@@ -347,9 +347,36 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .ev:hover{filter:brightness(.97)}
 .wk-now{position:absolute;left:0;right:0;height:2px;background:var(--flag);z-index:2}
 .wk-now::before{content:"";position:absolute;inset-inline-start:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--flag)}
+.stats-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.stat-link{text-decoration:none;color:var(--ink);display:block}
+.stat-link:hover{background:var(--paper)}
+.stat-link .v{font-size:1.2rem}
+.warn-text{color:var(--warn)}
+@media (max-width:900px){.stats-5{grid-template-columns:repeat(3,minmax(0,1fr))}.stats-5 .stat:nth-child(4){border-inline-start:0}.stats-5 .stat:nth-child(n+4){border-top:1px solid var(--line)}}
+@media (max-width:520px){.stats-5{grid-template-columns:1fr 1fr}.stats-5 .stat{border-inline-start:1px solid var(--line)}.stats-5 .stat:nth-child(odd){border-inline-start:0}.stats-5 .stat:nth-child(n+3){border-top:1px solid var(--line)}}
+.off-line{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.off-items{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.88rem}
+.fold summary{cursor:pointer;list-style:none}
+.fold summary::-webkit-details-marker{display:none}
+.fold summary h2::before{content:"▸ ";color:var(--muted)}
+.fold[open] summary h2::before{content:"▾ "}
+/* Game tables become cards on phones: main line first, details wrapping underneath, buttons last. */
+@media (max-width:700px){
+  .cards-m thead{display:none}
+  .cards-m,.cards-m tbody{display:block}
+  .cards-m tr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .cards-m tr:last-child{border-bottom:0}
+  .cards-m td{display:block;border:0;padding:0}
+  .cards-m td.c-main{flex-basis:100%;order:-1}
+  .cards-m td.c-act{flex-basis:100%;margin-top:4px}
+  .cards-m td.r{text-align:start}
+  .cards-m .row-actions{flex-wrap:wrap!important}
+}
 /* Right-to-left (Hebrew): chess notation, the board and time charts keep reading left to right. */
 .cboard,.moves,.line-box,.wbars,.week,.vctl,.spark,.chart{direction:ltr}
 [dir="rtl"] .line-box{text-align:left}
+[dir="rtl"] span.num,[dir="rtl"] b.num{unicode-bidi:plaintext}
+.rep-vs bdi{text-transform:none}
 [dir="rtl"] h1,[dir="rtl"] h2,[dir="rtl"] h3{letter-spacing:0}
 [dir="rtl"] .crumb{direction:rtl}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
@@ -2217,6 +2244,8 @@ const money = n => { const v = Math.round((+n||0)*100)/100; return (state.settin
 const initials = name => (name||"?").trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase();
 const sortBy = (arr, key, dir=1) => arr.slice().sort((a,b)=> (a[key]>b[key]?1:a[key]<b[key]?-1:0)*dir);
 const byId = id => state.students.find(s=>s.id===id);
+// Chess notation ("1.e4", "1...c6") kept left to right on its own, so it isn't scrambled inside Hebrew text.
+const ltr = x => '<bdi dir="ltr">'+esc(x)+'</bdi>';
 
 /* ---------- language ---------- */
 // Hebrew is applied to what the app shows rather than to its code: every text node, placeholder, title and
@@ -2908,13 +2937,16 @@ function ratingChart(pts){
     '<text x="'+pl+'" y="'+(H-6)+'">'+esc(fmtShort(pts[0].date))+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" text-anchor="end">'+esc(fmtShort(pts[pts.length-1].date))+'</text></svg>';
 }
 let chartSource = {};
-function officialPanel(s){
+// Official ratings as one line under the rating chart (they are reference, not what the coach checks daily).
+function officialLine(s){
   const f = s.fide||{}, i = s.icf||{};
-  const cell = (v,l)=>'<div><div class="num" style="font-family:var(--display);font-size:1.25rem;font-weight:600">'+(v?esc(v):"—")+'</div><div class="small muted">'+l+'</div></div>';
-  const body = (!s.fideId && !s.icfId) ? '<p class="empty">'+(s.noId?"No player ID yet. Add it in Edit profile once the player registers.":"Add a FIDE or ICF ID in Edit profile to track official ratings.")+'</p>' :
-    '<div class="off-grid">'+(s.fideId?cell(f.std,"FIDE standard")+cell(f.rapid,"FIDE rapid")+cell(f.blitz,"FIDE blitz"):"")+(s.icfId?cell(i.rating,"ICF (Israel)"):"")+'</div>'+
-    '<p class="small muted" style="margin:10px 0 0">'+[s.fideId?(f.updated?"FIDE checked "+esc(fmtDate(f.updated)):"FIDE not checked yet"):"", s.icfId?(i.updated?"ICF checked "+esc(fmtDate(i.updated)):"ICF not checked yet"):""].filter(Boolean).join(" · ")+'</p>';
-  return panel("Official ratings", body, (s.fideId||s.icfId)?'<button class="btn small" data-a="official">Enter manually</button>':'');
+  if (!s.fideId && !s.icfId) return '<p class="small muted" style="margin:10px 0 0">'+(s.noId?"No player ID yet. Add it in Edit profile once the player registers.":"Add a FIDE or ICF ID in Edit profile to track official ratings.")+'</p>';
+  const v = x=>x ? '<b class="num">'+esc(x)+'</b>' : '<span class="muted">—</span>';
+  const parts = [];
+  if (s.fideId) parts.push('<span class="off-item"><span class="muted">FIDE standard</span> '+v(f.std)+'</span><span class="off-item"><span class="muted">FIDE rapid</span> '+v(f.rapid)+'</span><span class="off-item"><span class="muted">FIDE blitz</span> '+v(f.blitz)+'</span>');
+  if (s.icfId) parts.push('<span class="off-item"><span class="muted">ICF (Israel)</span> '+v(i.rating)+'</span>');
+  const checked = [s.fideId?(f.updated?"FIDE checked "+esc(fmtDate(f.updated)):"FIDE not checked yet"):"", s.icfId?(i.updated?"ICF checked "+esc(fmtDate(i.updated)):"ICF not checked yet"):""].filter(Boolean).join(" · ");
+  return '<div class="off-line"><div class="off-items">'+parts.join("")+'</div><button class="btn small ghost" data-a="official">Enter manually</button></div><p class="small muted" style="margin:2px 0 0">'+checked+'</p>';
 }
 function tOverview(el, s){
   const t = today(); const srcOf = r=>r.source||mainSource(s);
@@ -2925,14 +2957,29 @@ function tOverview(el, s){
   const last = sortBy(done,"date",-1)[0]; const next = sortBy(s.sessions.filter(x=>x.status==="planned"&&x.date>=t),"date")[0];
   const nextT = sortBy(s.tournaments.filter(x=>(x.end||x.start)>=t),"start")[0];
   const openTasks = state.assignments.filter(a=>a.studentId===s.id && a.status==="Assigned").length; const l = ledger(s);
-  el.innerHTML = '<div class="grid g2">'+
-    officialPanel(s)+
-    panel("Rating history", (sources.length>1?'<div class="seg" role="group" aria-label="Rating list">'+sources.map(x=>'<button type="button" class="'+(x===src?"on":"")+'" data-a="src" data-id="'+esc(x)+'">'+esc(x)+'</button>').join("")+'</div>':"")+ratingChart(pts)+(pts.length?'<p class="small muted" style="margin:8px 0 0">'+pts.length+' entries · started at '+esc(pts[0].value)+', now '+esc(pts[pts.length-1].value)+' ('+((pts[pts.length-1].value-pts[0].value)>=0?"+":"")+(pts[pts.length-1].value-pts[0].value)+')</p>':""), '<button class="btn small" data-a="addRating">Add rating</button>')+
-    panel("At a glance", '<dl class="kv"><dt>Sessions done</dt><dd class="num">'+done.length+' ('+hours.toFixed(1)+' h)</dd><dt>Last session</dt><dd>'+(last?esc(fmtDate(last.date))+' — '+esc(last.topics||""):"—")+'</dd><dt>Next session</dt><dd>'+(next?esc(fmtDate(next.date))+" "+esc(next.time||""):"Not planned")+'</dd><dt>Next tournament</dt><dd>'+(nextT?esc(nextT.name)+", "+esc(fmtShort(nextT.start)):"—")+'</dd><dt>Open assignments</dt><dd>'+openTasks+'</dd>'+(()=>{ const n = s.repertoire.filter(x=>x.v===2&&repStatus(x).status==="Needs review").length; return n?'<dt>Repertoire</dt><dd><a href="#/student/'+s.id+'/repertoire">'+n+(n===1?' line needs':' lines need')+' review</a></dd>':""; })()+(s.books.some(b=>b.status==="Reading")?'<dt>Reading</dt><dd>'+s.books.filter(b=>b.status==="Reading").map(b=>'<i>'+esc(b.title)+'</i>'+(b.pages?' · p. '+(+b.page||0)+'/'+b.pages:'')).join('<br>')+'</dd>':'')+'<dt>Balance</dt><dd class="num'+(l.balance>0.009?" money-owed":"")+'">'+(l.balance>0.009?money(l.balance)+" owed":"Paid up")+'</dd><dt>Contact</dt><dd>'+esc(s.contact||"—")+(s.guardian?" · "+esc(s.guardian):"")+'</dd></dl>')+
-    panel("Goals", s.goals?'<p class="pre" style="margin:0">'+esc(s.goals)+'</p>':'<p class="empty">No goals written yet.</p>','<button class="btn small" data-a="edit">Edit</button>')+
-    panel("Coach notes", s.notes?'<p class="pre" style="margin:0">'+esc(s.notes)+'</p>':'<p class="empty">No notes yet.</p>','<button class="btn small" data-a="edit">Edit</button>')+
-  '</div>'+
-  (pts.length? '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>'+esc(src)+' rating entries</h2></div><ul class="list">'+sortBy(pts,"date",-1).map(p=>'<li><span>'+esc(fmtDate(p.date))+' <span class="tag">'+esc(srcOf(p))+'</span></span><span class="row-actions"><b class="num">'+esc(p.value)+'</b><button class="btn ghost small danger" data-a="delRating" data-id="'+p.id+'" aria-label="Delete rating">Remove</button></span></li>').join("")+'</ul></section>':"");
+  const hw = state.assignments.filter(a=>a.studentId===s.id && a.status==="Assigned"), hwLate = hw.filter(a=>a.due && a.due<t).length;
+  const toReview = s.repertoire.filter(x=>x.v===2 && repStatus(x).status==="Needs review").length;
+  const lastLog = s.worklog.reduce((m,w)=>w.date>m?w.date:m, ""), since = lastLog ? daysBetween(lastLog, t) : null;
+  const tile = (href, value, label, cls)=>'<a class="stat stat-link" href="'+href+'"><div class="v num'+(cls?" "+cls:"")+'">'+value+'</div><div class="l">'+label+'</div></a>';
+  const base = "#/student/"+s.id+"/";
+  el.innerHTML = '<div class="stats stats-5">'+
+      tile(base+"sessions", next ? esc(fmtDate(next.date,{weekday:"short",day:"numeric",month:"short"})) : "—", next ? "Next lesson"+(next.time?" · "+esc(next.time):"") : "No lesson planned", next ? "" : "warn-text")+
+      tile(base+"payments", l.balance>0.009 ? money(l.balance) : l.balance<-0.009 ? money(-l.balance) : "✓", l.balance>0.009 ? (l.overdue?l.age+" days overdue":"Owed") : l.balance<-0.009 ? "In credit" : "Paid up", l.balance>0.009 ? "money-owed" : "")+
+      tile(base+"assignments", hw.length, hwLate ? hwLate+" overdue" : "Open homework", hwLate ? "money-owed" : "")+
+      tile(base+"repertoire", toReview || "✓", toReview ? (toReview===1?"Line to review":"Lines to review") : "Repertoire up to date", toReview ? "warn-text" : "")+
+      tile(base+"work", since===null ? "—" : since===0 ? "Today" : since===1 ? "Yesterday" : since+"d", since===null ? "No practice logged" : "Last practice", since!==null && since>=PRACTICE_GAP_DAYS ? "warn-text" : "")+
+    '</div>'+
+    '<div class="grid g2">'+
+    panel("Rating history", (sources.length>1?'<div class="seg" role="group" aria-label="Rating list">'+sources.map(x=>'<button type="button" class="'+(x===src?"on":"")+'" data-a="src" data-id="'+esc(x)+'">'+esc(x)+'</button>').join("")+'</div>':"")+ratingChart(pts)+(pts.length?'<p class="small muted" style="margin:8px 0 0">'+pts.length+' entries · started at '+esc(pts[0].value)+', now '+esc(pts[pts.length-1].value)+' ('+((pts[pts.length-1].value-pts[0].value)>=0?"+":"")+(pts[pts.length-1].value-pts[0].value)+')</p>':"")+officialLine(s), '<button class="btn small" data-a="addRating">Add rating</button>')+
+    panel("Goals & notes", '<h3 class="subh" style="margin-top:0">Goals</h3>'+(s.goals?'<p class="pre" style="margin:0">'+esc(s.goals)+'</p>':'<p class="empty" style="padding:0">No goals written yet.</p>')+
+      '<h3 class="subh">Coach notes</h3>'+(s.notes?'<p class="pre" style="margin:0">'+esc(s.notes)+'</p>':'<p class="empty" style="padding:0">No notes yet.</p>'),'<button class="btn small" data-a="edit">Edit</button>')+
+    '</div>'+
+    '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Details</h2></div><dl class="kv">'+
+      '<dt>Sessions done</dt><dd class="num">'+done.length+' ('+hours.toFixed(1)+' h)</dd><dt>Last session</dt><dd>'+(last?esc(fmtDate(last.date))+' — '+esc(last.topics||""):"—")+'</dd>'+
+      '<dt>Next tournament</dt><dd>'+(nextT?esc(nextT.name)+", "+esc(fmtShort(nextT.start)):"—")+'</dd>'+
+      (s.books.some(b=>b.status==="Reading")?'<dt>Reading</dt><dd>'+s.books.filter(b=>b.status==="Reading").map(b=>'<i>'+esc(b.title)+'</i>'+(b.pages?' · p. '+(+b.page||0)+'/'+b.pages:'')).join('<br>')+'</dd>':'')+
+      '<dt>Contact</dt><dd>'+esc(s.contact||"—")+(s.guardian?" · "+esc(s.guardian):"")+'</dd></dl></section>'+
+  (pts.length? '<details class="panel fold" style="margin-top:16px"><summary><h2>'+esc(src)+' rating entries ('+pts.length+')</h2></summary><ul class="list" style="margin-top:8px">'+sortBy(pts,"date",-1).map(p=>'<li><span>'+esc(fmtDate(p.date))+' <span class="tag">'+esc(srcOf(p))+'</span></span><span class="row-actions"><b class="num">'+esc(p.value)+'</b><button class="btn ghost small danger" data-a="delRating" data-id="'+p.id+'" aria-label="Delete rating">Remove</button></span></li>').join("")+'</ul></details>':"");
   bindActions(el,{
     addRating:()=>openForm({title:"Add rating",submit:"Add",fields:[{name:"source",label:"Rating list",type:"select",options:RATING_SOURCES,value:src||mainSource(s)},{name:"date",label:"Date",type:"date",value:today()},{name:"value",label:"Rating",type:"number",value:"",required:true}],
       onSubmit:d=>{ if(d.value==="") return "Enter a rating."; addRating(s,d.source,d.value,d.date||today()); chartSource[s.id]=d.source; saveStudent(s); render(); toast("Rating added"); }}),
@@ -3306,6 +3353,17 @@ function gameEvent(g, s){ const tr = g.tournamentId && s.tournaments.find(x=>x.i
 function gameTitle(g){ return "vs "+(g.opponent||"?")+" ("+(g.color==="Black"?"Black":"White")+")"; }
 function gameOption(g, s){ const ev = gameEvent(g,s); return gameTitle(g)+" "+(g.result||"")+(ev?" · "+ev+(g.round?" R"+g.round:""):"")+(g.date?" · "+fmtShort(g.date):"")+" — "+(g.analysis||"Not analysed"); }
 const studentGames = sid => state.games.filter(g=>g.studentId===sid && g.kind!=="study");
+// FIDE performance rating: average opponent rating + dp for the score percentage (FIDE rating regulations, table 8.1.a).
+// DP[k] is dp for a score of (50+k)%; below 50% it is the same value, negative.
+const DP = [0,7,14,21,29,36,43,50,57,65,72,80,87,95,102,110,117,125,133,141,149,158,166,175,184,193,202,211,220,230,240,251,262,273,284,296,309,322,336,351,366,383,401,422,444,470,501,538,589,677,800];
+function performance(list){
+  const rated = list.filter(g=>+g.opponentRating>0 && outcomeOf(g));
+  if (!rated.length) return null;
+  const pts = rated.reduce((a,g)=>a+({W:1,D:.5,L:0})[outcomeOf(g)],0), n = rated.length;
+  const avg = rated.reduce((a,g)=>a+ +g.opponentRating,0)/n, pc = Math.round(pts/n*100);
+  const dp = pc>=50 ? DP[pc-50] : -DP[50-pc];
+  return {rp:Math.round(avg+dp), avg:Math.round(avg), n, pts};
+}
 function scoreLine(list){
   const w = list.filter(g=>outcomeOf(g)==="W").length, d = list.filter(g=>outcomeOf(g)==="D").length, l = list.filter(g=>outcomeOf(g)==="L").length, n = w+d+l;
   return {w,d,l,n,pts:w+d/2,pct:n?Math.round((w+d/2)/n*100):null};
@@ -3381,13 +3439,14 @@ function tGames(el, s){
     '<section class="panel"><div class="panel-head" style="flex-wrap:wrap"><div class="seg" role="group" aria-label="Analysis filter" style="margin:0">'+Object.keys(F).map(k=>'<button type="button" class="'+(gameFilter.status===k?"on":"")+'" data-a="gf" data-id="'+k+'">'+L[k]+' ('+all.filter(F[k]).filter(g=>!gameFilter.tid||g.tournamentId===gameFilter.tid).length+')</button>').join("")+'</div>'+
       '<div class="row-actions"><label class="btn small" for="gImport">Import PGN</label><input id="gImport" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain" multiple hidden><button class="btn small primary" data-a="addGame">Add game</button></div></div>'+
       (trName?'<p class="small" style="margin:0 0 8px">Showing games from <b>'+esc(trName)+'</b> · <button class="btn small ghost" data-a="clearT">Show all tournaments</button></p>':"")+
-      (list.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Opponent</th><th>Side</th><th>Result</th><th>Tournament</th><th>Analysis</th><th></th></tr></thead><tbody>'+
-        list.map(g=>'<tr><td class="small" style="white-space:nowrap">'+esc(fmtDate(g.date))+'</td><td><b>'+esc(g.opponent)+'</b>'+(g.opponentRating?' <span class="muted small num">'+esc(g.opponentRating)+'</span>':'')+(g.opening?'<div class="small muted">'+esc(g.opening)+'</div>':'')+(g.notes?'<div class="small">'+esc(g.notes)+'</div>':'')+'</td>'+
+      (()=>{ const pf = performance(list); return pf ? '<p class="small muted" style="margin:0 0 8px">Performance <b class="num" style="color:var(--ink)">'+pf.rp+'</b> · '+pf.n+' rated game'+(pf.n===1?'':'s')+' · average opponent '+pf.avg+'</p>' : ""; })()+
+      (list.length ? '<div class="table-wrap"><table class="cards-m"><thead><tr><th>Date</th><th>Opponent</th><th>Side</th><th>Result</th><th>Tournament</th><th>Analysis</th><th></th></tr></thead><tbody>'+
+        list.map(g=>'<tr><td class="small" style="white-space:nowrap">'+esc(fmtDate(g.date))+'</td><td class="c-main"><b>'+esc(g.opponent)+'</b>'+(g.opponentRating?' <span class="muted small num">'+esc(g.opponentRating)+'</span>':'')+(g.opening?'<div class="small muted">'+esc(g.opening)+'</div>':'')+(g.notes?'<div class="small">'+esc(g.notes)+'</div>':'')+'</td>'+
           '<td class="small"><span class="piece '+(g.color==="Black"?"b":"w")+'" style="display:inline-block;vertical-align:-2px;margin-inline-end:4px"></span>'+esc(g.color)+(g.needsCheck?' <span class="tag warn">Check side</span>':'')+'</td>'+
           '<td class="small"><span class="num">'+esc(g.result)+'</span> '+outTag(outcomeOf(g))+'</td>'+
           '<td class="small">'+esc(gameEvent(g,s)||"—")+(g.round?' <span class="muted">R'+esc(g.round)+'</span>':'')+' <span class="muted">· '+esc(g.timeControl||"")+'</span></td>'+
           '<td>'+statusTag(g.analysis)+(g.lastAnalysed?'<div class="small muted">'+esc(fmtShort(g.lastAnalysed))+'</div>':'')+'</td>'+
-          '<td><div class="row-actions" style="flex-wrap:nowrap">'+(g.pgn?'<button class="btn small" data-a="board" data-id="'+g.id+'">Board</button>':'')+'<button class="btn small ghost" data-a="analyse" data-id="'+g.id+'">Log analysis</button><button class="btn small ghost" data-a="editGame" data-id="'+g.id+'">Edit</button></div></td></tr>').join("")+
+          '<td class="c-act"><div class="row-actions" style="flex-wrap:nowrap">'+(g.pgn?'<button class="btn small" data-a="board" data-id="'+g.id+'">Board</button>':'')+'<button class="btn small ghost" data-a="analyse" data-id="'+g.id+'">Log analysis</button><button class="btn small ghost" data-a="editGame" data-id="'+g.id+'">Edit</button></div></td></tr>').join("")+
         '</tbody></table></div>'
         : '<p class="empty">'+(all.length?"No games match this filter.":"No games yet. Add them one by one, or import a PGN file from a tournament — games are matched to "+esc(s.name.split(" ")[0])+"’s side and to tournaments automatically.")+'</p>')+
     '</section>';
@@ -3485,14 +3544,14 @@ function tStudied(el, s){
     (all.length?'<p class="sub" style="margin:0 0 14px">'+all.length+' game'+(all.length===1?"":"s")+' by other players · '+Math.round(mins/60*10)/10+' h of analysis logged'+(themes.length?' · themes: '+themes.slice(0,6).map(esc).join(", ")+(themes.length>6?"…":""):"")+'</p>':"")+
     '<section class="panel"><div class="panel-head" style="flex-wrap:wrap"><div class="seg" role="group" aria-label="Analysis filter" style="margin:0">'+Object.keys(F).map(k=>'<button type="button" class="'+(studyFilter===k?"on":"")+'" data-a="sf" data-id="'+k+'">'+L[k]+' ('+all.filter(F[k]).length+')</button>').join("")+'</div>'+
       '<div class="row-actions"><label class="btn small" for="sImport">Import PGN</label><input id="sImport" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain" multiple hidden><button class="btn small primary" data-a="addS">Add game</button></div></div>'+
-      (list.length?'<div class="table-wrap"><table><thead><tr><th>Game</th><th>Event</th><th>Theme</th><th class="r">Time</th><th>Analysis</th><th></th></tr></thead><tbody>'+
+      (list.length?'<div class="table-wrap"><table class="cards-m"><thead><tr><th>Game</th><th>Event</th><th>Theme</th><th class="r">Time</th><th>Analysis</th><th></th></tr></thead><tbody>'+
         list.map(g=>{ const ss = sess(g.id), m = ss.reduce((x,w)=>x+(+w.minutes||0),0);
-          return '<tr><td><b>'+esc(studyTitle(g))+'</b> <span class="muted num">'+esc(g.result||"")+'</span>'+(g.opening?'<div class="small muted">'+esc(g.opening)+'</div>':'')+(g.notes?'<div class="small">'+esc(g.notes)+'</div>':'')+'</td>'+
+          return '<tr><td class="c-main"><b>'+esc(studyTitle(g))+'</b> <span class="muted num">'+esc(g.result||"")+'</span>'+(g.opening?'<div class="small muted">'+esc(g.opening)+'</div>':'')+(g.notes?'<div class="small">'+esc(g.notes)+'</div>':'')+'</td>'+
             '<td class="small">'+esc(g.event||"—")+(g.year?' <span class="muted">'+esc(g.year)+'</span>':'')+'<div class="muted">'+esc(g.source||"")+'</div></td>'+
             '<td class="small">'+(g.theme?'<span class="tag board">'+esc(g.theme)+'</span>':'<span class="muted">—</span>')+'</td>'+
             '<td class="r small num">'+(ss.length?ss.length+' · '+m+' min':'—')+'</td>'+
             '<td>'+statusTag(g.analysis)+(g.lastAnalysed?'<div class="small muted">'+esc(fmtShort(g.lastAnalysed))+'</div>':'')+'</td>'+
-            '<td><div class="row-actions" style="flex-wrap:nowrap">'+(g.pgn?'<button class="btn small" data-a="board" data-id="'+g.id+'">Board</button>':'')+'<button class="btn small ghost" data-a="analyse" data-id="'+g.id+'">Log analysis</button><button class="btn small ghost" data-a="editS" data-id="'+g.id+'">Edit</button></div></td></tr>'; }).join("")+
+            '<td class="c-act"><div class="row-actions" style="flex-wrap:nowrap">'+(g.pgn?'<button class="btn small" data-a="board" data-id="'+g.id+'">Board</button>':'')+'<button class="btn small ghost" data-a="analyse" data-id="'+g.id+'">Log analysis</button><button class="btn small ghost" data-a="editS" data-id="'+g.id+'">Edit</button></div></td></tr>'; }).join("")+
         '</tbody></table></div>'
         :'<p class="empty">'+(all.length?"No games match this filter.":"No studied games yet. Add classic or model games "+esc(s.name.split(" ")[0])+" analyses — from a book, a ChessBase database, or games you choose — and log each analysis session against them.")+'</p>')+
     '</section>';
@@ -3602,6 +3661,42 @@ function repMatches(x){
   if (repQuery){ const q = repQuery.toLowerCase(); const hay = [x.name,x.eco,x.against,x.againstOther,x.firstMove,x.lines,x.notes].join(" ").toLowerCase(); if (!q.split(/\s+/).every(t=>hay.includes(t))) return false; }
   return true;
 }
+/* ---------- openings met in games ---------- */
+// The moves of a game as SAN tokens (headers, comments, variations and annotations removed).
+function gameMoves(pgn){
+  if (!pgn || /\[SetUp\s+"1"\]|\[FEN\s/.test(pgn)) return [];
+  let b = String(pgn).replace(/\[[^\]]*\]/g," ").replace(/\{[^}]*\}/g," ").replace(/;[^\n]*/g," ").replace(/\$\d+/g," ");
+  for (let i=0; i<8 && /\([^()]*\)/.test(b); i++) b = b.replace(/\([^()]*\)/g," ");
+  return moveTokens(b).map(t=>t.replace(/[+#?!]+$/,"")).filter(t=>/^([a-h][1-8x]|[KQRBN][a-h1-8x]|O-O)/.test(t));
+}
+// Which repertoire slot a game falls into, keyed like repKey(): White by the student's first move and
+// Black's defence, Black by White's first move. Also the student's own reply when they had Black.
+function openingOf(g){
+  const m = gameMoves(g.pgn); if (m.length<2) return null;
+  const lines = m.slice(0,10).join(" ");
+  if (g.color==="Black"){ const r = guessRep({color:"Black", lines}); return {color:"Black", against:r.against, key:r.against, reply:"1..."+m[1]}; }
+  if (!["e4","d4","c4","Nf3"].includes(m[0])) return {color:"White", firstMove:"Other first moves", against:"Any defence", key:"Other first moves|Any defence"};
+  const r = guessRep({color:"White", lines}); return {color:"White", firstMove:r.firstMove, against:r.against, key:r.firstMove+"|"+r.against};
+}
+function openingsPanel(s){
+  const games = studentGames(s.id), withMoves = [], groups = {};
+  games.forEach(g=>{ const o = openingOf(g); if (!o) return; withMoves.push(g); (groups[o.key] = groups[o.key] || Object.assign({games:[], replies:{}}, o)).games.push(g); if (o.reply) groups[o.key].replies[o.reply] = (groups[o.key].replies[o.reply]||0)+1; });
+  if (!games.length) return "";
+  if (!withMoves.length) return '<p class="small muted" style="margin:0 0 12px">Add the moves (PGN) to games in Game history to see which openings '+esc(s.name.split(" ")[0])+' meets and how they score.</p>';
+  const lines = key=>s.repertoire.filter(x=>x.v===2 && repKey(x)===key);
+  const rows = Object.values(groups).map(o=>Object.assign(o, {sc:scoreLine(o.games), have:lines(o.key)}))
+    .sort((a,b)=>(a.have.length?1:0)-(b.have.length?1:0) || b.games.length-a.games.length);
+  const missing = rows.filter(o=>!o.have.length).length;
+  return '<section class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>Openings in games</h2>'+(missing?'<span class="tag flag">'+missing+(missing===1?' opening without a line':' openings without a line')+'</span>':'<span class="tag ok">Every opening met has a line</span>')+'</div>'+
+    '<div class="table-wrap"><table class="cards-m"><thead><tr><th>Side</th><th>Opponent played</th><th class="r">Games</th><th class="r">Score</th><th>Prepared line</th></tr></thead><tbody>'+
+    rows.map(o=>'<tr><td class="small"><span class="piece '+(o.color==="Black"?"b":"w")+'" style="display:inline-block;vertical-align:-2px;margin-inline-end:4px"></span>'+esc(o.color)+'</td>'+
+      '<td class="c-main"><b>'+(o.color==="White"?(o.firstMove==="Other first moves"?esc(o.firstMove):ltr(o.firstMove)+' · '+ltr(o.against)):ltr(o.against))+'</b>'+
+        (o.color==="Black"?'<div class="small muted"><span>Replies:</span> '+Object.entries(o.replies).sort((a,b)=>b[1]-a[1]).map(([mv,n])=>'<span dir="ltr">'+esc(mv)+(n>1?' ×'+n:'')+'</span>').join(", ")+'</div>':'')+'</td>'+
+      '<td class="r num">'+o.games.length+'</td>'+
+      '<td class="r num'+(o.sc.n && o.sc.pct<40?' money-owed':'')+'">'+(o.sc.n?ltr(fmtPts(o.sc.pts)+'/'+o.sc.n)+' ('+o.sc.pct+'%)':'—')+'</td>'+
+      '<td>'+(o.have.length?o.have.map(x=>'<span class="tag ok">'+esc(x.name)+'</span>').join(" "):'<span class="tag flag">No line</span> <button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify(o.color==="White"?{color:"White", firstMove:o.firstMove, against:o.against}:{color:"Black", against:o.against}))+'">Add line</button>')+'</td></tr>').join("")+
+    '</tbody></table></div><p class="small muted" style="margin:8px 0 0">From '+withMoves.length+' game'+(withMoves.length===1?'':'s')+' with moves'+(games.length>withMoves.length?' · '+(games.length-withMoves.length)+' without moves not counted':'')+'.</p></section>';
+}
 function tRepertoire(el, s){
   if (migrateRepertoire(s)) saveStudent(s);
   const st = x=>repStatus(x).status;
@@ -3615,7 +3710,7 @@ function tRepertoire(el, s){
   const tagCls = {Developing:"board", Learning:"", Studied:"ok", "Needs review":"warn"};
   const card = x=>{ const r = repStatus(x);
     return '<div class="rep-card"><div class="rep-top"><div style="min-width:0"><div class="title">'+esc(x.name)+(x.eco?' <span class="small muted">'+esc(x.eco)+'</span>':'')+'</div>'+
-      (x.againstOther?'<div class="small muted">vs '+esc(x.againstOther)+'</div>':'')+'</div>'+
+      (x.againstOther?'<div class="small muted">vs '+ltr(x.againstOther)+'</div>':'')+'</div>'+
       '<span class="tag '+tagCls[r.status]+'">'+esc(r.status)+(r.status==="Developing"&&x.developer?' · by '+(x.developer==="Coach"?"coach":"student"):'')+(r.auto?' · auto':'')+'</span></div>'+
       (x.lines?'<div class="line-box">'+esc(x.lines)+'</div>':'')+(x.notes?'<div class="small" style="margin-top:6px">'+esc(x.notes)+'</div>':'')+
       '<div class="rep-foot"><span class="small muted">'+(x.reviewed?'Reviewed '+esc(monthsAgo(x.reviewed)):'Never reviewed')+(r.auto?' — over 6 months':'')+'</span><span class="row-actions"><button class="btn small" data-a="rev" data-id="'+x.id+'">Reviewed today</button><button class="btn small ghost" data-a="edit" data-id="'+x.id+'">Edit</button></span></div></div>';
@@ -3627,22 +3722,22 @@ function tRepertoire(el, s){
       const shown = items.filter(F[repFilter]);
       if (!items.length){ (i<coreN?missCore:missOther).push(k); return; }
       if (!shown.length) return;
-      html += '<div class="rep-group"><div class="rep-vs">vs '+esc(k)+'</div>'+shown.map(card).join("")+'</div>';
+      html += '<div class="rep-group"><div class="rep-vs">vs '+ltr(k)+'</div>'+shown.map(card).join("")+'</div>';
     });
     if (repFilter==="all" && !narrowed && (missCore.length||missOther.length)){
-      html += '<div class="rep-gaps">'+(missCore.length?'<div class="small"><b>No answer yet against:</b> '+missCore.map(k=>'<button class="chip warn" data-a="addp" data-id="'+esc(JSON.stringify(presetOf(k)))+'">'+esc(k)+' +</button>').join("")+'</div>':'')+
-        (missOther.length?'<div class="small muted" style="margin-top:4px">Less common: '+missOther.filter(k=>!/^(Other|Any)/.test(k)).map(k=>'<button class="chip" data-a="addp" data-id="'+esc(JSON.stringify(presetOf(k)))+'">'+esc(k)+' +</button>').join("")+'</div>':'')+'</div>';
+      html += '<div class="rep-gaps">'+(missCore.length?'<div class="small"><b>No answer yet against:</b> '+missCore.map(k=>'<button class="chip warn" data-a="addp" data-id="'+esc(JSON.stringify(presetOf(k)))+'">'+ltr(k)+' +</button>').join("")+'</div>':'')+
+        (missOther.length?'<div class="small muted" style="margin-top:4px">Less common: '+missOther.filter(k=>!/^(Other|Any)/.test(k)).map(k=>'<button class="chip" data-a="addp" data-id="'+esc(JSON.stringify(presetOf(k)))+'">'+ltr(k)+' +</button>').join("")+'</div>':'')+'</div>';
     }
     return html;
   };
   const white = s.repertoire.filter(x=>x.color==="White"), black = s.repertoire.filter(x=>x.color==="Black");
   const firsts = WHITE_FIRST.filter(f=>white.some(x=>(x.firstMove||"1.e4")===f));
   const whiteHtml = firsts.length ? firsts.map(f=>{ const body = groupRows(DEFENCES[f], white.filter(x=>(x.firstMove||"1.e4")===f), x=>x.against, CORE[f], k=>({color:"White", firstMove:f, against:k}));
-      return body ? '<h4 class="rep-first">'+esc(f)+'</h4>'+body : ""; }).join("") || '<p class="empty">No White lines match this filter.</p>'
+      return body ? '<h4 class="rep-first">'+ltr(f)+'</h4>'+body : ""; }).join("") || '<p class="empty">No White lines match this filter.</p>'
     : '<p class="empty">No White repertoire yet. Start with the first move '+esc(s.name.split(" ")[0])+' plays, then add an answer to each defence.</p>';
   const blackHtml = black.length ? (groupRows(BLACK_AGAINST, black, x=>x.against, BLACK_CORE, k=>({color:"Black", against:k})) || '<p class="empty">No Black lines match this filter.</p>')
     : '<p class="empty">No Black repertoire yet.</p>'+groupRows(BLACK_AGAINST, [], x=>x.against, BLACK_CORE, k=>({color:"Black", against:k}));
-  el.innerHTML = '<p class="sub" style="margin:0 0 12px">'+[count("Studied")+" studied", count("Learning")+" learning", count("Developing")+" in development"+(devC||devS?" ("+[devC?devC+" by you":"", devS?devS+" by the student":""].filter(Boolean).join(", ")+")":""), count("Needs review")+(count("Needs review")===1?" needs":" need")+" review"].join(" · ")+'</p>'+
+  el.innerHTML = '<p class="sub" style="margin:0 0 12px">'+[count("Studied")+" studied", count("Learning")+" learning", count("Developing")+" in development"+(devC||devS?" ("+[devC?devC+" by you":"", devS?devS+" by the student":""].filter(Boolean).join(", ")+")":""), count("Needs review")+(count("Needs review")===1?" needs":" need")+" review"].join(" · ")+'</p>'+openingsPanel(s)+
     '<div class="rep-tools"><select id="repOpen" class="search" aria-label="Filter by opening"><option value="">All openings</option>'+Object.keys(fams).sort((a,b)=>a.localeCompare(b)).map(f=>'<option value="'+esc(f)+'"'+(repOpening===f?" selected":"")+'>'+esc(f)+' ('+fams[f]+')</option>').join("")+'</select>'+
       '<input id="repQ" class="search" type="search" placeholder="Search lines, moves, ECO, notes" value="'+esc(repQuery)+'" aria-label="Search repertoire">'+
       (narrowed?'<button class="btn small ghost" data-a="clearRep">Clear</button>':'')+'</div>'+
@@ -3709,7 +3804,8 @@ function tTournaments(el, s){
       return '<div class="expect small"><span class="muted">Expected</span> <b class="num">'+(ex?esc(fmtScore(ex)):"—")+'</b> <span class="muted">→ Actual</span> <b class="num">'+(ac?esc(fmtScore(ac)):"—")+'</b>'+
         (c?' <span class="tag '+(c.d>0?"ok":c.d<0?"flag":"board")+'">'+esc(diffLabel(c))+'</span>':(ex&&!ac?' <span class="muted">— add the actual result</span>':''))+'</div>'; })()+'</div>'+
     '<div class="row-actions" style="flex-direction:column;align-items:flex-end">'+(isUp?'<span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span>':(x.result?'<b class="num">'+esc(x.result)+'</b>':resultOf(s,x)?'<b class="num" title="Worked out from the games in Game history">'+esc(resultOf(s,x))+'</b><span class="small muted">from games</span>':'<span class="tag warn">Add result</span>')+(x.ratingChange!==""&&x.ratingChange!=null?'<span class="small num" style="color:'+(+x.ratingChange>=0?"var(--ok)":"var(--flag)")+'">'+(+x.ratingChange>=0?"+":"")+esc(x.ratingChange)+'</span>':""))+
-    (()=>{ const gs = studentGames(s.id).filter(g=>g.tournamentId===x.id); if (!gs.length) return isUp?"":'<button class="btn small" data-a="games" data-id="'+x.id+'">Add games</button>'; const sc = scoreLine(gs); return '<button class="btn small" data-a="games" data-id="'+x.id+'">'+gs.length+' game'+(gs.length===1?"":"s")+(sc.n?' · '+sc.pts+'/'+sc.n:'')+'</button>'; })()+
+    (()=>{ const gs = studentGames(s.id).filter(g=>g.tournamentId===x.id); if (!gs.length) return isUp?"":'<button class="btn small" data-a="games" data-id="'+x.id+'">Add games</button>'; const sc = scoreLine(gs), pf = performance(gs); return '<button class="btn small" data-a="games" data-id="'+x.id+'">'+gs.length+' game'+(gs.length===1?"":"s")+(sc.n?' · '+sc.pts+'/'+sc.n:'')+'</button>'+
+      (pf?'<span class="small" title="Average opponent '+pf.avg+' · '+pf.n+' rated game'+(pf.n===1?'':'s')+'">Performance <b class="num">'+pf.rp+'</b></span>':''); })()+
     '<button class="btn small ghost" data-a="edit" data-id="'+x.id+'">'+(isUp?"Edit":"Edit / result")+'</button></div></li>'; };
   const played = past.filter(x=>x.ratingChange!==""&&x.ratingChange!=null); const net = played.reduce((a,x)=>a+(+x.ratingChange||0),0);
   const cmp = past.map(x=>compareScores(parseScore(x.expected,x.rounds), parseScore(resultOf(s,x),x.rounds))).filter(Boolean);
@@ -4555,6 +4651,10 @@ Object.assign(HE, {
   "No assignments yet. Add a task like “30 puzzles on pins”, or upload games in PGN for":"עדיין אין משימות. אפשר להוסיף משימה כמו ״30 פאזלים על ריתוקים״, או להעלות משחקים ב־PGN עבור",
   "The line, its moves and notes will be removed. This can't be undone.":"הוריאנט, המסעים וההערות יימחקו. אי אפשר לבטל את הפעולה.",
   "FIDE":"פיד״ה", "FIDE Rapid":"פיד״ה רפיד", "FIDE Blitz":"פיד״ה בליץ", "ICF":"איגוד", "min":"דק׳", "Marked done":"סומן כבוצע",
+  "Next lesson":"השיעור הבא", "Owed":"חוב", "Open homework":"שיעורי בית פתוחים", "Line to review":"וריאנט לחזרה", "Lines to review":"וריאנטים לחזרה",
+  "Repertoire up to date":"הרפרטואר מעודכן", "Yesterday":"אתמול", "No practice logged":"לא נרשם תרגול", "Last practice":"תרגול אחרון", "Goals & notes":"מטרות והערות", "Details":"פרטים",
+  "Performance":"דירוג ביצוע", "Openings in games":"פתיחות במשחקים", "Every opening met has a line":"לכל פתיחה שנפגשה יש וריאנט", "Opponent played":"היריב שיחק",
+  "Score":"ניקוד", "vs":"נגד", "Prepared line":"וריאנט מוכן", "Replies:":"תשובות:", "No line":"אין וריאנט",
   "lines":"וריאנטים", "line":"וריאנט", "for":"עבור", "today":"היום", "yesterday":"אתמול", "Given":"ניתנה", "Status:":"סטטוס:"
 });
 // Which of the numbers in a phrase decides singular / plural is always the first captured one.
@@ -4598,6 +4698,11 @@ const HE_RX = [
   [/^(.+) rating entries$/, (m,a)=>"רישומי דירוג "+heRating(a)],
   [/^Finished (.+)$/, "הסתיים $1"], [/^took (\d+) weeks?$/, "לקח $1 שבועות"],
   [/^From the (\d+) games? in Game history: (\S+)( \(not every round has a game yet\))?$/, (m,n,sc,part)=>"לפי "+n+" המשחקים בהיסטוריה: "+sc+(part?" (עדיין אין משחק לכל סיבוב)":"")],
+  [/^From (\d+) games? with moves\.?$/, "לפי $1 משחקים עם מסעים."], [/^(\d+) without moves not counted\.?$/, "$1 ללא מסעים לא נספרו."],
+  [/^Add the moves \(PGN\) to games in Game history to see which openings (.+) meets and how they score\.$/, "הוספת המסעים (PGN) למשחקים בהיסטוריית המשחקים תראה אילו פתיחות $1 פוגש ומה הניקוד בהן."],
+  [/^(\d+) openings? without a line$/, (m,n)=>+n===1 ? "פתיחה אחת בלי וריאנט" : n+" פתיחות בלי וריאנט"],
+  [/^(\d+) rated games?$/, "$1 משחקים מדורגים"], [/^[Aa]verage opponent (\d+)$/, "יריב ממוצע $1"],
+  [/^(\d+) overdue$/, "$1 באיחור"], [/^(\d+)d$/, "$1 ימים"],
   [/^From (.+) until (.+)$/, "מ־$1 עד $2"], [/^From (.+)$/, "מ־$1"],
   [/^(Good morning|Good afternoon|Good evening), (.+)$/, (m,g,n)=>HE[g]+", "+n],
   [/^In (\d+) days$/, "בעוד $1 ימים"],
