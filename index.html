@@ -338,6 +338,9 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .ev.st-cancelled{opacity:.45;text-decoration:line-through}
 .ev.clash{box-shadow:inset 0 0 0 2px var(--flag);border-inline-start-color:var(--flag)}
 .ev:hover{filter:brightness(.97)}
+.ev.train,.chip-ev.train{background:var(--surface);border:1px dashed var(--sq-dark);border-inline-start:3px solid var(--sq-dark)}
+.ev.req,.chip-ev.req{background:var(--warn-bg);border-inline-start-color:var(--warn)}
+.ev.req.st-declined,.chip-ev.req.st-declined{opacity:.5;text-decoration:line-through}
 .wk-now{position:absolute;left:0;right:0;height:2px;background:var(--flag);z-index:2}
 .wk-now::before{content:"";position:absolute;inset-inline-start:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--flag)}
 .stats-5{grid-template-columns:repeat(5,minmax(0,1fr))}
@@ -2840,7 +2843,7 @@ function renderStudent(v, r){
     return;
   }
   if (r.page==="assignment") return pAssignment(v, r);
-  if (r.page==="schedule") return pMySchedule(v, s);
+  if (r.page==="schedule") return pSchedule(v);
   return pHome(v, s);
 }
 function linkPage(me){
@@ -2890,11 +2893,11 @@ function pHome(v, s){
   bindActions(v,{ req:()=>requestLesson(s), log:()=>openPractice(s, null),
     hwdone:id=>{ const a = state.assignments.find(x=>x.id===id); if (!a) return; a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — your coach will review it"); } });
 }
-function requestLesson(s){
-  const tomorrow = addDays(today(),1);
+function requestLesson(s, pre){
+  const p = pre||{};
   openForm({title:"Request a lesson", submit:"Send request", fields:[
-      {name:"date",label:"Date",type:"date",value:tomorrow},
-      {name:"time",label:"Start time",type:"time",value:""},
+      {name:"date",label:"Date",type:"date",value:p.date||addDays(today(),1)},
+      {name:"time",label:"Start time",type:"time",value:p.time||""},
       {name:"duration",label:"Duration (minutes)",type:"select",options:[["45","45"],["60","60"],["90","90"],["120","120"]],value:"60"},
       {name:"format",label:"Format",type:"select",options:["In person","Online"],value:"In person"},
       {name:"note",label:"Note for your coach",type:"textarea",value:"",placeholder:"e.g. I'd like to prepare for the City Open"}],
@@ -2914,31 +2917,7 @@ function editTraining(s, x){
     {name:"note",label:"Notes",type:"textarea",value:x?.note||"",placeholder:"e.g. Puzzle Rush, then the Lucena chapter"}],
   "training","Training", d=>!d.date ? "Choose a date." : null);
 }
-function pMySchedule(v, s){
-  const t = today(), end = addDays(t, 56);
-  const items = [];
-  s.sessions.forEach(x=>{ if (x.status!=="cancelled" && x.date>=t && x.date<=end) items.push({kind:"lesson", date:x.date, time:x.time||"", x}); });
-  s.tournaments.forEach(x=>{ if (x.start && (x.end||x.start)>=t && x.start<=end) items.push({kind:"tour", date:x.start<t?t:x.start, time:"", x}); });
-  state.assignments.forEach(a=>{ if (a.status==="Assigned" && a.due && a.due>=t && a.due<=end) items.push({kind:"due", date:a.due, time:"", x:a}); });
-  (s.training||[]).forEach(x=>{ if (x.date>=t && x.date<=end) items.push({kind:"train", date:x.date, time:x.time||"", x}); });
-  (s.requests||[]).forEach(r=>{ if (r.status==="pending" || (r.status==="declined" && r.date>=t)) items.push({kind:"req", date:r.date, time:r.time||"", x:r}); });
-  const groups = {}; items.forEach(i=>(groups[i.date]=groups[i.date]||[]).push(i));
-  const ord = {tour:0, due:1, lesson:2, req:3, train:4};
-  const row = i=>{ const x = i.x;
-    if (i.kind==="lesson") return '<li><div class="main"><div class="title">Lesson'+(x.topics?' — '+esc(x.topics):'')+'</div><div class="small muted">'+[x.time||"No time set", x.duration?x.duration+" min":"", x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">Lesson</span></li>';
-    if (i.kind==="tour") return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+[x.location, x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">Tournament</span></li>';
-    if (i.kind==="due") return '<li><div class="main"><div class="title"><a href="#/assignment/'+x.id+'">'+esc(x.title)+'</a></div><div class="small muted">'+esc(x.type)+'</div></div><span class="tag warn">Assignment due</span></li>';
-    if (i.kind==="req") return '<li><div class="main"><div class="title">Lesson request</div><div class="small muted">'+[x.time, x.duration+" min", x.format].filter(Boolean).map(esc).join(" · ")+(x.note?' · '+esc(x.note):'')+'</div></div>'+(x.status==="pending"?'<span class="tag warn">Waiting for your coach</span><button class="btn small ghost" data-a="unreq" data-id="'+x.id+'">Cancel</button>':'<span class="tag flag">Declined</span>')+'</li>';
-    return '<li><div class="main"><div class="title">Training · '+esc(x.what||"")+'</div><div class="small muted">'+[x.time, x.duration?x.duration+" min":"", x.note].filter(Boolean).map(esc).join(" · ")+'</div></div><button class="btn small ghost" data-a="train" data-id="'+x.id+'">Edit</button></li>';
-  };
-  const past = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,8);
-  v.innerHTML = '<div class="page-head"><div><h1>Schedule</h1><p class="sub">Your lessons, tournaments, assignments and own training for the next 8 weeks</p></div><div class="row-actions"><button class="btn" data-a="plan">Plan training</button><button class="btn primary" data-a="req">Request a lesson</button></div></div>'+
-    (Object.keys(groups).length ? Object.keys(groups).sort().map(d=>'<div class="date-group"><h3>'+(d===t?"Today":d===addDays(t,1)?"Tomorrow":esc(fmtDay(d)))+'</h3><section class="panel" style="padding:4px 18px"><ul class="list">'+groups[d].sort((a,b)=>(ord[a.kind]-ord[b.kind])||(a.time<b.time?-1:1)).map(row).join("")+'</ul></section></div>').join("")
-      : '<p class="empty">Nothing on the calendar in the next 8 weeks.</p>')+
-    panel("Past lessons", past.length ? '<ul class="list">'+past.map(x=>'<li style="display:block"><div class="title">'+esc(fmtDate(x.date))+(x.topics?' — '+esc(x.topics):'')+'</div>'+(x.notes?'<div class="small pre">'+esc(x.notes)+'</div>':'')+'</li>').join("")+'</ul>' : '<p class="empty">No lessons yet.</p>');
-  bindActions(v,{ req:()=>requestLesson(s), plan:()=>editTraining(s, null), train:id=>editTraining(s, (s.training||[]).find(x=>x.id===id)),
-    unreq:id=>{ const op = {type:"request.cancel", id}; store.send(op); applyOp(s, op, false); render(); toast("Request cancelled"); } });
-}
+function cancelRequest(s, id){ const op = {type:"request.cancel", id}; store.send(op); applyOp(s, op, false); render(); toast("Request cancelled"); }
 /* ---------- welcome ---------- */
 function welcome(){
   let sq = ""; for (let r=0;r<2;r++) for (let c=0;c<8;c++) sq += '<i class="'+((r+c)%2?"d":"l")+'"></i>';
@@ -4662,18 +4641,23 @@ function scheduleItems(from, to){
   // sessions, tournaments (on every day they run) and assignment due dates between two dates
   const items = [];
   state.students.filter(s=>s.active).forEach(s=>{
-    s.sessions.forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"session", date:x.date, s, x, clash:x.status!=="cancelled" ? clashesFor(s.id,x) : []}); });
+    s.sessions.forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"session", date:x.date, s, x, clash:x.status!=="cancelled" && !STUDENT() ? clashesFor(s.id,x) : []}); });
     s.tournaments.forEach(t=>{ if (!t.start) return; const e = t.end && t.end>=t.start ? t.end : t.start; const n = daysBetween(t.start,e)+1;
       for (let d=t.start<from?from:t.start; d<=e && d<=to; d=addDays(d,1)) items.push({kind:"tour", date:d, s, x:t, day:daysBetween(t.start,d)+1, days:n}); });
   });
   state.assignments.forEach(a=>{ const s = byId(a.studentId); if (s && s.active && a.due && a.due>=from && a.due<=to && a.status==="Assigned") items.push({kind:"due", date:a.due, s, x:a}); });
+  // A student also sees their own training and the lessons they asked for.
+  if (STUDENT()) state.students.forEach(s=>{
+    (s.training||[]).forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"train", date:x.date, s, x}); });
+    (s.requests||[]).forEach(x=>{ if ((x.status==="pending" || x.status==="declined") && x.date>=from && x.date<=to) items.push({kind:"req", date:x.date, s, x}); });
+  });
   return items;
 }
 function pSchedule(v){
   const t = today();
   if (!schedWeek) schedWeek = weekStartOf(t);
-  const unmarked = [];
-  state.students.filter(s=>s.active).forEach(s=>s.sessions.forEach(x=>{ if (x.status==="planned" && x.date<t) unmarked.push({s,x}); }));
+  const unmarked = [], st = STUDENT(), me = st && state.students[0];
+  if (!st) state.students.filter(s=>s.active).forEach(s=>s.sessions.forEach(x=>{ if (x.status==="planned" && x.date<t) unmarked.push({s,x}); }));
   // On a phone the week view shows PHONE_DAYS days at a time, starting today, instead of a sideways-scrolling week.
   const phone = isPhone(), n = phone ? PHONE_DAYS : 7;
   if (!schedDay) schedDay = t;
@@ -4683,20 +4667,24 @@ function pSchedule(v){
   const clashes = items.filter(i=>i.kind==="session" && i.x.status!=="cancelled" && i.clash.length);
   const title = schedView==="week" ? fmtDate(first,{day:"numeric",month:"short"})+" – "+fmtDate(weekEnd,{day:"numeric",month:"short",year:"numeric"}) : "Next 4 weeks";
   const slotsN = state.students.filter(s=>s.active).reduce((a,s)=>a+(s.slots||[]).length,0);
-  v.innerHTML = '<div class="page-head"><div><h1>Schedule</h1><p class="sub">'+slotsN+' weekly slot'+(slotsN===1?"":"s")+' · sessions are planned 8 weeks ahead automatically</p></div><div class="row-actions"><button class="btn" id="scSlot">Add weekly slot</button><button class="btn primary" id="scAdd">Plan session</button></div></div>'+
+  v.innerHTML = (st ? '<div class="page-head"><div><h1>Schedule</h1><p class="sub">Your lessons, tournaments, assignments and own training</p></div><div class="row-actions"><button class="btn" data-a="plan">Plan training</button><button class="btn primary" data-a="req">Request a lesson</button></div></div>'
+      : '<div class="page-head"><div><h1>Schedule</h1><p class="sub">'+slotsN+' weekly slot'+(slotsN===1?"":"s")+' · sessions are planned 8 weeks ahead automatically</p></div><div class="row-actions"><button class="btn" id="scSlot">Add weekly slot</button><button class="btn primary" id="scAdd">Plan session</button></div></div>')+
     (unmarked.length?'<section class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="panel-head"><h2>Past sessions still marked as planned</h2><span class="small muted">Marking them done adds the fee to the balance</span></div><ul class="list">'+sortBy(unmarked.map(u=>Object.assign({d:u.x.date},u)),"d",-1).map(({s,x})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(x.date))+(x.time?" "+esc(x.time):"")+(x.topics?" · "+esc(x.topics):"")+'</div></div><div class="row-actions"><button class="btn small primary" data-a="done" data-id="'+s.id+'|'+x.id+'">Mark done</button><button class="btn small" data-a="cancel" data-id="'+s.id+'|'+x.id+'">Cancelled</button></div></li>').join("")+'</ul></section>':'')+
     '<div class="sched-bar"><div class="seg" role="group" aria-label="View" style="margin:0"><button type="button" class="'+(schedView==="week"?"on":"")+'" data-a="view" data-id="week">'+(phone?"Days":"Week")+'</button><button type="button" class="'+(schedView==="list"?"on":"")+'" data-a="view" data-id="list">List</button></div>'+
       (schedView==="week"?'<div class="row-actions"><button class="btn small" data-a="wk" data-id="-1" aria-label="'+(phone?"Earlier days":"Previous week")+'"><span dir="ltr">'+(lang()==="he"?"›":"‹")+'</span></button><button class="btn small" data-a="wk" data-id="0">Today</button><button class="btn small" data-a="wk" data-id="1" aria-label="'+(phone?"Later days":"Next week")+'"><span dir="ltr">'+(lang()==="he"?"‹":"›")+'</span></button></div>':'')+
       '<b class="sched-title">'+esc(title)+'</b></div>'+
     (clashes.length?'<div class="clash-box" style="margin-bottom:12px"><b>'+clashes.length+' session'+(clashes.length===1?" has a clash":"s have clashes")+' '+(schedView==="week"?(phone?"in these days":"this week"):"in the next 4 weeks")+'</b>'+clashes.map(i=>'<div>⚠ '+esc(i.s.name)+', '+esc(fmtDate(i.date,{weekday:"short",day:"numeric",month:"short"}))+(i.x.time?" "+esc(i.x.time):"")+': '+esc(i.clash.map(c=>c.text).join("; "))+' <button class="btn small ghost" data-a="open" data-id="'+i.s.id+'|'+i.x.id+'">Fix</button></div>').join("")+'</div>':'')+
     (schedView==="week" ? weekGrid(first, items, n) : listView(items, t));
-  $("#scAdd").onclick = ()=>planSession();
-  $("#scSlot").onclick = ()=>pickStudent("Add a weekly slot for…", s=>editSlot(s,null));
+  if (!st){ $("#scAdd").onclick = ()=>planSession(); $("#scSlot").onclick = ()=>pickStudent("Add a weekly slot for…", s=>editSlot(s,null)); }
   const find = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && s.sessions.find(y=>y.id===b)]; };
   bindActions(v,{
     view:id=>{ schedView = id; render(); },
     wk:id=>{ if (phone) schedDay = +id===0 ? t : addDays(schedDay, PHONE_DAYS*(+id)); else schedWeek = +id===0 ? weekStartOf(t) : addDays(schedWeek, 7*(+id)); render(); },
-    open:id=>{ const [s,x] = find(id); if (x) sessionActions(s,x); },
+    open:id=>{ const [s,x] = find(id); if (x && !st) sessionActions(s,x); },
+    req:()=>requestLesson(me), plan:()=>editTraining(me, null),
+    train:id=>editTraining(me, (me.training||[]).find(x=>x.id===id)),
+    reqx:id=>{ const r = (me.requests||[]).find(x=>x.id===id); if (r && r.status==="pending") confirmBox("Cancel this request?", "Your lesson request for "+fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"})+" "+r.time+" will be withdrawn.", "Cancel request", ()=>cancelRequest(me, id)); },
+    unreq:id=>cancelRequest(me, id),
     done:id=>{ const [s,x] = find(id); markDone(s,x); },
     cancel:id=>{ const [s,x] = find(id); x.status = "cancelled"; saveStudent(s); render(); },
     move:id=>{ const [s,x] = find(id); moveSession(s,x); }
@@ -4706,25 +4694,33 @@ function pSchedule(v){
     if (e.target.closest(".ev")) return;
     const r = col.getBoundingClientRect(); const h0 = +col.dataset.h0;
     const mins = Math.max(0, Math.round(((e.clientY - r.top)/HOUR_PX*60)/30)*30) + h0*60;
-    planSession({date:col.dataset.date, time:fmtMin(Math.min(mins, 23*60+30))});
+    const pre = {date:col.dataset.date, time:fmtMin(Math.min(mins, 23*60+30))};
+    if (st) requestLesson(me, pre); else planSession(pre);
   }));
   const now = v.querySelector(".wk-now"); if (now && now.scrollIntoView) { const wrap = v.querySelector(".wk-wrap"); if (wrap) wrap.scrollLeft = Math.max(0, now.parentElement.offsetLeft - 60); }
 }
 const HOUR_PX = 48;
+// Timed things on the week grid: lessons, and for a student their training and lesson requests.
+const TIMED = {session:1, train:1, req:1};
+const evLabel = i => !STUDENT() ? i.s.name : i.kind==="train" ? "Training · "+(i.x.what||"") : i.kind==="req" ? (i.x.status==="declined" ? "Declined request" : "Requested lesson") : "Lesson";
+const evAct = i => i.kind==="train" ? 'data-a="train" data-id="'+i.x.id+'"' : i.kind==="req" ? 'data-a="reqx" data-id="'+i.x.id+'"' : 'data-a="open" data-id="'+i.s.id+'|'+i.x.id+'"';
+const evCls = i => i.kind==="train" ? "train" : i.kind==="req" ? "req st-"+i.x.status : "st-"+i.x.status;
 function weekGrid(ws, items, n=7){
   const t = today(), days = [...Array(n)].map((_,i)=>addDays(ws,i));
-  const timed = items.filter(i=>i.kind==="session" && toMin(i.x.time)!==null);
+  const timed = items.filter(i=>TIMED[i.kind] && toMin(i.x.time)!==null);
   let h0 = 15, h1 = 21;
   timed.forEach(i=>{ const a = toMin(i.x.time), b = a+(+i.x.duration||60); h0 = Math.min(h0, Math.floor(a/60)); h1 = Math.max(h1, Math.ceil(b/60)); });
   h0 = Math.max(0, h0-1); h1 = Math.min(24, h1+1);
   const H = h1-h0;
   const head = '<div class="wk-corner"></div>'+days.map(d=>'<div class="wk-dh'+(d===t?" today":"")+'"><span>'+esc(new Date(d+"T00:00").toLocaleDateString(LOCALE(),{weekday:"short"}))+'</span><b>'+new Date(d+"T00:00").getDate()+'</b></div>').join("");
   const allday = '<div class="wk-corner small muted">All day</div>'+days.map(d=>{
-    const its = items.filter(i=>i.date===d && (i.kind!=="session" || toMin(i.x.time)===null));
+    const its = items.filter(i=>i.date===d && (!TIMED[i.kind] || toMin(i.x.time)===null));
+    const who = i=>STUDENT() ? "" : ' · '+esc(i.s.name.split(" ")[0]);
     return '<div class="wk-ad">'+its.map(i=>{
-      if (i.kind==="tour") return '<div class="chip-ev tour" title="'+esc(i.x.name)+'">♜ '+esc(i.x.name)+' · '+esc(i.s.name.split(" ")[0])+(i.days>1?' <span class="muted">'+i.day+'/'+i.days+'</span>':'')+'</div>';
-      if (i.kind==="due") return '<a class="chip-ev due" href="#/assignment/'+i.x.id+'">Due: '+esc(i.x.title)+' · '+esc(i.s.name.split(" ")[0])+'</a>';
-      return '<button type="button" class="chip-ev ses'+(i.x.status==="cancelled"?" cx":"")+(i.clash.length?" clash":"")+'" data-a="open" data-id="'+i.s.id+'|'+i.x.id+'">'+(i.clash.length?"⚠ ":"")+esc(i.s.name)+' · no time</button>';
+      if (i.kind==="tour") return '<div class="chip-ev tour" title="'+esc(i.x.name)+'">♜ '+esc(i.x.name)+who(i)+(i.days>1?' <span class="muted">'+i.day+'/'+i.days+'</span>':'')+'</div>';
+      if (i.kind==="due") return '<a class="chip-ev due" href="#/assignment/'+i.x.id+'">Due: '+esc(i.x.title)+who(i)+'</a>';
+      if (i.kind!=="session") return '<button type="button" class="chip-ev '+evCls(i)+'" '+evAct(i)+'>'+esc(evLabel(i))+'</button>';
+      return '<button type="button" class="chip-ev ses'+(i.x.status==="cancelled"?" cx":"")+(i.clash.length?" clash":"")+'" '+evAct(i)+'>'+(i.clash.length?"⚠ ":"")+esc(evLabel(i))+' · no time</button>';
     }).join("")+'</div>';
   }).join("");
   const labels = '<div class="wk-times" style="height:'+(H*HOUR_PX)+'px">'+[...Array(H)].map((_,k)=>'<span style="top:'+(k*HOUR_PX)+'px">'+pad(h0+k)+':00</span>').join("")+'</div>';
@@ -4735,25 +4731,28 @@ function weekGrid(ws, items, n=7){
     const flush = ()=>{ const lanes = []; cluster.forEach(e=>{ let k = lanes.findIndex(end=>end<=e.a); if (k<0){ k = lanes.length; lanes.push(0); } lanes[k] = e.b; e.lane = k; }); cluster.forEach(e=>{ e.n = lanes.length; placed.push(e); }); cluster = []; };
     evs.forEach(e=>{ if (e.a>=clEnd && cluster.length) flush(); cluster.push(e); clEnd = Math.max(clEnd, e.b); }); if (cluster.length) flush();
     const now = d===t ? (()=>{ const n = new Date(); const mm = n.getHours()*60+n.getMinutes(); return mm>=h0*60 && mm<=h1*60 ? '<div class="wk-now" style="top:'+((mm-h0*60)/60*HOUR_PX)+'px"></div>' : ""; })() : "";
-    return '<div class="wk-day'+(d===t?" today":"")+'" data-date="'+d+'" data-h0="'+h0+'" style="height:'+(H*HOUR_PX)+'px" title="Click an empty spot to plan a session">'+now+placed.map(e=>{
-      const x = e.i.x, top = (e.a-h0*60)/60*HOUR_PX, ht = Math.max(22, (e.b-e.a)/60*HOUR_PX-2);
-      return '<button type="button" class="ev st-'+x.status+(e.i.clash.length?" clash":"")+'" data-a="open" data-id="'+e.i.s.id+'|'+x.id+'" style="top:'+top+'px;height:'+ht+'px;inset-inline-start:calc('+(e.lane/e.n*100)+'% + 2px);width:calc('+(100/e.n)+'% - 4px)">'+
-        '<b>'+(e.i.clash.length?"⚠ ":"")+esc(e.i.s.name)+'</b><span>'+esc(x.time)+'–'+fmtMin(e.b)+(x.format&&x.format!=="In person"?' · '+esc(x.format):'')+(x.slotId?' ↻':'')+'</span></button>';
+    return '<div class="wk-day'+(d===t?" today":"")+'" data-date="'+d+'" data-h0="'+h0+'" style="height:'+(H*HOUR_PX)+'px" title="'+(STUDENT()?"Click an empty spot to request a lesson":"Click an empty spot to plan a session")+'">'+now+placed.map(e=>{
+      const x = e.i.x, top = (e.a-h0*60)/60*HOUR_PX, ht = Math.max(22, (e.b-e.a)/60*HOUR_PX-2), cl = e.i.clash||[];
+      return '<button type="button" class="ev '+evCls(e.i)+(cl.length?" clash":"")+'" '+evAct(e.i)+' style="top:'+top+'px;height:'+ht+'px;inset-inline-start:calc('+(e.lane/e.n*100)+'% + 2px);width:calc('+(100/e.n)+'% - 4px)">'+
+        '<b>'+(cl.length?"⚠ ":"")+esc(evLabel(e.i))+'</b><span>'+esc(x.time)+'–'+fmtMin(e.b)+(x.format&&x.format!=="In person"?' · '+esc(x.format):'')+(x.slotId?' ↻':'')+'</span></button>';
     }).join("")+'</div>';
   }).join("");
   return '<div class="wk-wrap"><div class="wk'+(n<7?" wk-few":"")+'" style="--days:'+n+'"><div class="wk-row">'+head+'</div><div class="wk-row">'+allday+'</div><div class="wk-row wk-body">'+labels+cols+'</div></div></div>'+
-    '<p class="small muted" style="margin:8px 0 0">↻ weekly slot · click a session for actions, or click an empty spot to plan one.</p>';
+    '<p class="small muted" style="margin:8px 0 0">'+(STUDENT()?"↻ weekly lesson · click your training to edit it, or click an empty spot to request a lesson.":"↻ weekly slot · click a session for actions, or click an empty spot to plan one.")+'</p>';
 }
 function listView(items, t){
   const groups = {}; items.forEach(i=>{ if (i.kind==="session" && i.x.status==="cancelled") return; (groups[i.date]=groups[i.date]||[]).push(i); });
   const keys = Object.keys(groups).sort();
   if (!keys.length) return '<p class="empty">Nothing on the calendar in the next 4 weeks.</p>';
-  const ord = {tour:0, due:1, session:2};
+  const ord = {tour:0, due:1, session:2, req:3, train:4};
   return keys.map(d=>'<div class="date-group"><h3>'+(d===t?"Today":d===addDays(t,1)?"Tomorrow":esc(fmtDay(d)))+'</h3><section class="panel" style="padding:4px 18px"><ul class="list">'+
     groups[d].sort((a,b)=>(ord[a.kind]-ord[b.kind]) || ((a.x.time||"99")<(b.x.time||"99")?-1:1)).map(i=>{
-      if (i.kind==="tour") return '<li><div class="main"><div class="title">'+esc(i.x.name)+(i.days>1?' <span class="muted small">day '+i.day+' of '+i.days+'</span>':'')+'</div><div class="small muted"><a href="#/student/'+i.s.id+'/tournaments">'+esc(i.s.name)+'</a>'+(i.x.location?" · "+esc(i.x.location):"")+'</div></div><span class="tag board">Tournament</span></li>';
-      if (i.kind==="due") return '<li><div class="main"><div class="title"><a href="#/assignment/'+i.x.id+'">'+esc(i.x.title)+'</a></div><div class="small muted">'+esc(i.s.name)+' · '+esc(i.x.type)+'</div></div><span class="tag warn">Assignment due</span></li>';
-      const x = i.x;
+      const st = STUDENT(), x = i.x;
+      if (i.kind==="tour") return '<li><div class="main"><div class="title">'+esc(x.name)+(i.days>1?' <span class="muted small">day '+i.day+' of '+i.days+'</span>':'')+'</div><div class="small muted">'+[st?"":'<a href="#/student/'+i.s.id+'/tournaments">'+esc(i.s.name)+'</a>', esc(x.location||""), st?esc(x.format||""):""].filter(Boolean).join(" · ")+'</div></div><span class="tag board">Tournament</span></li>';
+      if (i.kind==="due") return '<li><div class="main"><div class="title"><a href="#/assignment/'+x.id+'">'+esc(x.title)+'</a></div><div class="small muted">'+(st?"":esc(i.s.name)+' · ')+esc(x.type)+'</div></div><span class="tag warn">Assignment due</span></li>';
+      if (i.kind==="req") return '<li><div class="main"><div class="title">Lesson request</div><div class="small muted">'+[x.time, x.duration+" min", x.format].filter(Boolean).map(esc).join(" · ")+(x.note?' · '+esc(x.note):'')+'</div></div><div class="row-actions">'+(x.status==="pending"?'<span class="tag warn">Waiting for your coach</span><button class="btn small ghost" data-a="unreq" data-id="'+x.id+'">Cancel</button>':'<span class="tag flag">Declined</span>')+'</div></li>';
+      if (i.kind==="train") return '<li><div class="main"><div class="title">Training · '+esc(x.what||"")+'</div><div class="small muted">'+[x.time, x.duration?x.duration+" min":"", x.note].filter(Boolean).map(esc).join(" · ")+'</div></div><button class="btn small ghost" data-a="train" data-id="'+x.id+'">Edit</button></li>';
+      if (st) return '<li><div class="main"><div class="title">Lesson'+(x.topics?' — '+esc(x.topics):'')+(x.slotId?' <span class="muted small">↻ weekly</span>':'')+'</div><div class="small muted">'+[x.time||"No time set", x.duration?x.duration+" min":"", x.format].filter(Boolean).map(esc).join(" · ")+'</div></div>'+(x.status==="done"?'<span class="tag ok">Done</span>':'<span class="tag board">Lesson</span>')+'</li>';
       return '<li><div class="main"><div class="title"><a href="#/student/'+i.s.id+'/sessions">'+esc(i.s.name)+'</a>'+(x.slotId?' <span class="muted small">↻ weekly</span>':'')+'</div><div class="small muted">'+esc(x.time||"No time set")+(x.duration?" · "+x.duration+" min":"")+" · "+esc(x.format||"")+(x.topics?" · "+esc(x.topics):"")+'</div>'+(i.clash.length?'<div class="small" style="color:var(--flag)">⚠ '+esc(i.clash.map(c=>c.text).join("; "))+'</div>':'')+'</div>'+
         '<div class="row-actions">'+(x.status==="done"?'<span class="tag ok">Done</span>':'<button class="btn small" data-a="move" data-id="'+i.s.id+'|'+x.id+'">Move</button><button class="btn small ghost" data-a="open" data-id="'+i.s.id+'|'+x.id+'">More</button>')+'</div></li>';
     }).join("")+'</ul></section></div>').join("");
@@ -4856,6 +4855,8 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Requested lesson":"שיעור מבוקש", "Declined request":"בקשה שנדחתה", "Cancel request":"ביטול הבקשה", "Your lessons, tournaments, assignments and own training":"השיעורים, הטורנירים, המשימות והאימונים שלך",
+  "Click an empty spot to request a lesson":"לחיצה על מקום פנוי לבקשת שיעור", "↻ weekly lesson · click your training to edit it, or click an empty spot to request a lesson.":"↻ שיעור קבוע · לחיצה על אימון לעריכה, או על מקום פנוי לבקשת שיעור.",
   "Home":"בית", "Openings":"פתיחות", "Schedule":"לוח זמנים", "Lesson":"שיעור", "Training":"אימון", "Declined":"נדחתה", "Request a lesson":"בקשת שיעור", "Send request":"שליחת בקשה", "Request sent to your coach":"הבקשה נשלחה למאמן", "Lesson request":"בקשת שיעור", "Waiting for your coach":"ממתין למאמן", "Request cancelled":"הבקשה בוטלה", "Note for your coach":"הערה למאמן", "e.g. I'd like to prepare for the City Open":"למשל: אני רוצה להתכונן לטורניר", "Choose a date from today on.":"יש לבחור תאריך מהיום והלאה.", "Choose a start time.":"יש לבחור שעת התחלה.", "Choose a date.":"יש לבחור תאריך.", "Plan training":"תכנון אימון", "Add Training":"הוספת אימון", "Edit Training":"עריכת אימון", "Add training":"הוספת אימון", "Edit training":"עריכת אימון", "Delete this training?":"למחוק את האימון?", "No feedback yet.":"עדיין אין משוב.", "No games with this assignment.":"אין משחקים במשימה הזו.", "Training added":"האימון נוסף", "Training updated":"האימון עודכן", "Training deleted":"האימון נמחק", "Delete this Training?":"למחוק את האימון?", "What you'll work on":"על מה תעבוד/י", "What you worked on":"על מה עבדת", "e.g. Puzzle Rush, then the Lucena chapter":"למשל: Puzzle Rush ואז הפרק על לוסנה", "Your lessons, tournaments, assignments and own training for the next 8 weeks":"השיעורים, הטורנירים, המשימות והאימונים שלך ל־8 השבועות הקרובים", "Nothing on the calendar in the next 8 weeks.":"אין כלום ביומן ב־8 השבועות הקרובים.", "Past lessons":"שיעורים קודמים", "No lessons yet.":"עדיין אין שיעורים.", "Recent lessons":"שיעורים אחרונים", "Coming up":"בקרוב", "Nothing planned yet.":"עדיין לא תוכנן כלום.", "No assignments right now.":"אין כרגע משימות.", "Assignments to do":"משימות לביצוע", "Practice minutes this week":"דקות תרגול השבוע", "Rating":"דירוג", "No lesson planned":"לא תוכנן שיעור", "Your coach hasn't written goals yet.":"המאמן עדיין לא כתב מטרות.", "From your coach":"מהמאמן", "Welcome to Coach's Board":"ברוכים הבאים ללוח של המאמן", "Enter the code your coach gave you to connect your account.":"יש להזין את הקוד שקיבלת מהמאמן כדי לחבר את החשבון.", "Connect":"חיבור", "Code from your coach":"קוד מהמאמן", "Code sent":"הקוד נשלח", "Enter the code from your coach.":"יש להזין את הקוד מהמאמן.", "Couldn't send the code. Check your connection.":"לא ניתן לשלוח את הקוד. כדאי לבדוק את החיבור.", "That code wasn't recognised. Check it with your coach and try again.":"הקוד לא זוהה. כדאי לבדוק אותו עם המאמן ולנסות שוב.", "Code sent. You'll be connected as soon as your coach opens Coach's Board.":"הקוד נשלח. החיבור יושלם ברגע שהמאמן יפתח את הלוח של המאמן.", "Your coach has closed access to this board. Ask your coach for a new code.":"המאמן סגר את הגישה ללוח. אפשר לבקש מהמאמן קוד חדש.", "Connected! Your board is being prepared — it appears here in a moment.":"מחובר! הלוח שלך בהכנה — הוא יופיע כאן בעוד רגע.", "Couldn't load your board":"לא ניתן לטעון את הלוח שלך", "Marked done — your coach will review it":"סומן כבוצע — המאמן יבדוק", "Done · to review":"בוצע · לבדיקה", "by student":"של התלמיד", "Student app":"אפליקציית התלמיד", "Invite to the app":"הזמנה לאפליקציה", "Cancel invite":"ביטול ההזמנה", "Invite cancelled":"ההזמנה בוטלה", "Connected":"מחובר", "Disconnect":"ניתוק", "Visible to student":"גלוי לתלמיד", "Private":"פרטי", "Make private":"הפיכה לפרטי", "Show to student":"הצגה לתלמיד", "Notes are private again":"ההערות שוב פרטיות", "Coach notes in the student app":"הערות המאמן באפליקציית התלמיד", "Private — only you see them":"פרטי — רק את/ה רואה", "Visible to the student":"גלוי לתלמיד", "Notes in the student app":"הערות באפליקציית התלמיד", "The student app works in the published Coach's Board on claude.ai, where your records are stored in your account.":"אפליקציית התלמיד פועלת בלוח של המאמן שפורסם ב־claude.ai, שם הנתונים נשמרים בחשבון שלך.", "They see their lessons, assignments, goals, games, practice, reading and repertoire. They don't see payments, fees, contact details, other students or notes you keep private.":"התלמיד רואה את השיעורים, המשימות, המטרות, המשחקים, התרגול, הקריאה והרפרטואר שלו. הוא לא רואה תשלומים, מחירים, פרטי קשר, תלמידים אחרים או הערות פרטיות.", "Lesson requests":"בקשות לשיעור", "Approve":"אישור", "Decline":"דחייה", "Decline this request?":"לדחות את הבקשה?", "Request declined":"הבקשה נדחתה", "This date has passed":"התאריך עבר",
   // navigation, page titles
   "Coach's Board":"הלוח של המאמן", "Today":"היום", "Students":"תלמידים", "Schedule":"לוח זמנים", "Assignments":"משימות", "Payments":"תשלומים", "Settings":"הגדרות",
@@ -5072,6 +5073,8 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Cancel this request\?$/, "לבטל את הבקשה?"],
+  [/^Your lesson request for (.+) will be withdrawn\.$/, "בקשת השיעור ל־$1 תבוטל."],
   [/^Page (\d+) is before page (\d+), already reached on (.+)\. Enter the page reached in this session\.$/, "עמוד $1 לפני עמוד $2, שכבר הגיעו אליו ב־$3. יש להזין את העמוד שהגיעו אליו באימון הזה."],
   [/^Page (\d+) is before page (\d+), where this book is already\. Enter the page reached in this session\.$/, "עמוד $1 לפני עמוד $2, שבו הספר כבר נמצא. יש להזין את העמוד שהגיעו אליו באימון הזה."],
   [/^Page (\d+) is after page (\d+), logged later on (.+)\. Check the date or the page\.$/, "עמוד $1 אחרי עמוד $2, שנרשם מאוחר יותר ב־$3. כדאי לבדוק את התאריך או העמוד."],
