@@ -339,6 +339,8 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .ev.clash{box-shadow:inset 0 0 0 2px var(--flag);border-inline-start-color:var(--flag)}
 .ev:hover{filter:brightness(.97)}
 .wk-free{position:absolute;left:0;right:0;background:color-mix(in srgb,var(--ok) 13%,transparent);border-top:1px solid color-mix(in srgb,var(--ok) 45%,transparent);border-bottom:1px solid color-mix(in srgb,var(--ok) 45%,transparent);pointer-events:none}
+.wk-taken{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--muted) 16%,transparent) 0 6px,transparent 6px 12px);border-top:1px solid var(--line);border-bottom:1px solid var(--line);pointer-events:none}
+.wk-taken span{position:absolute;inset-inline-end:4px;top:2px;font-size:.66rem;color:var(--muted);font-weight:600;white-space:nowrap}
 .wk-free span{position:absolute;inset-inline-end:4px;top:2px;font-size:.66rem;color:var(--ok);font-weight:600;white-space:nowrap}
 .ev.train,.chip-ev.train{background:var(--surface);border:1px dashed var(--sq-dark);border-inline-start:3px solid var(--sq-dark)}
 .ev.req,.chip-ev.req{background:var(--warn-bg);border-inline-start-color:var(--warn)}
@@ -2502,7 +2504,7 @@ function studentView(s){
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
     worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments, books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[],
     coachName:state.settings.coachName||"", weekStart:state.settings.weekStart||0,
-    freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56))}));
+    freeSet:freeRules().some(r=>r.kind!=="off"), ...openSlots(today(), addDays(today(),56), s.id)}));
 }
 // Every document the student's app reads, by id.
 function portalDocs(s){
@@ -2636,7 +2638,8 @@ function makeStudentStore(db, account){
     Object.assign(state.settings, {coachName:main.coachName||"", weekStart:main.weekStart||0, currency:""});
     // Drop windows that have passed since the coach's app last wrote them.
     const now = new Date(), t = today(), nm = Math.ceil((now.getHours()*60+now.getMinutes())/30)*30;
-    s.free = (main.free||[]).filter(f=>f.date>t || (f.date===t && toMin(f.to)-nm>=FREE_MIN)).map(f=>f.date===t && toMin(f.from)<nm ? Object.assign({}, f, {from:fmtMin(nm)}) : f);
+    const fresh = (L, min)=>(L||[]).filter(f=>f.date>t || (f.date===t && toMin(f.to)-nm>=min)).map(f=>f.date===t && toMin(f.from)<nm ? Object.assign({}, f, {from:fmtMin(nm)}) : f);
+    s.free = fresh(main.free, FREE_MIN); s.taken = fresh(main.taken, 1);
     s.freeSet = !!main.freeSet;
     base = clone(s);
   }
@@ -4503,18 +4506,30 @@ function freeOn(d){
   const out = []; w.forEach(([a,b])=>{ const l = out[out.length-1]; if (l && a<=l[1]) l[1] = Math.max(l[1], b); else out.push([a,b]); });
   return out;
 }
-// What is still open: free windows minus every student's lessons (never saying whose), and minus the past.
-function openSlots(from, to){
-  const out = [], now = new Date(), t = today(), nowMin = now.getHours()*60+now.getMinutes();
+// What is still open: free windows minus every booked lesson and pending lesson request, and minus the past.
+// "taken" is the part of the free windows other students hold, so a student sees the window split,
+// never whose lesson it is (their own lessons and requests show as themselves instead).
+function openSlots(from, to, sid){
+  const free = [], taken = [], now = new Date(), t = today(), nowMin = now.getHours()*60+now.getMinutes();
+  const cut = (win, a, b)=>win.flatMap(([p,q])=>b<=p || a>=q ? [[p,q]] : [[p,Math.min(q,a)],[Math.max(p,b),q]].filter(([u,v])=>v-u>0));
   for (let d=from; d<=to; d=addDays(d,1)){
-    let win = freeOn(d); if (!win.length) continue;
+    const orig = freeOn(d); if (!orig.length) continue;
+    const past = d===t ? Math.ceil(nowMin/30)*30 : 0;
     const busy = [];
-    state.students.forEach(s=>s.sessions.forEach(x=>{ const a = toMin(x.time); if (x.date===d && x.status!=="cancelled" && a!==null) busy.push([a, a+(+x.duration||60)]); }));
-    if (d===t) busy.push([0, Math.ceil(nowMin/30)*30]);
-    busy.forEach(([a,b])=>{ win = win.flatMap(([p,q])=>b<=p || a>=q ? [[p,q]] : [[p,Math.min(q,a)],[Math.max(p,b),q]].filter(([u,v])=>v-u>=FREE_MIN)); });
-    win.forEach(([a,b])=>out.push({date:d, from:fmtMin(a), to:fmtMin(b)}));
+    state.students.forEach(s=>{
+      s.sessions.forEach(x=>{ const a = toMin(x.time); if (x.date===d && x.status!=="cancelled" && a!==null) busy.push([a, a+(+x.duration||60), s.id]); });
+      (s.requests||[]).forEach(r=>{ const a = toMin(r.time); if (r.date===d && r.status==="pending" && a!==null) busy.push([a, a+(+r.duration||60), s.id]); });
+    });
+    let win = cut(orig, 0, past);
+    busy.forEach(([a,b])=>{ win = cut(win, a, b); });
+    win.filter(([a,b])=>b-a>=FREE_MIN).forEach(([a,b])=>free.push({date:d, from:fmtMin(a), to:fmtMin(b)}));
+    // other students' time inside the free windows, merged
+    const tk = [];
+    busy.filter(z=>z[2]!==sid).forEach(([a,b])=>orig.forEach(([p,q])=>{ const u = Math.max(a,p,past), v = Math.min(b,q); if (v>u) tk.push([u,v]); }));
+    tk.sort((x,y)=>x[0]-y[0]).reduce((m,[a,b])=>{ const l = m[m.length-1]; if (l && a<=l[1]) l[1] = Math.max(l[1], b); else m.push([a,b]); return m; }, [])
+      .forEach(([a,b])=>taken.push({date:d, from:fmtMin(a), to:fmtMin(b)}));
   }
-  return out;
+  return {free, taken};
 }
 function freeLabel(r){
   const wd = n=>new Date(2024,0,7+(+n)).toLocaleDateString(LOCALE(),{weekday:"long"});
@@ -4716,6 +4731,7 @@ function scheduleItems(from, to){
     (s.training||[]).forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"train", date:x.date, s, x}); });
     (s.requests||[]).forEach(x=>{ if ((x.status==="pending" || x.status==="declined") && x.date>=from && x.date<=to) items.push({kind:"req", date:x.date, s, x}); });
     (s.free||[]).forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"free", date:x.date, s, x}); });
+    (s.taken||[]).forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"taken", date:x.date, s, x}); });
   });
   return items;
 }
@@ -4789,17 +4805,18 @@ function freeBands(d){
   if (STUDENT()){ const me = state.students[0]; return ((me && me.free)||[]).filter(f=>f.date===d).map(f=>[toMin(f.from), toMin(f.to)]); }
   return freeOn(d);
 }
+function takenBands(d){ const me = STUDENT() && state.students[0]; return ((me && me.taken)||[]).filter(f=>f.date===d).map(f=>[toMin(f.from), toMin(f.to)]); }
 function weekGrid(ws, items, n=7){
   const t = today(), days = [...Array(n)].map((_,i)=>addDays(ws,i));
   const timed = items.filter(i=>TIMED[i.kind] && toMin(i.x.time)!==null);
   let h0 = 15, h1 = 21;
   timed.forEach(i=>{ const a = toMin(i.x.time), b = a+(+i.x.duration||60); h0 = Math.min(h0, Math.floor(a/60)); h1 = Math.max(h1, Math.ceil(b/60)); });
-  days.forEach(d=>freeBands(d).forEach(([a,b])=>{ h0 = Math.min(h0, Math.floor(a/60)); h1 = Math.max(h1, Math.ceil(b/60)); }));
+  days.forEach(d=>[...freeBands(d), ...takenBands(d)].forEach(([a,b])=>{ h0 = Math.min(h0, Math.floor(a/60)); h1 = Math.max(h1, Math.ceil(b/60)); }));
   h0 = Math.max(0, h0-1); h1 = Math.min(24, h1+1);
   const H = h1-h0;
   const head = '<div class="wk-corner"></div>'+days.map(d=>'<div class="wk-dh'+(d===t?" today":"")+'"><span>'+esc(new Date(d+"T00:00").toLocaleDateString(LOCALE(),{weekday:"short"}))+'</span><b>'+new Date(d+"T00:00").getDate()+'</b></div>').join("");
   const allday = '<div class="wk-corner small muted">All day</div>'+days.map(d=>{
-    const its = items.filter(i=>i.date===d && i.kind!=="free" && (!TIMED[i.kind] || toMin(i.x.time)===null));
+    const its = items.filter(i=>i.date===d && i.kind!=="free" && i.kind!=="taken" && (!TIMED[i.kind] || toMin(i.x.time)===null));
     const who = i=>STUDENT() ? "" : ' · '+esc(i.s.name.split(" ")[0]);
     return '<div class="wk-ad">'+its.map(i=>{
       if (i.kind==="tour") return '<div class="chip-ev tour" title="'+esc(i.x.name)+'">♜ '+esc(i.x.name)+who(i)+(i.days>1?' <span class="muted">'+i.day+'/'+i.days+'</span>':'')+'</div>';
@@ -4817,26 +4834,28 @@ function weekGrid(ws, items, n=7){
     evs.forEach(e=>{ if (e.a>=clEnd && cluster.length) flush(); cluster.push(e); clEnd = Math.max(clEnd, e.b); }); if (cluster.length) flush();
     const now = d===t ? (()=>{ const n = new Date(); const mm = n.getHours()*60+n.getMinutes(); return mm>=h0*60 && mm<=h1*60 ? '<div class="wk-now" style="top:'+((mm-h0*60)/60*HOUR_PX)+'px"></div>' : ""; })() : "";
     return '<div class="wk-day'+(d===t?" today":"")+'" data-date="'+d+'" data-h0="'+h0+'" style="height:'+(H*HOUR_PX)+'px" title="'+(STUDENT()?"Click an empty spot to request a lesson":"Click an empty spot to plan a session")+'">'+now+
-      freeBands(d).map(([a,b])=>'<div class="wk-free" style="top:'+((a-h0*60)/60*HOUR_PX)+'px;height:'+((b-a)/60*HOUR_PX)+'px"><span>Free '+fmtMin(a)+'–'+fmtMin(b)+'</span></div>').join("")+placed.map(e=>{
+      freeBands(d).map(([a,b])=>'<div class="wk-free" style="top:'+((a-h0*60)/60*HOUR_PX)+'px;height:'+((b-a)/60*HOUR_PX)+'px"><span>Free '+fmtMin(a)+'–'+fmtMin(b)+'</span></div>').join("")+
+      takenBands(d).map(([a,b])=>'<div class="wk-taken" style="top:'+((a-h0*60)/60*HOUR_PX)+'px;height:'+((b-a)/60*HOUR_PX)+'px"><span>Taken '+fmtMin(a)+'–'+fmtMin(b)+'</span></div>').join("")+placed.map(e=>{
       const x = e.i.x, top = (e.a-h0*60)/60*HOUR_PX, ht = Math.max(22, (e.b-e.a)/60*HOUR_PX-2), cl = e.i.clash||[];
       return '<button type="button" class="ev '+evCls(e.i)+(cl.length?" clash":"")+'" '+evAct(e.i)+' style="top:'+top+'px;height:'+ht+'px;inset-inline-start:calc('+(e.lane/e.n*100)+'% + 2px);width:calc('+(100/e.n)+'% - 4px)">'+
         '<b>'+(cl.length?"⚠ ":"")+esc(evLabel(e.i))+'</b><span>'+esc(x.time)+'–'+fmtMin(e.b)+(x.format&&x.format!=="In person"?' · '+esc(x.format):'')+(x.slotId?' ↻':'')+'</span></button>';
     }).join("")+'</div>';
   }).join("");
   return '<div class="wk-wrap"><div class="wk'+(n<7?" wk-few":"")+'" style="--days:'+n+'"><div class="wk-row">'+head+'</div><div class="wk-row">'+allday+'</div><div class="wk-row wk-body">'+labels+cols+'</div></div></div>'+
-    '<p class="small muted" style="margin:8px 0 0">'+(STUDENT()?"Green is when your coach is free · click inside it to request a lesson, or click your training to edit it.":"↻ weekly slot · green is your free time · click a session for actions, or click an empty spot to plan one.")+'</p>';
+    '<p class="small muted" style="margin:8px 0 0">'+(STUDENT()?"Green is when your coach is free, striped is already taken · click inside green to request a lesson, or click your training to edit it.":"↻ weekly slot · green is your free time · click a session for actions, or click an empty spot to plan one.")+'</p>';
 }
 function listView(items, t){
   const groups = {}; items.forEach(i=>{ if (i.kind==="session" && i.x.status==="cancelled") return; (groups[i.date]=groups[i.date]||[]).push(i); });
   const keys = Object.keys(groups).sort();
   if (!keys.length) return '<p class="empty">Nothing on the calendar in the next 4 weeks.</p>';
-  const ord = {tour:0, due:1, session:2, req:3, train:4, free:5};
+  const ord = {tour:0, due:1, session:2, req:3, train:4, free:5, taken:5};
   return keys.map(d=>'<div class="date-group"><h3>'+(d===t?"Today":d===addDays(t,1)?"Tomorrow":esc(fmtDay(d)))+'</h3><section class="panel" style="padding:4px 18px"><ul class="list">'+
-    groups[d].sort((a,b)=>(ord[a.kind]-ord[b.kind]) || ((a.x.time||"99")<(b.x.time||"99")?-1:1)).map(i=>{
+    groups[d].sort((a,b)=>(ord[a.kind]-ord[b.kind]) || ((a.x.time||a.x.from||"99")<(b.x.time||b.x.from||"99")?-1:1)).map(i=>{
       const st = STUDENT(), x = i.x;
       if (i.kind==="tour") return '<li><div class="main"><div class="title">'+esc(x.name)+(i.days>1?' <span class="muted small">day '+i.day+' of '+i.days+'</span>':'')+'</div><div class="small muted">'+[st?"":'<a href="#/student/'+i.s.id+'/tournaments">'+esc(i.s.name)+'</a>', esc(x.location||""), st?esc(x.format||""):""].filter(Boolean).join(" · ")+'</div></div><span class="tag board">Tournament</span></li>';
       if (i.kind==="due") return '<li><div class="main"><div class="title"><a href="#/assignment/'+x.id+'">'+esc(x.title)+'</a></div><div class="small muted">'+(st?"":esc(i.s.name)+' · ')+esc(x.type)+'</div></div><span class="tag warn">Assignment due</span></li>';
       if (i.kind==="req") return '<li><div class="main"><div class="title">Lesson request</div><div class="small muted">'+[x.time, x.duration+" min", x.format].filter(Boolean).map(esc).join(" · ")+(x.note?' · '+esc(x.note):'')+'</div></div><div class="row-actions">'+(x.status==="pending"?'<span class="tag warn">Waiting for your coach</span><button class="btn small ghost" data-a="unreq" data-id="'+x.id+'">Cancel</button>':'<span class="tag flag">Declined</span>')+'</div></li>';
+      if (i.kind==="taken") return '<li><div class="main"><div class="title muted">Taken '+esc(x.from)+'–'+esc(x.to)+'</div><div class="small muted">Another lesson</div></div><span class="tag">Booked</span></li>';
       if (i.kind==="free") return '<li><div class="main"><div class="title">Coach free '+esc(x.from)+'–'+esc(x.to)+'</div><div class="small muted">Open for lessons</div></div><button class="btn small" data-a="reqat" data-id="'+x.date+'|'+x.from+'">Request</button></li>';
       if (i.kind==="train") return '<li><div class="main"><div class="title">Training · '+esc(x.what||"")+'</div><div class="small muted">'+[x.time, x.duration?x.duration+" min":"", x.note].filter(Boolean).map(esc).join(" · ")+'</div></div><button class="btn small ghost" data-a="train" data-id="'+x.id+'">Edit</button></li>';
       if (st) return '<li><div class="main"><div class="title">Lesson'+(x.topics?' — '+esc(x.topics):'')+(x.slotId?' <span class="muted small">↻ weekly</span>':'')+'</div><div class="small muted">'+[x.time||"No time set", x.duration?x.duration+" min":"", x.format].filter(Boolean).map(esc).join(" · ")+'</div></div>'+(x.status==="done"?'<span class="tag ok">Done</span>':'<span class="tag board">Lesson</span>')+'</li>';
@@ -4942,6 +4961,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Another lesson":"שיעור אחר", "Booked":"תפוס",
   "From":"משעה",
   "Day off":"יום חופש", "Add free time":"הוספת זמן פנוי", "Edit free time":"עריכת זמן פנוי", "Type":"סוג", "Every week":"כל שבוע", "One date only":"תאריך אחד בלבד", "Day off (not available)":"יום חופש (לא זמין)",
   "Until":"עד", "Last date (optional)":"תאריך אחרון (לא חובה)", "For every week: the first week it applies":"לכל שבוע: השבוע הראשון שבו זה חל",
@@ -4951,7 +4971,7 @@ const HE = {
   "No free time set yet.":"עדיין לא הוגדר זמן פנוי.", "Open for lessons":"פנוי לשיעורים", "Request":"בקשה",
   "When your coach is free":"מתי המאמן פנוי", "No free time in the coming weeks.":"אין זמן פנוי בשבועות הקרובים.",
   "Your coach isn't free then. Choose a time inside a green free slot on the Schedule.":"המאמן לא פנוי בזמן הזה. יש לבחור זמן בתוך משבצת פנויה ירוקה בלוח הזמנים.",
-  "Green is when your coach is free · click inside it to request a lesson, or click your training to edit it.":"ירוק = המאמן פנוי · לחיצה בתוכו לבקשת שיעור, או על אימון לעריכה.",
+  "Green is when your coach is free, striped is already taken · click inside green to request a lesson, or click your training to edit it.":"ירוק = המאמן פנוי, מפוספס = כבר תפוס · לחיצה בתוך הירוק לבקשת שיעור, או על אימון לעריכה.",
   "↻ weekly slot · green is your free time · click a session for actions, or click an empty spot to plan one.":"↻ שיעור קבוע · ירוק = הזמן הפנוי שלך · לחיצה על שיעור לפעולות, או על מקום פנוי לתכנון שיעור.",
   "Requested lesson":"שיעור מבוקש", "Declined request":"בקשה שנדחתה", "Cancel request":"ביטול הבקשה", "Your lessons, tournaments, assignments and own training":"השיעורים, הטורנירים, המשימות והאימונים שלך",
   "Click an empty spot to request a lesson":"לחיצה על מקום פנוי לבקשת שיעור", "↻ weekly lesson · click your training to edit it, or click an empty spot to request a lesson.":"↻ שיעור קבוע · לחיצה על אימון לעריכה, או על מקום פנוי לבקשת שיעור.",
@@ -5171,6 +5191,7 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Taken (\d\d:\d\d)–(\d\d:\d\d)$/, "תפוס $1–$2"],
   [/^Free (\d\d:\d\d)–(\d\d:\d\d)$/, "פנוי $1–$2"], [/^Coach free (\d\d:\d\d)–(\d\d:\d\d)$/, "המאמן פנוי $1–$2"],
   [/^Free time for lessons \((\d+)\)$/, "זמן פנוי לשיעורים ($1)"],
   [/^Every (.+) · (\d\d:\d\d)–(\d\d:\d\d)$/, "כל $1 · $2–$3"],
