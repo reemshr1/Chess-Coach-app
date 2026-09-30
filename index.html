@@ -2583,12 +2583,18 @@ function editStudent(s){
       if (iid && !/^\d{1,10}$/.test(iid)) return "The ICF ID should be digits only, like 20256.";
       if (fid && state.students.some(y=>y.id!==x.id && y.fideId===fid)) return "Another student already has FIDE ID "+fid+".";
       if (iid && state.students.some(y=>y.id!==x.id && y.icfId===iid)) return "Another student already has ICF ID "+iid+".";
-      const oldRating = x.rating;
+      const oldRating = x.rating, oldRate = +x.rate||0;
       if (fid!==x.fideId) x.fide = {}; if (iid!==x.icfId) x.icf = {};
       Object.assign(x,{name:d.name,fideId:fid,icfId:iid,noId:d.idStatus==="none"&&!fid&&!iid,rating:d.rating,ratingType:d.ratingType,level:d.level,birthYear:d.birthYear,contact:d.contact,guardian:d.guardian,rate:d.rate===""?0:d.rate,active:d.active==="1",goals:d.goals,notes:d.notes});
       if (d.rating!=="" && d.rating!==oldRating && d.ratingType!=="Unrated") addRating(x, mainSource(x), d.rating);
+      // A new fee applies to weekly slots and upcoming planned sessions that were on the old fee.
+      // Sessions and slots with a fee of their own, and anything already done, keep their price.
+      let repriced = 0;
+      if (!isNew && (+x.rate||0)!==oldRate){ const t = today(), onOld = v=>v!==""&&v!=null&&+v===oldRate;
+        (x.slots||[]).forEach(sl=>{ if (onOld(sl.fee)) sl.fee = x.rate; });
+        x.sessions.forEach(ss=>{ if (ss.status==="planned" && ss.date>=t && onOld(ss.fee)){ ss.fee = x.rate; repriced++; } }); }
       if (isNew){ state.students.push(x); location.hash = "#/student/"+x.id; }
-      saveStudent(x); render(); toast(isNew?"Student added":"Changes saved");
+      saveStudent(x); render(); toast(isNew?"Student added":repriced?"Changes saved — new fee applied to "+repriced+" planned session"+(repriced===1?"":"s"):"Changes saved");
     }});
 }
 
@@ -2614,10 +2620,11 @@ function bindActions(root, handlers){
     el.addEventListener(el.tagName==="INPUT"?"change":"click", e=>{ e.preventDefault && el.tagName!=="INPUT" && e.preventDefault(); h(el.dataset.id, el, e); });
   });
 }
-function crud(s, key, item, fields, title, toastWord, validate, transform, after){
+function crud(s, key, item, fields, title, toastWord, validate, transform, after, beforeDelete){
   const isNew = !item; const x = item ? item : {id:uid()};
   return openForm({title:(isNew?"Add ":"Edit ")+title, submit:isNew?"Add":"Save changes", fields,
-    danger: isNew?null:{label:"Delete", onClick:()=>{ s[key] = s[key].filter(y=>y.id!==x.id); saveStudent(s); render(); toast(toastWord+" deleted"); }},
+    danger: isNew?null:{label:"Delete", onClick:()=>confirmBox("Delete this "+title+"?","This can't be undone.","Delete",()=>{
+      if (beforeDelete) beforeDelete(x); s[key] = s[key].filter(y=>y.id!==x.id); saveStudent(s); render(); toast(toastWord+" deleted"); })},
     onSubmit:d=>{ const err = validate && validate(d); if (err) return err; if (transform) d = transform(d); Object.assign(x,d); if (isNew) s[key].push(x); if (after) after(x, isNew); saveStudent(s); render(); toast(toastWord+(isNew?" added":" updated")); }});
 }
 
@@ -2674,7 +2681,8 @@ function tOverview(el, s){
           if (d.std!=="") addRating(s,"FIDE",d.std,t2); if (d.rapid!=="") addRating(s,"FIDE Rapid",d.rapid,t2); if (d.blitz!=="") addRating(s,"FIDE Blitz",d.blitz,t2); }
         if (s.icfId && d.icf!==undefined){ s.icf = Object.assign({}, s.icf, {rating:d.icf, updated:t2}); if (d.icf!=="") addRating(s,"ICF",d.icf,t2); }
         saveStudent(s); render(); toast("Ratings saved"); }}),
-    delRating:id=>{ s.ratings = s.ratings.filter(p=>p.id!==id); saveStudent(s); render(); },
+    delRating:id=>{ const p = s.ratings.find(y=>y.id===id); if (!p) return;
+      confirmBox("Remove this rating?", (p.source||mainSource(s))+" "+p.value+" from "+fmtDate(p.date)+" will be removed from the history.","Remove",()=>{ s.ratings = s.ratings.filter(y=>y.id!==id); saveStudent(s); render(); toast("Rating removed"); }); },
     edit:()=>editStudent(s)
   });
 }
@@ -2693,7 +2701,9 @@ function editSession(s, x){
   ],"session","Session",
   d=>d.status==="cancelled" ? null : clashCheck(s.id, {id:x?x.id:"-", date:d.date, time:d.time, duration:d.duration, format:d.format}, ack),
   null,
-  (y)=>{ if (y.slotId && before && (y.date!==before.date || y.time!==before.time)) y.custom = true; });
+  (y)=>{ if (y.slotId && before && (y.date!==before.date || y.time!==before.time)) y.custom = true; },
+  // A deleted weekly-slot session is remembered on its slot, so it isn't planned again on the next load.
+  (y)=>{ const sl = y.slotId && (s.slots||[]).find(z=>z.id===y.slotId); if (sl){ sl.skip = sl.skip||[]; sl.skip.push(y.slotDate||y.date); } });
 }
 function tSessions(el, s){
   const t = today();
@@ -2775,6 +2785,7 @@ function tacticsStats(s, days){
       :'<p class="empty">No tactics logged in this period.</p>');
 }
 let tacPeriod = 30;
+const workShown = {}; // how many practice entries to list, per student
 function tWork(el, s){
   const t = today();
   const days = []; for (let i=6;i>=0;i--){ const d = addDays(t,-i); const m = s.worklog.filter(w=>w.date===d).reduce((a,w)=>a+(+w.minutes||0),0); days.push({d,m}); }
@@ -2784,12 +2795,15 @@ function tWork(el, s){
   const periods = [[7,"7 days"],[30,"30 days"],[90,"90 days"],[0,"All time"]];
   el.innerHTML = workNav(s,"work")+'<div class="grid g2">'+
     panel("Daily practice", '<p style="margin:0"><b class="num">'+total+' min</b> <span class="muted">over '+active+' of the last 7 days'+(streak>1?" · "+streak+"-day streak":"")+'</span></p><div class="week">'+days.map(x=>'<div><span class="'+lvl(x.m)+'" title="'+x.m+' min"></span>'+esc(new Date(x.d+"T00:00").toLocaleDateString(undefined,{weekday:"narrow"}))+'</div>').join("")+'</div>'+
-      '<ul class="list" style="margin-top:14px">'+(sortBy(s.worklog,"date",-1).slice(0,25).map(w=>{ const res = practiceResult(w); return '<li><div class="main"><div class="title">'+practiceLabel(w,s)+(w.what==="Tactics"&&w.site&&exKind(w.site,w.exercise)==="score"&&runsOf(w).length&&(personalBest(s,w.site,w.exercise)||{}).entry===w?' <span class="tag ok">Personal best</span>':'')+'</div><div class="small muted">'+esc(fmtDate(w.date))+(res?" · "+esc(res):"")+(w.note?" · "+esc(w.note):"")+'</div></div><span class="num">'+esc(w.minutes)+' min</span><button class="btn small ghost" data-a="editLog" data-id="'+w.id+'">Edit</button></li>'; }).join("")||'<li class="empty">No practice logged yet.</li>')+'</ul>',
+      '<ul class="list" style="margin-top:14px">'+(sortBy(s.worklog,"date",-1).slice(0,workShown[s.id]||25).map(w=>{ const res = practiceResult(w); return '<li><div class="main"><div class="title">'+practiceLabel(w,s)+(w.what==="Tactics"&&w.site&&exKind(w.site,w.exercise)==="score"&&runsOf(w).length&&(personalBest(s,w.site,w.exercise)||{}).entry===w?' <span class="tag ok">Personal best</span>':'')+'</div><div class="small muted">'+esc(fmtDate(w.date))+(res?" · "+esc(res):"")+(w.note?" · "+esc(w.note):"")+'</div></div><span class="num">'+esc(w.minutes)+' min</span><button class="btn small ghost" data-a="editLog" data-id="'+w.id+'">Edit</button></li>'; }).join("")||'<li class="empty">No practice logged yet.</li>')+'</ul>'+
+      (()=>{ const n = s.worklog.length, shown = Math.min(n, workShown[s.id]||25); return n>shown ? '<div class="row-actions" style="margin-top:8px;align-items:center"><span class="small muted" style="margin-right:auto">Showing '+shown+' of '+n+'</span><button class="btn small" data-a="more">Show 25 more</button><button class="btn small ghost" data-a="all">Show all</button></div>' : ""; })(),
       '<button class="btn small primary" data-a="addLog">Log practice</button>')+
     panel("Tactics statistics", '<div class="seg" role="group" aria-label="Period">'+periods.map(([n,l])=>'<button type="button" class="'+(tacPeriod===n?"on":"")+'" data-a="period" data-id="'+n+'">'+l+'</button>').join("")+'</div>'+tacticsStats(s, tacPeriod))+
   '</div>';
   bindActions(el,{
     period:id=>{ tacPeriod = +id; render(); },
+    more:()=>{ workShown[s.id] = (workShown[s.id]||25) + 25; render(); },
+    all:()=>{ workShown[s.id] = Infinity; render(); },
     addLog:()=>openPractice(s, null),
     editLog:id=>openPractice(s, s.worklog.find(x=>x.id===id))
   });
@@ -3230,7 +3244,7 @@ function editRep(s, item, preset){
       {name:"reviewed",label:"Last reviewed",type:"date",value:x.reviewed,hint:"Lines not reviewed for 6 months are flagged as Needs review automatically"},
       {name:"lines",label:"Main lines",type:"textarea",value:x.lines,placeholder:"1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6"},
       {name:"notes",label:"Notes",type:"textarea",value:x.notes,placeholder:"Key ideas, typical plans, lines still missing"}],
-    danger: isNew?null:{label:"Delete line", onClick:()=>{ s.repertoire = s.repertoire.filter(y=>y.id!==x.id); saveStudent(s); render(); toast("Line deleted"); }},
+    danger: isNew?null:{label:"Delete line", onClick:()=>confirmBox("Delete “"+x.name+"”?","The line, its moves and notes will be removed. This can't be undone.","Delete",()=>{ s.repertoire = s.repertoire.filter(y=>y.id!==x.id); saveStudent(s); render(); toast("Line deleted"); })},
     onSubmit:d=>{
       if (!d.name) return "Enter the name of the student's line.";
       if (d.color==="Black") d.firstMove = "";
@@ -3621,10 +3635,11 @@ function weekStartOf(d){ const ws = +(state.settings.weekStart||0); let x = d; w
 function ensureRecurring(s){
   let changed = false; const t = today(), end = addDays(t, HORIZON_DAYS);
   (s.slots||[]).forEach(sl=>{
+    if (sl.skip && sl.skip.some(d=>d<t)){ sl.skip = sl.skip.filter(d=>d>=t); changed = true; }
     let d = sl.start && sl.start>t ? sl.start : t;
     for (let i=0;i<7 && dow(d)!==+sl.weekday;i++) d = addDays(d,1);
     for (; d<=end && (!sl.end || d<=sl.end); d = addDays(d,7)){
-      if (s.sessions.some(x=>x.slotId===sl.id && (x.slotDate||x.date)===d)) continue;
+      if (s.sessions.some(x=>x.slotId===sl.id && (x.slotDate||x.date)===d) || (sl.skip||[]).includes(d)) continue;
       s.sessions.push({id:uid(), slotId:sl.id, slotDate:d, date:d, time:sl.time, duration:sl.duration, format:sl.format, status:"planned", topics:"", notes:"", fee:sl.fee});
       changed = true;
     }
