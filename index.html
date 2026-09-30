@@ -59,6 +59,18 @@ img{max-width:100%}
 .nav a[aria-current="page"]{background:var(--sq-light);color:var(--ink)}
 .nav svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .side-foot{margin-top:auto;font-size:.8rem;color:var(--muted);padding:0 10px}
+.ic{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.side-search{display:flex;align-items:center;gap:8px;margin:0 2px 12px;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-sm);color:var(--muted);text-decoration:none;background:var(--paper)}
+.side-search:hover{border-color:var(--muted)}
+.side-search span{flex:1}
+kbd{font-family:var(--body);font-size:.75rem;border:1px solid var(--line);border-radius:4px;padding:0 6px;background:var(--surface);color:var(--muted)}
+.topbar{display:none}
+.search-big{width:100%;font-size:1.05rem;padding:10px 14px;margin-bottom:18px}
+.hit{display:block;padding:10px 0;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}
+.hit:first-child{border-top:0}
+.hit:hover .title{text-decoration:underline}
+.hit .title{font-weight:600}
+.hit mark{background:var(--warn-bg);color:inherit;border-radius:2px}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:middle}
 .dot.busy{background:var(--warn)} .dot.local{background:var(--muted)} .dot.err{background:var(--flag)}
 main{padding:32px clamp(16px,4vw,48px) 96px;max-width:1180px;width:100%;min-width:0}
@@ -67,6 +79,9 @@ main{padding:32px clamp(16px,4vw,48px) 96px;max-width:1180px;width:100%;min-widt
 @media (max-width:820px){
   .app{grid-template-columns:1fr}
   .side{display:none}
+  .topbar{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:15;background:var(--surface);border-bottom:1px solid var(--line);padding:calc(6px + env(safe-area-inset-top,0px)) 8px 6px 16px}
+  .topbar .brand{padding:0}
+  .topbar .ic{width:22px;height:22px}
   main{padding:20px 16px calc(96px + env(safe-area-inset-bottom,0px))}
   .bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:20;justify-content:space-around}
   .bottom-nav a{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.7rem;color:var(--muted);text-decoration:none;padding:4px 8px;border-radius:var(--r-sm);min-width:56px}
@@ -336,9 +351,11 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 </style>
 </head>
 <body>
+<header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>Coach's Board</b></div><a class="btn ghost small" href="#/search" aria-label="Search"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></a></header>
 <div class="app">
   <aside class="side">
     <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>Coach's Board</b></div>
+    <a class="side-search" href="#/search"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Search</span><kbd>/</kbd></a>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot" id="syncState"><span class="dot local"></span>Loading…</div>
   </aside>
@@ -2495,7 +2512,7 @@ function render(){
   if (!loaded){ v.innerHTML = '<p class="muted">Loading your students…</p>'; return; }
   const r = route();
   if (!state.students.length && ["dashboard","students","schedule","payments","assignments"].includes(r.page)){ v.innerHTML = welcome(); bindWelcome(); return; }
-  const pages = {dashboard:pDashboard, students:pStudents, student:pStudent, schedule:pSchedule, payments:pPayments, settings:pSettings, assignments:pAssignments, assignment:pAssignment};
+  const pages = {dashboard:pDashboard, students:pStudents, student:pStudent, schedule:pSchedule, payments:pPayments, settings:pSettings, assignments:pAssignments, assignment:pAssignment, search:pSearch};
   (pages[r.page]||pDashboard)(v, r);
 }
 
@@ -2632,6 +2649,72 @@ function pickStudent(title, then){
   openForm({title, submit:"Continue", fields:[{name:"sid",label:"Student",type:"select",options:act.map(s=>[s.id,s.name]),full:true}],
     onSubmit:d=>{ setTimeout(()=>then(byId(d.sid)),0); }});
 }
+
+/* ---------- search ---------- */
+// One box that finds students, lessons, games, repertoire, assignments, tournaments and books.
+const foldText = v => String(v??"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const SEARCH_SHOW = 6;
+let searchOpen = {}; // groups expanded to show every match
+function searchAll(q){
+  const words = foldText(q).split(/\s+/).filter(Boolean);
+  const groups = [];
+  if (!words.length) return groups;
+  const hit = (...parts)=>{ const h = foldText(parts.join(" ")); return words.every(w=>h.includes(w)); };
+  const add = (key, label, items)=>{ if (items.length) groups.push({key, label, items}); };
+  const ss = sortBy(state.students,"name");
+  add("students","Students", ss.filter(s=>hit(s.name,s.level,s.contact,s.guardian,s.goals,s.notes,s.fideId,s.icfId))
+    .map(s=>({title:s.name, sub:[s.level, s.active?"":"Archived"].filter(Boolean).join(" · "), href:"#/student/"+s.id})));
+  const ses = []; ss.forEach(s=>s.sessions.forEach(x=>{ if ((x.topics||x.notes) && hit(x.topics,x.notes)) ses.push({s,x}); }));
+  add("sessions","Lessons", ses.sort((a,b)=>a.x.date<b.x.date?1:-1).map(({s,x})=>({title:x.topics||"Lesson notes", sub:s.name+" · "+fmtDate(x.date)+(x.notes&&!hit(x.topics)?" · "+x.notes.slice(0,80):""), href:"#/student/"+s.id+"/sessions"})));
+  const own = [], studied = [];
+  state.games.forEach(g=>{ const s = byId(g.studentId); if (!s) return;
+    if (g.kind==="study"){ if (hit(g.white,g.black,g.event,g.opening,g.theme,g.notes,g.year,g.source)) studied.push({s,g}); }
+    else if (hit(g.opponent,gameEvent(g,s),g.opening,g.notes,g.round?"round "+g.round:"",g.timeControl)) own.push({s,g}); });
+  add("games","Games", own.sort((a,b)=>(a.g.date||"")<(b.g.date||"")?1:-1).map(({s,g})=>({title:s.name+" "+gameTitle(g)+" "+(g.result||""), sub:[gameEvent(g,s), g.opening, fmtDate(g.date)].filter(Boolean).join(" · "), href:"#/student/"+s.id+"/games"})));
+  add("studied","Studied games", studied.map(({s,g})=>({title:studyTitle(g)+" "+(g.result||""), sub:[s.name, g.theme, g.event, g.year].filter(Boolean).join(" · "), href:"#/student/"+s.id+"/studied"})));
+  const rep = []; ss.forEach(s=>s.repertoire.forEach(x=>{ if (hit(x.name,x.eco,x.lines,x.notes,x.against,x.againstOther,x.firstMove)) rep.push({s,x}); }));
+  add("repertoire","Repertoire", rep.map(({s,x})=>({title:x.name+(x.eco?" ("+x.eco+")":""), sub:s.name+" · "+x.color+(x.against?" · vs "+(x.againstOther||x.against):""), href:"#/student/"+s.id+"/repertoire", rep:x.name})));
+  add("assignments","Assignments", state.assignments.filter(a=>byId(a.studentId) && hit(a.title,a.type,a.instructions,a.feedback,(a.games||[]).map(g=>[g.white,g.black,g.event,g.date,g.note].join(" ")).join(" ")))
+    .map(a=>({title:a.title, sub:byId(a.studentId).name+" · "+a.type+" · "+(STATUS_LABEL[a.status]||a.status), href:"#/assignment/"+a.id})));
+  const tr = []; ss.forEach(s=>s.tournaments.forEach(x=>{ if (hit(x.name,x.location,x.notes,x.format)) tr.push({s,x}); }));
+  add("tournaments","Tournaments", tr.sort((a,b)=>(a.x.start||"")<(b.x.start||"")?1:-1).map(({s,x})=>({title:x.name, sub:[s.name, x.location, fmtDate(x.start)].filter(Boolean).join(" · "), href:"#/student/"+s.id+"/tournaments"})));
+  const bk = []; ss.forEach(s=>s.books.forEach(b=>{ if (hit(b.title,b.author,b.topic,b.notes)) bk.push({s,b}); }));
+  add("books","Books", bk.map(({s,b})=>({title:b.title, sub:[s.name, b.author, b.status].filter(Boolean).join(" · "), href:"#/student/"+s.id+"/books"})));
+  return groups;
+}
+function pSearch(v, r){
+  let q = ""; try { q = decodeURIComponent(r.id||""); } catch(e){ q = r.id||""; }
+  v.innerHTML = '<div class="page-head" style="margin-bottom:14px"><h1>Search</h1></div>'+
+    '<input id="gq" class="search search-big" type="search" placeholder="Student, opponent, opening, lesson topic, assignment…" aria-label="Search everything" autocomplete="off" value="'+esc(q)+'"><div id="gres"></div>';
+  const input = $("#gq"), out = $("#gres");
+  const draw = ()=>{
+    const val = input.value.trim(), groups = searchAll(val);
+    if (!val){ out.innerHTML = '<p class="empty">Search across all students: names, lesson topics and notes, games and opponents, openings and repertoire lines, assignments, tournaments and books. Press <kbd>/</kbd> anywhere to jump here.</p>'; return; }
+    if (!groups.length){ out.innerHTML = '<p class="empty">Nothing matches “'+esc(val)+'”.</p>'; return; }
+    const n = groups.reduce((a,g)=>a+g.items.length,0);
+    out.innerHTML = '<p class="small muted" style="margin:0 0 10px">'+n+' result'+(n===1?"":"s")+'</p><div class="grid g2">'+groups.map(g=>{
+      const all = searchOpen[g.key], shown = all ? g.items : g.items.slice(0,SEARCH_SHOW);
+      return panel(g.label+" ("+g.items.length+")", '<div>'+shown.map(it=>'<a class="hit" href="'+it.href+'"'+(it.rep?' data-rep="'+esc(it.rep)+'"':'')+'><div class="title">'+esc(it.title)+'</div>'+(it.sub?'<div class="small muted">'+esc(it.sub)+'</div>':'')+'</a>').join("")+'</div>'+
+        (g.items.length>shown.length?'<button class="btn small ghost" data-more="'+g.key+'" style="margin-top:6px">Show all '+g.items.length+'</button>':''));
+    }).join("")+'</div>';
+  };
+  let tmr;
+  input.oninput = ()=>{ clearTimeout(tmr); tmr = setTimeout(()=>{ searchOpen = {}; draw(); try { history.replaceState(null, "", "#/search/"+encodeURIComponent(input.value.trim())); } catch(e){} }, 120); };
+  out.onclick = e=>{
+    const more = e.target.closest("[data-more]"); if (more){ searchOpen[more.dataset.more] = true; draw(); return; }
+    // Opening a repertoire line shows just that line on the student's Repertoire tab.
+    const a = e.target.closest("[data-rep]"); if (a){ repOpening = ""; repQuery = a.dataset.rep; repFilter = "all"; }
+  };
+  draw();
+  setTimeout(()=>{ input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 0);
+}
+// Press "/" anywhere (outside a text field or dialog) to search.
+document.addEventListener("keydown", e=>{
+  if (e.key!=="/" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = document.activeElement; if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName) || el && el.isContentEditable || $("#modal").open) return;
+  e.preventDefault();
+  if (route().page==="search"){ const i = $("#gq"); if (i) i.focus(); } else location.hash = "#/search";
+});
 
 /* ---------- students list ---------- */
 let studentFilter = {q:"", show:"active"};
