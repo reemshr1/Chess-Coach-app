@@ -2406,6 +2406,14 @@ const saveGame = g => { store && store.saveGame(g.id); };
 /* ---------- UI utilities ---------- */
 let toastTimer;
 function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove("show"), 2600); }
+// Offer a generated file to the viewer (they confirm the save).
+async function saveFile(filename, data){
+  let dl = null; try { dl = window.claude && await window.claude.use("downloads"); } catch(e){}
+  if (!dl) return toast("Downloads aren't available here.");
+  try { await dl.save({filename, data}); } catch(e){ if (e && e.code!=="cancelled") toast("The file wasn't saved."); }
+}
+// CSV that Excel opens with Hebrew names intact (BOM) and values containing commas or quotes kept whole.
+const toCsv = rows => "﻿"+rows.map(r=>r.map(v=>{ const x = v==null ? "" : String(v); return /[",\n\r]/.test(x) ? '"'+x.replace(/"/g,'""')+'"' : x; }).join(",")).join("\r\n")+"\r\n";
 
 function openForm({title, fields, submit="Save", onSubmit, danger}){
   const m = $("#modal");
@@ -2579,6 +2587,7 @@ function pDashboard(v){
   '<div class="stat"><div class="v num">'+sessions.length+'</div><div class="l">Sessions in the next 7 days</div></div>'+
   '<div class="stat"><div class="v num'+(outstanding>0?" money-owed":"")+'">'+money(outstanding)+'</div><div class="l">Outstanding</div></div>'+
   '<div class="stat"><div class="v num">'+money(received)+'</div><div class="l">Received this month</div></div></div>'+
+  attentionPanel(active, t)+
   '<div class="grid g2">'+
   panel("Coming up this week", sessions.length ? '<ul class="list">'+sessions.map(({s,x})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(x.topics||"No topic yet")+'</div></div><div style="text-align:right"><div class="small">'+esc(x.date===t?"Today":fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(x.time||"")+(x.duration?" · "+x.duration+" min":"")+'</div></div></li>').join("")+'</ul>' : '<p class="empty">No sessions planned for the next 7 days.</p>')+
   panel("Who owes you", owing.length ? '<ul class="list">'+owing.slice(0,8).map(({s,l})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a></div><div class="small muted">'+(l.lastPay?"Last paid "+esc(fmtShort(l.lastPay.date)):"No payments yet")+'</div></div><div style="text-align:right"><div class="money-owed num">'+money(l.balance)+'</div>'+(l.overdue?'<span class="tag flag">'+l.age+' days overdue</span>':'')+'</div></li>').join("")+'</ul>' : '<p class="empty">Everyone is paid up.</p>')+
@@ -2587,6 +2596,29 @@ function pDashboard(v){
   '</div>';
   $("#dSes").onclick = ()=>planSession();
   $("#dPay").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
+  const find = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && s.sessions.find(y=>y.id===b)]; };
+  bindActions(v,{ done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}) });
+}
+const PRACTICE_GAP_DAYS = 7;
+// Things that slip through: lessons never marked done (so never charged), students with nothing planned,
+// and students who log practice but have gone quiet.
+function attentionPanel(active, t){
+  const unmarked = [], noNext = [], quiet = [];
+  active.forEach(s=>{
+    s.sessions.forEach(x=>{ if (x.status==="planned" && x.date<t) unmarked.push({s,x}); });
+    if (!s.sessions.some(x=>x.status==="planned" && x.date>=t)) noNext.push(s);
+    const lastLog = s.worklog.reduce((m,w)=>w.date>m?w.date:m, "");
+    if (lastLog && daysBetween(lastLog, t)>=PRACTICE_GAP_DAYS) quiet.push({s, days:daysBetween(lastLog, t)});
+  });
+  if (!unmarked.length && !noNext.length && !quiet.length) return "";
+  unmarked.sort((a,b)=>a.x.date<b.x.date?1:-1); quiet.sort((a,b)=>b.days-a.days);
+  const more = (n, href, what)=>n>0?'<li><a class="small" href="'+href+'">'+n+' more '+what+'</a></li>':"";
+  const col = (title, body)=>'<div style="min-width:0"><h3 class="subh" style="margin-top:0">'+title+'</h3><ul class="list">'+body+'</ul></div>';
+  return '<section class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="panel-head"><h2>Needs attention</h2></div><div class="grid g3">'+
+    (unmarked.length?col("Lessons not marked done ("+unmarked.length+")", unmarked.slice(0,4).map(({s,x})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+(x.time?" "+esc(x.time):"")+'</div></div><button class="btn small" data-a="done" data-id="'+s.id+'|'+x.id+'">Mark done</button></li>').join("")+more(unmarked.length-4,"#/schedule","on the Schedule page")):"")+
+    (noNext.length?col("No lesson planned ("+noNext.length+")", sortBy(noNext,"name").slice(0,4).map(s=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+(()=>{ const last = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1)[0]; return last?"Last lesson "+esc(fmtShort(last.date)):"No lessons yet"; })()+'</div></div><button class="btn small" data-a="plan" data-id="'+s.id+'">Plan</button></li>').join("")+more(noNext.length-4,"#/students","students")):"")+
+    (quiet.length?col("No practice for "+PRACTICE_GAP_DAYS+"+ days ("+quiet.length+")", quiet.slice(0,4).map(({s,days})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/work">'+esc(s.name)+'</a></div><div class="small muted">Last practice '+days+' days ago</div></div></li>').join("")+more(quiet.length-4,"#/students","students")):"")+
+    '</div></section>';
 }
 function panel(title, body, action){ return '<section class="panel"><div class="panel-head"><h2>'+esc(title)+'</h2>'+(action||"")+'</div>'+body+'</section>'; }
 function pickStudent(title, then){
@@ -2782,20 +2814,79 @@ function editSession(s, x){
   // A deleted weekly-slot session is remembered on its slot, so it isn't planned again on the next load.
   (y)=>{ const sl = y.slotId && (s.slots||[]).find(z=>z.id===y.slotId); if (sl){ sl.skip = sl.skip||[]; sl.skip.push(y.slotDate||y.date); } });
 }
+// Marking a session done asks for what was covered while it is fresh, and can go straight on to the parents' summary.
+function markDone(s, x){
+  openForm({title:"Mark done — "+s.name, submit:"Mark done", fields:[
+      {name:"topics",label:"What you covered",value:x.topics||"",full:true,placeholder:"e.g. Rook endgames: Lucena & Philidor"},
+      {name:"notes",label:"Notes & observations",type:"textarea",value:x.notes||"",placeholder:"What went well, what to work on next. Private unless you choose to share it."},
+      {name:"fee",label:"Fee ("+state.settings.currency+")",type:"number",value:x.fee??s.rate,min:0,step:"any",hint:"Added to "+s.name.split(" ")[0]+"’s balance"},
+      {name:"then",label:"Then",type:"select",options:[["","Nothing else"],["summary","Write a summary for the parents"]],value:""}],
+    onSubmit:d=>{
+      Object.assign(x, {status:"done", topics:d.topics, notes:d.notes, fee:d.fee===""?0:d.fee});
+      saveStudent(s); render(); toast("Marked done — "+money(x.fee)+" added to "+s.name.split(" ")[0]+"’s balance");
+      if (d.then==="summary") setTimeout(()=>shareSummary(s, x), 0);
+    }});
+}
+// A short message for the parents: what the lesson covered, open homework and the next lesson. Editable before sending.
+function summaryText(s, x, withNotes){
+  const first = s.name.split(" ")[0], t = x.date;
+  const hw = sortBy(state.assignments.filter(a=>a.studentId===s.id && a.status==="Assigned"),"due");
+  const next = sortBy(s.sessions.filter(y=>y.status==="planned" && y.date>t),"date")[0];
+  const out = [(s.guardian ? "Hi "+s.guardian.split(" ")[0] : "Hi")+",", "", "Here is a summary of "+first+"’s chess lesson on "+fmtDate(t,{weekday:"long",day:"numeric",month:"long"})+"."];
+  if (x.topics) out.push("", "We worked on: "+x.topics);
+  if (withNotes && x.notes) out.push("", x.notes);
+  if (hw.length) out.push("", "Homework:", ...hw.map(a=>"• "+a.title+(a.due?" (by "+fmtDate(a.due,{weekday:"short",day:"numeric",month:"short"})+")":"")));
+  if (next) out.push("", "Next lesson: "+fmtDate(next.date,{weekday:"long",day:"numeric",month:"long"})+(next.time?" at "+next.time:"")+".");
+  if (state.settings.coachName) out.push("", state.settings.coachName);
+  return out.join("\n");
+}
+// Pull a phone number (for WhatsApp, as an international number) and an email address out of the free-text contact field.
+// Local numbers starting with 0 are read as Israeli (+972).
+function contactParts(c){
+  c = String(c||"");
+  const email = (c.match(/[^\s,;<>]+@[^\s,;<>]+\.[^\s,;<>]+/)||[])[0] || "";
+  let ph = ((c.replace(email,"")).match(/\+?\d[\d\s\-().]{6,}\d/)||[])[0] || "";
+  ph = ph.replace(/[^\d+]/g,"");
+  if (ph.startsWith("+")) ph = ph.slice(1); else if (ph.startsWith("00")) ph = ph.slice(2); else if (ph.startsWith("0")) ph = "972"+ph.slice(1);
+  return {email, phone: ph.length>=9 ? ph : ""};
+}
+function shareSummary(s, x){
+  const m = $("#modal"), c = contactParts(s.contact), first = s.name.split(" ")[0];
+  m.innerHTML = '<div class="modal-form"><header><h2>Lesson summary — '+esc(s.name)+'</h2><p class="sub small">Edit the message, then send it'+(s.guardian?' to '+esc(s.guardian):'')+'.</p></header>'+
+    '<div style="padding:8px 20px;overflow:auto"><textarea id="sumTxt" class="fb" style="min-height:220px" aria-label="Summary message"></textarea>'+
+    (x.notes?'<label class="check small" style="margin-top:8px"><input type="checkbox" id="sumNotes"> Include my notes &amp; observations</label>':'')+
+    (!c.phone&&!c.email?'<p class="small muted" style="margin:8px 0 0">No phone or email saved for '+esc(first)+'. Add one in Edit profile to send in one tap.</p>':'')+'</div>'+
+    '<footer style="flex-wrap:wrap"><button type="button" class="btn ghost" id="sumClose" style="margin-right:auto">Close</button><button type="button" class="btn" id="sumCopy">Copy</button>'+
+    (c.email?'<a class="btn" id="sumMail" target="_blank" rel="noopener" style="text-decoration:none">Email</a>':'')+
+    '<a class="btn primary" id="sumWa" target="_blank" rel="noopener" style="text-decoration:none">WhatsApp</a></footer></div>';
+  const ta = $("#sumTxt");
+  const links = ()=>{ const txt = ta.value;
+    $("#sumWa").href = "https://wa.me/"+c.phone+"?text="+encodeURIComponent(txt);
+    const mail = $("#sumMail"); if (mail) mail.href = "mailto:"+c.email+"?subject="+encodeURIComponent("Chess lesson summary — "+first)+"&body="+encodeURIComponent(txt); };
+  const fill = ()=>{ ta.value = summaryText(s, x, !!($("#sumNotes")||{}).checked); links(); };
+  fill(); ta.oninput = links;
+  if ($("#sumNotes")) $("#sumNotes").onchange = fill;
+  $("#sumClose").onclick = ()=>m.close();
+  $("#sumCopy").onclick = async ()=>{
+    try { await navigator.clipboard.writeText(ta.value); } catch(e){ ta.select(); try { document.execCommand("copy"); } catch(e2){ return toast("Couldn't copy — select the text and copy it yourself."); } }
+    toast("Summary copied");
+  };
+  m.showModal(); ta.focus();
+}
 function tSessions(el, s){
   const t = today();
   const upAll = sortBy(s.sessions.filter(x=>x.status==="planned"),"date"); const up = upAll.slice(0,8);
   const past = sortBy(s.sessions.filter(x=>x.status!=="planned"),"date",-1);
   const row = x=>'<li><div class="main"><div class="title">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short",year:"numeric"}))+(x.time?' <span class="muted small">'+esc(x.time)+'</span>':"")+(x.slotId?' <span class="muted small">↻'+(x.custom?' moved':'')+'</span>':'')+'</div><div>'+esc(x.topics||"")+'</div>'+(x.notes?'<div class="small muted pre">'+esc(x.notes)+'</div>':"")+'<div class="small muted">'+[x.duration?x.duration+" min":"",x.format, x.fee!==""&&x.fee!=null?money(x.fee):""].filter(Boolean).map(esc).join(" · ")+'</div></div><div class="row-actions" style="flex-direction:column;align-items:flex-end">'+
     (x.status==="done"?'<span class="tag ok">Done</span>':x.status==="cancelled"?'<span class="tag">Cancelled</span>':(x.date<t?'<span class="tag warn">Not marked</span>':'<span class="tag board">Planned</span>'))+
-    '<div class="row-actions">'+(x.status==="planned"?'<button class="btn small" data-a="done" data-id="'+x.id+'">Mark done</button>':"")+'<button class="btn small ghost" data-a="edit" data-id="'+x.id+'">Edit</button></div></div></li>';
+    '<div class="row-actions">'+(x.status==="planned"?'<button class="btn small" data-a="done" data-id="'+x.id+'">Mark done</button>':"")+(x.status==="done"?'<button class="btn small" data-a="sum" data-id="'+x.id+'">Send summary</button>':"")+'<button class="btn small ghost" data-a="edit" data-id="'+x.id+'">Edit</button></div></div></li>';
   const slots = s.slots||[];
   el.innerHTML = panel("Weekly slots", slots.length ? '<ul class="list">'+slots.map(sl=>'<li><div class="main"><div class="title">↻ '+esc(slotLabel(sl))+'</div><div class="small muted">From '+esc(fmtDate(sl.start))+(sl.end?' until '+esc(fmtDate(sl.end)):' · no end date')+'</div></div><button class="btn small ghost" data-a="editSlot" data-id="'+sl.id+'">Edit</button></li>').join("")+'</ul>' : '<p class="empty" style="padding:4px 0">No weekly slot. If '+esc(s.name.split(" ")[0])+' has a fixed lesson time, add it here and the sessions are planned automatically, 8 weeks ahead.</p>', '<button class="btn small" data-a="addSlot">Add weekly slot</button>')+
     '<div class="grid g2" style="margin-top:16px">'+panel("Planned"+(upAll.length>up.length?" (next "+up.length+" of "+upAll.length+")":""), up.length?'<ul class="list">'+up.map(row).join("")+'</ul>':'<p class="empty">Nothing planned. Add the next session to keep momentum.</p>','<button class="btn small primary" data-a="add">Add session</button>')+
     panel("History", past.length?'<ul class="list">'+past.map(row).join("")+'</ul>':'<p class="empty">Finished sessions appear here.</p>')+'</div>';
   bindActions(el,{ add:()=>editSession(s,null), edit:id=>editSession(s,s.sessions.find(x=>x.id===id)),
     addSlot:()=>editSlot(s,null), editSlot:id=>editSlot(s, s.slots.find(x=>x.id===id)),
-    done:id=>{ const x = s.sessions.find(y=>y.id===id); x.status="done"; saveStudent(s); render(); toast("Session marked done — "+money(x.fee)+" added to balance"); } });
+    done:id=>markDone(s, s.sessions.find(y=>y.id===id)), sum:id=>shareSummary(s, s.sessions.find(y=>y.id===id)) });
 }
 
 function bestScores(s, from){
@@ -3434,22 +3525,34 @@ function diffLabel(c){
   const v = c.pct ? Math.abs(c.d)+"%" : fmtPts(Math.abs(c.d))+" point"+(Math.abs(c.d)===1?"":"s");
   return (c.d>0?"+":"−")+v+(c.d>0?" above":" below")+" expectation";
 }
+// The score a tournament's games add up to. `complete` when there is a game for every round,
+// so it can stand in for a result nobody has typed in yet.
+function gamesScore(s, x){
+  const sc = scoreLine(studentGames(s.id).filter(g=>g.tournamentId===x.id));
+  if (!sc.n) return null;
+  return {text:fmtPts(sc.pts)+"/"+sc.n, n:sc.n, complete: !+x.rounds || sc.n>=+x.rounds};
+}
+const resultOf = (s, x)=>{ if (x.result) return x.result; const g = gamesScore(s, x); return g && g.complete ? g.text : ""; };
+// The rating list a tournament counts for, and the student's last rating on it before the tournament ended.
+const TC_SOURCE = {Rapid:"FIDE Rapid", Blitz:"FIDE Blitz", Online:"Online"};
+const tourSource = (s, format)=>TC_SOURCE[format] || mainSource(s);
+const ratingBefore = (s, src, date)=>sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===src && r.date<=date),"date").pop();
 function tTournaments(el, s){
   const t = today();
   const up = sortBy(s.tournaments.filter(x=>(x.end||x.start)>=t),"start"); const past = sortBy(s.tournaments.filter(x=>(x.end||x.start)<t),"start",-1);
   const row = (x,isUp)=>{ const d = daysBetween(t,x.start);
     return '<li style="align-items:flex-start"><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+esc(fmtDate(x.start))+(x.end&&x.end!==x.start?" – "+esc(fmtDate(x.end)):"")+[x.location,x.format,x.rounds?x.rounds+" rounds":""].filter(Boolean).map(v=>" · "+esc(v)).join("")+'</div>'+(x.notes?'<div class="small pre" style="margin-top:4px">'+esc(x.notes)+'</div>':"")+
-    (()=>{ const ex = parseScore(x.expected, x.rounds), ac = parseScore(x.result, x.rounds);
+    (()=>{ const ex = parseScore(x.expected, x.rounds), ac = parseScore(resultOf(s,x), x.rounds);
       if (isUp) return '<div class="expect small">'+(ex?'Expected score: <b class="num">'+esc(fmtScore(ex))+'</b>':'<span class="tag warn">No expected score yet</span> <button class="btn small ghost" data-a="expect" data-id="'+x.id+'">Set it</button>')+'</div>';
       if (!ex && !ac) return "";
       const c = compareScores(ex, ac);
       return '<div class="expect small"><span class="muted">Expected</span> <b class="num">'+(ex?esc(fmtScore(ex)):"—")+'</b> <span class="muted">→ Actual</span> <b class="num">'+(ac?esc(fmtScore(ac)):"—")+'</b>'+
         (c?' <span class="tag '+(c.d>0?"ok":c.d<0?"flag":"board")+'">'+esc(diffLabel(c))+'</span>':(ex&&!ac?' <span class="muted">— add the actual result</span>':''))+'</div>'; })()+'</div>'+
-    '<div class="row-actions" style="flex-direction:column;align-items:flex-end">'+(isUp?'<span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span>':(x.result?'<b class="num">'+esc(x.result)+'</b>':'<span class="tag warn">Add result</span>')+(x.ratingChange!==""&&x.ratingChange!=null?'<span class="small num" style="color:'+(+x.ratingChange>=0?"var(--ok)":"var(--flag)")+'">'+(+x.ratingChange>=0?"+":"")+esc(x.ratingChange)+'</span>':""))+
+    '<div class="row-actions" style="flex-direction:column;align-items:flex-end">'+(isUp?'<span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span>':(x.result?'<b class="num">'+esc(x.result)+'</b>':resultOf(s,x)?'<b class="num" title="Worked out from the games in Game history">'+esc(resultOf(s,x))+'</b><span class="small muted">from games</span>':'<span class="tag warn">Add result</span>')+(x.ratingChange!==""&&x.ratingChange!=null?'<span class="small num" style="color:'+(+x.ratingChange>=0?"var(--ok)":"var(--flag)")+'">'+(+x.ratingChange>=0?"+":"")+esc(x.ratingChange)+'</span>':""))+
     (()=>{ const gs = studentGames(s.id).filter(g=>g.tournamentId===x.id); if (!gs.length) return isUp?"":'<button class="btn small" data-a="games" data-id="'+x.id+'">Add games</button>'; const sc = scoreLine(gs); return '<button class="btn small" data-a="games" data-id="'+x.id+'">'+gs.length+' game'+(gs.length===1?"":"s")+(sc.n?' · '+sc.pts+'/'+sc.n:'')+'</button>'; })()+
     '<button class="btn small ghost" data-a="edit" data-id="'+x.id+'">'+(isUp?"Edit":"Edit / result")+'</button></div></li>'; };
   const played = past.filter(x=>x.ratingChange!==""&&x.ratingChange!=null); const net = played.reduce((a,x)=>a+(+x.ratingChange||0),0);
-  const cmp = past.map(x=>compareScores(parseScore(x.expected,x.rounds), parseScore(x.result,x.rounds))).filter(Boolean);
+  const cmp = past.map(x=>compareScores(parseScore(x.expected,x.rounds), parseScore(resultOf(s,x),x.rounds))).filter(Boolean);
   const met = cmp.filter(c=>c.d>=0).length, ptsCmp = cmp.filter(c=>!c.pct), avgD = ptsCmp.length ? ptsCmp.reduce((a,c)=>a+c.d,0)/ptsCmp.length : null;
   const expLine = cmp.length ? '<p class="small muted" style="margin:0 0 6px">Met or beat the expected score in <b style="color:var(--ink)">'+met+' of '+cmp.length+'</b> event'+(cmp.length===1?"":"s")+(avgD!==null?' · on average <b style="color:'+(avgD>=0?"var(--ok)":"var(--flag)")+'">'+(avgD>=0?"+":"−")+(Math.round(Math.abs(avgD)*10)/10)+'</b> point'+(Math.abs(avgD)===1?"":"s")+' vs. expectation':'')+'</p>' : "";
   el.innerHTML = tabSwitch(s,"tournaments")+'<div class="grid g2">'+panel("Upcoming", up.length?'<ul class="list">'+up.map(x=>row(x,true)).join("")+'</ul>':'<p class="empty">No upcoming tournaments.</p>','<button class="btn small primary" data-a="add">Add tournament</button>')+
@@ -3458,15 +3561,29 @@ function tTournaments(el, s){
     {name:"location",label:"Location",value:x?.location||""},{name:"format",label:"Time control",type:"select",options:["Classical","Rapid","Blitz","Online"],value:x?.format||"Classical"},
     {name:"rounds",label:"Rounds",type:"number",value:x?.rounds??"",min:0},
     {name:"expected",label:"Expected score",value:x?.expected||"",placeholder:"e.g. 5/9",hint:"The student's own prediction, written before the first round"},
-    {name:"result",label:"Actual score",value:x?.result||"",placeholder:"e.g. 5.5/9",show:v=>!!v.start&&v.start<=today(),hint:(()=>{ const gs = x ? studentGames(s.id).filter(g=>g.tournamentId===x.id) : []; const sc = scoreLine(gs); return sc.n ? "From the "+sc.n+" game"+(sc.n===1?"":"s")+" in Game history: "+fmtPts(sc.pts)+"/"+sc.n : ""; })()},
-    {name:"ratingChange",label:"Rating change",type:"number",value:x?.ratingChange??"",show:v=>!!v.start&&v.start<=today(),hint:"Leave empty until results are in"},{name:"notes",label:"Preparation & reflection",type:"textarea",value:x?.notes||""}];
+    {name:"result",label:"Actual score",value:x?.result||(x?resultOf(s,x):""),placeholder:"e.g. 5.5/9",show:v=>!!v.start&&v.start<=today(),hint:(()=>{ const g = x && gamesScore(s,x); return g ? "From the "+g.n+" game"+(g.n===1?"":"s")+" in Game history: "+g.text+(g.complete?"":" (not every round has a game yet)") : ""; })()},
+    {name:"ratingChange",label:"Rating change",type:"number",value:x?.ratingChange??"",show:v=>!!v.start&&v.start<=today(),
+      hint:x?.ratingAdded?"Added to the "+x.ratingAdded.source+" history as "+x.ratingAdded.value:"Leave empty until results are in"},
+    {name:"addRating",label:"Add to rating history",type:"select",options:[["","No"],...RATING_SOURCES.map(r=>[r,"Yes — "+r+" list"])],
+      value:(()=>{ const src = tourSource(s, x?.format||"Classical"); return x && ratingBefore(s, src, x.end||x.start) ? src : ""; })(),
+      show:v=>!!v.start && v.start<=today() && v.ratingChange!=="" && !x?.ratingAdded, hint:"Adds a new rating: the last one before the tournament plus the change, dated the last day"},
+    {name:"notes",label:"Preparation & reflection",type:"textarea",value:x?.notes||""}];
   const validate = d=>{
     if (d.expected && !parseScore(d.expected, d.rounds)) return "Write the expected score like 5/9 or 5.5/9 (and no more than the number of rounds).";
     if (d.result && !parseScore(d.result, d.rounds)) return "Write the actual score like 5/9 or 5.5/9 (and no more than the number of rounds).";
+    if (d.addRating && d.ratingChange!=="" && !ratingBefore(s, d.addRating, d.end||d.start)) return "There’s no "+d.addRating+" rating from before this tournament to add the change to. Add it in Overview → Add rating first, or choose No.";
+  };
+  // Adds the post-tournament rating once; `ratingAdded` stops a later edit from counting the change twice.
+  const after = y=>{
+    const src = y.addRating; delete y.addRating;
+    if (!src || y.ratingChange==="" || y.ratingAdded) return;
+    const date = y.end||y.start, value = +ratingBefore(s, src, date).value + +y.ratingChange;
+    addRating(s, src, value, date); y.ratingAdded = {source:src, value, date};
+    setTimeout(()=>toast(src+" rating "+value+" added to the history"), 30);
   };
   bindActions(el,{ expect:id=>{ const x = s.tournaments.find(y=>y.id===id); openForm({title:"Expected score — "+x.name, submit:"Save", fields:[{name:"expected",label:"Expected score",value:x.expected||"",placeholder:x.rounds?"e.g. "+Math.ceil(x.rounds/2)+"/"+x.rounds:"e.g. 5/9",hint:"The student's own prediction"}],
       onSubmit:d=>{ if (d.expected && !parseScore(d.expected, x.rounds)) return "Write it like 5/9 or 5.5/9."; x.expected = d.expected; saveStudent(s); render(); toast("Expected score saved"); }}); },
-    games:id=>{ gameFilter = {status:"all", tid:id}; location.hash = "#/student/"+s.id+"/games"; }, add:()=>crud(s,"tournaments",null,fields(null),"tournament","Tournament",validate), edit:id=>{ const x = s.tournaments.find(y=>y.id===id); crud(s,"tournaments",x,fields(x),"tournament","Tournament",validate); } });
+    games:id=>{ gameFilter = {status:"all", tid:id}; location.hash = "#/student/"+s.id+"/games"; }, add:()=>crud(s,"tournaments",null,fields(null),"tournament","Tournament",validate,null,after), edit:id=>{ const x = s.tournaments.find(y=>y.id===id); crud(s,"tournaments",x,fields(x),"tournament","Tournament",validate,null,after); } });
 }
 
 function editPayment(s, x){
@@ -3841,12 +3958,13 @@ function sessionActions(s, x){
       '<a class="btn" href="#/student/'+s.id+'/sessions" style="margin-right:auto;text-decoration:none">Open student</a>'+
       (x.status==="planned"?'<button type="button" class="btn" data-x="cancel">Cancel session</button><button type="button" class="btn" data-x="move">Move</button><button type="button" class="btn primary" data-x="done">Mark done</button>':'')+
       (x.status==="cancelled"?'<button type="button" class="btn primary" data-x="restore">Restore</button>':'')+
-      (x.status==="done"?'<button type="button" class="btn" data-x="edit">Edit details</button>':'')+
+      (x.status==="done"?'<button type="button" class="btn" data-x="edit">Edit details</button><button type="button" class="btn primary" data-x="sum">Send summary</button>':'')+
       '<button type="button" class="btn ghost" data-x="close">Close</button></footer></div>';
   m.querySelector('a').onclick = ()=>m.close();
   m.querySelectorAll("[data-x]").forEach(b=>b.onclick = ()=>{
     const k = b.dataset.x; m.close();
-    if (k==="done"){ x.status = "done"; saveStudent(s); render(); toast("Marked done — "+money(x.fee)+" added to "+s.name.split(" ")[0]+"’s balance"); }
+    if (k==="done") setTimeout(()=>markDone(s,x),0);
+    else if (k==="sum") setTimeout(()=>shareSummary(s,x),0);
     else if (k==="cancel"){ x.status = "cancelled"; saveStudent(s); render(); toast("Session cancelled"); }
     else if (k==="restore"){ x.status = "planned"; saveStudent(s); render(); toast("Session restored"); }
     else if (k==="move") setTimeout(()=>moveSession(s,x),0);
@@ -3893,7 +4011,7 @@ function pSchedule(v){
     view:id=>{ schedView = id; render(); },
     wk:id=>{ schedWeek = +id===0 ? weekStartOf(t) : addDays(schedWeek, 7*(+id)); render(); },
     open:id=>{ const [s,x] = find(id); if (x) sessionActions(s,x); },
-    done:id=>{ const [s,x] = find(id); x.status = "done"; saveStudent(s); render(); toast("Marked done — "+money(x.fee)+" added"); },
+    done:id=>{ const [s,x] = find(id); markDone(s,x); },
     cancel:id=>{ const [s,x] = find(id); x.status = "cancelled"; saveStudent(s); render(); },
     move:id=>{ const [s,x] = find(id); moveSession(s,x); }
   });
@@ -3970,9 +4088,46 @@ function pPayments(v){
     '<section class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>Balances</h2></div><div class="table-wrap"><table><thead><tr><th>Student</th><th class="r">Charged</th><th class="r">Paid</th><th class="r">Balance</th><th>Last payment</th><th>Status</th><th></th></tr></thead><tbody>'+
     rows.map(({s,l})=>'<tr><td><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a></td><td class="r num">'+money(l.charged)+'</td><td class="r num">'+money(l.paid)+'</td><td class="r num'+(l.balance>0.009?" money-owed":"")+'">'+money(l.balance)+'</td><td class="small">'+(l.lastPay?esc(fmtDate(l.lastPay.date)):'<span class="muted">—</span>')+'</td><td>'+(l.overdue?'<span class="tag flag">'+l.age+' days overdue</span>':l.balance>0.009?'<span class="tag warn">Due</span>':l.balance<-0.009?'<span class="tag ok">In credit</span>':'<span class="tag ok">Paid up</span>')+'</td><td><button class="btn small" data-a="pay" data-id="'+s.id+'">Record</button></td></tr>').join("")+
     '</tbody></table></div></section>'+
+    incomePanel()+
     panel("Recent payments", allPays.length?'<ul class="list">'+allPays.slice(0,25).map(({s,p})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(p.date))+' · '+esc(p.method||"")+(p.note?" · "+esc(p.note):"")+'</div></div><span class="num" style="color:var(--ok);font-weight:600">'+money(p.amount)+'</span></li>').join("")+'</ul>':'<p class="empty">No payments recorded yet.</p>');
   $("#pRec").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
-  bindActions(v,{ pay:id=>editPayment(byId(id),null) });
+  $("#incYear").onchange = e=>{ incomeYear = e.target.value; render(); };
+  bindActions(v,{ pay:id=>editPayment(byId(id),null),
+    csvPay:()=>{ const y = incomeData().year;
+      const rows = []; state.students.forEach(s=>s.payments.forEach(p=>{ if ((p.date||"").slice(0,4)===y) rows.push([p.date, s.name, +p.amount||0, p.method||"", p.note||""]); }));
+      rows.sort((a,b)=>a[0]<b[0]?-1:1);
+      if (!rows.length) return toast("No payments recorded in "+y+".");
+      saveFile("payments-"+y+".csv", toCsv([["Date","Student","Amount ("+(state.settings.currency||"")+")","Method","Note"], ...rows])); },
+    csvMonth:()=>{ const d = incomeData();
+      saveFile("income-by-month-"+d.year+".csv", toCsv([["Month","Lessons","Charged","Received"], ...d.months.map(m=>[m.key, m.lessons, m.charged, m.received]), ["Total", d.total.lessons, d.total.charged, d.total.received]])); } });
+}
+/* ---------- income report ---------- */
+let incomeYear = null;
+// Per month of one year: lessons marked done, what was charged (lessons + extra charges) and what was received.
+function incomeData(){
+  const years = new Set([today().slice(0,4)]);
+  state.students.forEach(s=>{ s.payments.forEach(p=>p.date&&years.add(p.date.slice(0,4))); ledger(s).charges.forEach(c=>c.date&&years.add(c.date.slice(0,4))); });
+  const list = [...years].sort().reverse(), year = list.includes(incomeYear) ? incomeYear : list[0];
+  const months = [...Array(12)].map((_,i)=>({key:year+"-"+pad(i+1), lessons:0, charged:0, received:0}));
+  const at = d => d && d.slice(0,4)===year ? months[+d.slice(5,7)-1] : null;
+  state.students.forEach(s=>{
+    s.sessions.forEach(x=>{ const m = x.status==="done" && at(x.date); if (m) m.lessons++; });
+    ledger(s).charges.forEach(c=>{ const m = at(c.date); if (m) m.charged += c.amount; });
+    s.payments.forEach(p=>{ const m = at(p.date); if (m) m.received += +p.amount||0; });
+  });
+  const total = months.reduce((a,m)=>({lessons:a.lessons+m.lessons, charged:a.charged+m.charged, received:a.received+m.received}), {lessons:0, charged:0, received:0});
+  return {year, years:list, months, total};
+}
+function incomePanel(){
+  const d = incomeData(), cur = today().slice(0,7);
+  const rows = d.months.filter(m=>m.key<=cur || m.lessons || m.charged || m.received);
+  return '<section class="panel" style="margin-bottom:16px"><div class="panel-head" style="flex-wrap:wrap"><h2>Income</h2><div class="row-actions">'+
+      '<select id="incYear" class="search" style="min-width:auto" aria-label="Year">'+d.years.map(y=>'<option'+(y===d.year?" selected":"")+'>'+y+'</option>').join("")+'</select>'+
+      '<button class="btn small" data-a="csvMonth">Monthly CSV</button><button class="btn small" data-a="csvPay">Payments CSV</button></div></div>'+
+    '<div class="table-wrap"><table><thead><tr><th>Month</th><th class="r">Lessons</th><th class="r">Charged</th><th class="r">Received</th></tr></thead><tbody>'+
+      rows.map(m=>'<tr><td>'+esc(fmtDate(m.key+"-01",{month:"long"}))+'</td><td class="r num">'+m.lessons+'</td><td class="r num">'+money(m.charged)+'</td><td class="r num">'+money(m.received)+'</td></tr>').join("")+
+      '<tr><td><b>'+esc(d.year)+' total</b></td><td class="r num"><b>'+d.total.lessons+'</b></td><td class="r num"><b>'+money(d.total.charged)+'</b></td><td class="r num"><b>'+money(d.total.received)+'</b></td></tr>'+
+    '</tbody></table></div><p class="small muted" style="margin:8px 0 0">Charged counts lessons marked done and extra charges; Received counts payments recorded. Includes archived students.</p></section>';
 }
 
 /* ---------- settings ---------- */
