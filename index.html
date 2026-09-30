@@ -2231,10 +2231,66 @@ function makeLocalStore(){
     saveStudent:f, saveSettings:f, deleteStudent:f, saveAssignment:f, deleteAssignment:f, saveGame:f, deleteGame:f, subscribe(){}
   };
 }
+// A database document holds at most 256 KB, and a student's logs keep growing. So a student is stored as a
+// main document (st-*) with everything from the last LOG_KEEP_DAYS days, plus one log document per year
+// (lg-<student id>-<year>) holding that year's older entries. In memory the student is always whole.
+const LOG_KEYS = ["worklog","sessions","payments","charges","ratings"];
+const LOG_KEEP_DAYS = 90;
+const DOC_LIMIT = 250000;
+function splitStudent(s){
+  const cut = addDays(today(), -LOG_KEEP_DAYS), main = JSON.parse(JSON.stringify(s)), logs = {};
+  LOG_KEYS.forEach(k=>{
+    if (!Array.isArray(main[k])) return;
+    main[k] = main[k].filter(x=>{
+      const d = x && typeof x.date==="string" ? x.date : "";
+      if (!/^\d{4}-/.test(d) || d>=cut) return true;
+      const y = d.slice(0,4), id = "lg-"+s.id+"-"+y;
+      const doc = logs[id] = logs[id] || {sid:s.id, year:y};
+      (doc[k] = doc[k] || []).push(x); return false;
+    });
+  });
+  return {main, logs};
+}
+// Put a student back together from the main document and its log documents. Entries already in the main
+// document win, so a main document rewritten elsewhere with a full list never shows entries twice.
+function joinStudent(main, logs){
+  const s = JSON.parse(JSON.stringify(main));
+  logs.slice().sort((a,b)=>a.year<b.year?-1:1).forEach(lg=>LOG_KEYS.forEach(k=>{
+    if (!Array.isArray(lg[k])) return;
+    if (!Array.isArray(s[k])) s[k] = [];
+    const have = new Set(s[k].map(x=>x&&x.id).filter(Boolean));
+    lg[k].forEach(x=>{ if (!x || !x.id || !have.has(x.id)) s[k].push(x); });
+  }));
+  return normalize(s);
+}
+// Compare two versions of a student regardless of the order their entries are listed in.
+function canon(s){
+  const c = Object.assign({}, s);
+  LOG_KEYS.forEach(k=>{ if (Array.isArray(c[k])) c[k] = c[k].map(x=>JSON.stringify(x)).sort(); });
+  const o = {}; Object.keys(c).sort().forEach(k=>{ o[k] = c[k]; });
+  return JSON.stringify(o);
+}
 function makeDbStore(db, userId){
   const coll = db.collection("data/users/"+userId);
   const timers = {}, chains = {}, busyIds = {};
+  const mains = {}, logs = {}; // last known stored version of each student document and log document
+  const logsOf = sid => Object.keys(logs).filter(id=>logs[id].sid===sid);
   let pending = 0;
+  function writeStudent(id){
+    const s = byId(id); if (!s) return Promise.resolve();
+    const parts = splitStudent(s), docs = [["", id, parts.main], ...Object.keys(parts.logs).map(k=>[k, k, parts.logs[k]])];
+    const big = docs.find(([,,v])=>JSON.stringify(v).length > DOC_LIMIT);
+    if (big) return Promise.reject({code:"too_large", message:s.name+(big[0]?" ("+big[2].year+")":"")});
+    const put = ([lg, docId, v])=>{
+      const cache = lg ? logs : mains;
+      if (cache[docId] && JSON.stringify(cache[docId])===JSON.stringify(v)) return Promise.resolve();
+      return coll.doc(docId).set(v).then(()=>{ cache[docId] = v; });
+    };
+    // Log documents first, then the main document, then drop log documents that are now empty,
+    // so a failure part-way never leaves an entry in neither place.
+    return Promise.all(docs.slice(1).map(put)).then(()=>put(docs[0]))
+      .then(()=>Promise.all(logsOf(id).filter(docId=>!parts.logs[docId]).map(docId=>coll.doc(docId).delete().then(()=>{ delete logs[docId]; }))));
+  }
   function queue(docId, fn){
     clearTimeout(timers[docId]);
     busyIds[docId] = (busyIds[docId]||0) + (timers[docId] ? 0 : 1);
@@ -2245,7 +2301,7 @@ function makeDbStore(db, userId){
       chains[docId] = (chains[docId]||Promise.resolve()).then(fn).then(done, async err=>{
         if (err && err.code==="unavailable"){ await new Promise(r=>setTimeout(r,800+Math.random()*800)); try { await fn(); done(); return; } catch(e2){ err=e2; } }
         pending--; busyIds[docId] = 0;
-        setSync("err", err && err.code==="quota_exceeded" ? "Storage is full" : "Couldn't save the last change");
+        setSync("err", err && err.code==="quota_exceeded" ? "Storage is full" : err && err.code==="too_large" ? "Too much data to save for "+err.message : "Couldn't save the last change");
       });
     }, 500);
   }
@@ -2258,13 +2314,20 @@ function makeDbStore(db, userId){
       const out = { settings:null, students:[], assignments:[], games:[] };
       snap.docs.forEach(d=>{ const v = d.data(); if (!v) return;
         if (d.id==="settings") out.settings = clone(v);
-        else if (d.id.startsWith("st-")) out.students.push(clone(v));
+        else if (d.id.startsWith("st-")) mains[d.id] = clone(v);
+        else if (d.id.startsWith("lg-")) logs[d.id] = clone(v);
         else if (d.id.startsWith("as-")) out.assignments.push(clone(v));
         else if (d.id.startsWith("gm-")) out.games.push(clone(v)); });
+      out.students = Object.keys(mains).map(id=>joinStudent(mains[id], logsOf(id).map(k=>logs[k])));
       return out;
     },
-    saveStudent(id){ queue(id, ()=>{ const s = byId(id); return s ? coll.doc(id).set(clone(s)) : Promise.resolve(); }); },
-    deleteStudent(id){ queue(id, ()=>coll.doc(id).delete()); },
+    // Students stored in one document from before the split, or with entries that have since aged past
+    // LOG_KEEP_DAYS, are re-saved once so their main document stays small.
+    tidy(){ state.students.forEach(s=>{ if (!mains[s.id]) return;
+      const p = splitStudent(s); if (JSON.stringify(p.main)!==JSON.stringify(mains[s.id])) this.saveStudent(s.id); }); },
+    saveStudent(id){ queue(id, ()=>writeStudent(id)); },
+    deleteStudent(id){ queue(id, ()=>Promise.all(logsOf(id).map(k=>coll.doc(k).delete().then(()=>{ delete logs[k]; })))
+      .then(()=>coll.doc(id).delete()).then(()=>{ delete mains[id]; })); },
     saveAssignment(id){ queue(id, ()=>{ const a = state.assignments.find(x=>x.id===id); return a ? coll.doc(id).set(clone(a)) : Promise.resolve(); }); },
     deleteAssignment(id){ queue(id, ()=>coll.doc(id).delete()); },
     saveGame(id){ queue(id, ()=>{ const g = state.games.find(x=>x.id===id); return g ? coll.doc(id).set(clone(g)) : Promise.resolve(); }); },
@@ -2278,6 +2341,20 @@ function makeDbStore(db, userId){
           const id = ch.doc.id;
           if (busyIds[id] || ch.doc.metadata.hasPendingWrites) return;
           if (id==="settings"){ if (ch.type!=="removed"){ const v = clone(ch.doc.data()); if (JSON.stringify(v)!==JSON.stringify(state.settings)){ state.settings = Object.assign(state.settings, v); changed = true; } } return; }
+          if (id.startsWith("st-") || id.startsWith("lg-")){
+            // Rebuild the student from its stored parts. Skipped while a local change to it is waiting to be saved.
+            const sid = id.startsWith("st-") ? id : ((ch.type==="removed" ? logs[id] : ch.doc.data())||{}).sid;
+            if (!sid || busyIds[sid]) return;
+            const cache = id.startsWith("st-") ? mains : logs;
+            if (ch.type==="removed"){ if (!cache[id]) return; delete cache[id]; }
+            else { const v = clone(ch.doc.data()); if (JSON.stringify(cache[id])===JSON.stringify(v)) return; cache[id] = v; } // our own write coming back
+            const i = state.students.findIndex(x=>x.id===sid);
+            if (!mains[sid]){ if (i>=0){ state.students.splice(i,1); changed = true; } return; }
+            const v = joinStudent(mains[sid], logsOf(sid).map(k=>logs[k]));
+            if (i<0){ state.students.push(v); changed = true; }
+            else if (canon(state.students[i])!==canon(v)){ state.students[i] = v; changed = true; }
+            return;
+          }
           const list = id.startsWith("st-") ? "students" : id.startsWith("as-") ? "assignments" : id.startsWith("gm-") ? "games" : null; if (!list) return;
           const i = state[list].findIndex(x=>x.id===id);
           if (ch.type==="removed"){ if (i>=0){ state[list].splice(i,1); changed = true; } return; }
@@ -2316,7 +2393,7 @@ async function initStore(){
   } catch(e){ db = null; }
   if (db && userId){
     store = makeDbStore(db, userId);
-    try { applyLoaded(await store.loadAll()); setSync("ok"); store.subscribe(); }
+    try { applyLoaded(await store.loadAll()); setSync("ok"); store.tidy(); store.subscribe(); }
     catch(e){ store = makeLocalStore(); applyLoaded(await store.loadAll()); setSync("local"); }
   } else { store = makeLocalStore(); applyLoaded(await store.loadAll()); setSync("local"); }
   loaded = true; render();
@@ -3927,9 +4004,13 @@ function pSettings(v){
       let d; try { d = JSON.parse(txt); } catch(err){ toast("That file isn't a valid backup."); return; }
       if (!Array.isArray(d.students)){ toast("That file isn't a Coach's Board backup."); return; }
       confirmBox("Restore backup?","This adds "+d.students.length+" students from the file. Students with the same ID are replaced; others are kept.","Restore",()=>{
-        if (Array.isArray(d.assignments)) d.assignments.forEach(a=>{ if (!String(a.id).startsWith("as-")) a.id = "as-"+uid(); const i = state.assignments.findIndex(y=>y.id===a.id); if (i>=0) state.assignments[i]=a; else state.assignments.push(a); saveAssignment(a); });
-        if (Array.isArray(d.games)) d.games.forEach(g=>{ if (!String(g.id).startsWith("gm-")) g.id = "gm-"+uid(); const i = state.games.findIndex(y=>y.id===g.id); if (i>=0) state.games[i]=g; else state.games.push(g); saveGame(g); });
-        d.students.forEach(s=>{ normalize(s); if (!String(s.id).startsWith("st-")) s.id = "st-"+uid(); const i = state.students.findIndex(y=>y.id===s.id); if (i>=0) state.students[i]=s; else state.students.push(s); saveStudent(s); });
+        // Students first: one that gets a new ID takes its games and assignments along with it.
+        const newId = {};
+        d.students.forEach(s=>{ normalize(s); if (!String(s.id).startsWith("st-")){ const was = s.id; s.id = "st-"+uid(); if (was!=null) newId[was] = s.id; }
+          const i = state.students.findIndex(y=>y.id===s.id); if (i>=0) state.students[i]=s; else state.students.push(s); ensureRecurring(s); saveStudent(s); });
+        const relink = x=>{ if (Object.prototype.hasOwnProperty.call(newId, x.studentId)) x.studentId = newId[x.studentId]; };
+        if (Array.isArray(d.assignments)) d.assignments.forEach(a=>{ relink(a); if (!String(a.id).startsWith("as-")) a.id = "as-"+uid(); const i = state.assignments.findIndex(y=>y.id===a.id); if (i>=0) state.assignments[i]=a; else state.assignments.push(a); saveAssignment(a); });
+        if (Array.isArray(d.games)) d.games.forEach(g=>{ relink(g); if (!String(g.id).startsWith("gm-")) g.id = "gm-"+uid(); const i = state.games.findIndex(y=>y.id===g.id); if (i>=0) state.games[i]=g; else state.games.push(g); saveGame(g); });
         if (d.settings){ Object.assign(state.settings,d.settings); saveSettings(); }
         toast("Backup restored"); render();
       });
