@@ -148,21 +148,6 @@ tr:last-child td{border-bottom:0}
 .avatar{width:36px;height:36px;border-radius:6px;display:grid;place-items:center;font-family:var(--display);font-weight:600;background:var(--sq-light);flex:none}
 .who{display:flex;align-items:center;gap:12px;min-width:0}
 
-/* Rank bar: skill level as a rank of 8 squares */
-.rank{display:inline-grid;grid-template-columns:repeat(8,1fr);border:1px solid var(--line);border-radius:3px;overflow:hidden}
-.rank i{width:12px;height:12px;background:transparent}
-.rank i.on:nth-child(odd){background:var(--sq-dark)}
-.rank i.on:nth-child(even){background:var(--sq-light);box-shadow:inset 0 0 0 1px var(--sq-dark)}
-.rank.big i{width:30px;height:30px}
-.rank.big button{width:34px;height:34px;border:0;padding:0;cursor:pointer;background:transparent}
-.rank.big button.on:nth-child(odd){background:var(--sq-dark)}
-.rank.big button.on:nth-child(even){background:var(--sq-light);box-shadow:inset 0 0 0 2px var(--sq-dark)}
-.rank.big button:not(.on):hover{background:var(--paper)}
-.rank.big button:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
-@media (max-width:480px){.rank.big button{width:30px;height:30px}}
-.skill{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
-.skill:first-child{border-top:0}
-.skill .note{grid-column:1/-1;color:var(--muted);font-size:.88rem}
 
 /* Student header & tabs */
 .s-head{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
@@ -352,6 +337,7 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .stat-link:hover{background:var(--paper)}
 .stat-link .v{font-size:1.2rem}
 .warn-text{color:var(--warn)}
+.note-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--warn-bg);color:var(--warn);border-radius:var(--r-md);padding:10px 14px;margin-bottom:16px;font-size:.9rem}
 @media (max-width:900px){.stats-5{grid-template-columns:repeat(3,minmax(0,1fr))}.stats-5 .stat:nth-child(4){border-inline-start:0}.stats-5 .stat:nth-child(n+4){border-top:1px solid var(--line)}}
 @media (max-width:520px){.stats-5{grid-template-columns:1fr 1fr}.stats-5 .stat{border-inline-start:1px solid var(--line)}.stats-5 .stat:nth-child(odd){border-inline-start:0}.stats-5 .stat:nth-child(n+3){border-top:1px solid var(--line)}}
 .off-line{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
@@ -2155,11 +2141,6 @@ if (typeof define !== 'undefined')
 "use strict";
 
 /* ---------- constants ---------- */
-const SKILLS = [
-  ["tactics","Tactics"],["calculation","Calculation"],["endgames","Endgame technique"],
-  ["openings","Opening knowledge"],["strategy","Strategy & planning"],
-  ["time","Time management"],["psychology","Focus & psychology"]
-];
 const TASK_CATS = ["Tactics","Endgames","Openings","Calculation","Game analysis","Strategy","Reading","Other"];
 // Tactics sources: each exercise has a kind that decides what result is recorded.
 // rated = puzzles solved + puzzle rating after; score = best score in the mode; count = number of exercises.
@@ -2311,7 +2292,7 @@ new MutationObserver(ms=>{ if (appliedLang!=="he") return; ms.forEach(m=>m.added
 function blankStudent(){
   return { id:"st-"+uid(), name:"", rating:"", ratingType:"FIDE", level:"", birthYear:"", contact:"", guardian:"", rate:state.settings.defaultRate||0, fideId:"", icfId:"", noId:false, fide:{}, icf:{},
     billing:"per session", goals:"", notes:"", active:true, createdAt:today(),
-    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], skills:{}, skillHistory:[], payments:[], charges:[], books:[], slots:[] };
+    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], payments:[], charges:[], books:[], slots:[] };
 }
 function normalize(s){
   const b = blankStudent();
@@ -2527,7 +2508,13 @@ function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add
 async function saveFile(filename, data){
   let dl = null; try { dl = window.claude && await window.claude.use("downloads"); } catch(e){}
   if (!dl) return toast("Downloads aren't available here.");
-  try { await dl.save({filename, data}); } catch(e){ if (e && e.code!=="cancelled") toast("The file wasn't saved."); }
+  try { await dl.save({filename, data}); return true; } catch(e){ if (e && e.code!=="cancelled") toast("The file wasn't saved."); }
+  return false;
+}
+// Download every record as one JSON file, and remember when, for the backup reminder on Today.
+async function downloadBackup(){
+  const data = JSON.stringify({app:"coachs-board",version:1,exportedAt:new Date().toISOString(),...state},null,2);
+  if (await saveFile("coachs-board-backup-"+today()+".json", data)){ state.settings.lastBackup = today(); saveSettings(); toast("Backup downloaded"); render(); }
 }
 // CSV that Excel opens with Hebrew names intact (BOM) and values containing commas or quotes kept whole.
 const toCsv = rows => "﻿"+rows.map(r=>r.map(v=>{ const x = v==null ? "" : String(v); return /[",\n\r]/.test(x) ? '"'+x.replace(/"/g,'""')+'"' : x; }).join(",")).join("\r\n")+"\r\n";
@@ -2615,7 +2602,7 @@ function render(){
 /* ---------- welcome ---------- */
 function welcome(){
   let sq = ""; for (let r=0;r<2;r++) for (let c=0;c<8;c++) sq += '<i class="'+((r+c)%2?"d":"l")+'"></i>';
-  return '<div class="welcome"><div class="board" aria-hidden="true">'+sq+'</div><h1>Set up your coaching board</h1><p class="sub" style="margin:10px 0 22px">Add a student to start tracking lessons, homework, openings, tournaments, skills and payments in one place.</p><div class="row-actions"><button class="btn primary" id="wAdd">Add a student</button><button class="btn" id="wSample">Explore with a sample student</button></div></div>';
+  return '<div class="welcome"><div class="board" aria-hidden="true">'+sq+'</div><h1>Set up your coaching board</h1><p class="sub" style="margin:10px 0 22px">Add a student to start tracking lessons, homework, openings, tournaments and payments in one place.</p><div class="row-actions"><button class="btn primary" id="wAdd">Add a student</button><button class="btn" id="wSample">Explore with a sample student</button></div></div>';
 }
 function bindWelcome(){ $("#wAdd").onclick = editStudent.bind(null,null); $("#wSample").onclick = addSample; }
 function addSample(){
@@ -2645,7 +2632,6 @@ function addSample(){
                 {id:uid(),v:2,color:"Black",against:"1.d4",name:"Queen's Gambit Declined",eco:"D37",lines:"1.d4 d5 2.c4 e6 3.Nc3 Nf6",status:"Studied",developer:"",reviewed:addDays(t,-210),created:addDays(t,-400),notes:""}],
     tournaments:[{id:uid(),name:"City Open",start:addDays(t,18),end:addDays(t,21),location:"Tel Aviv",format:"Classical",rounds:7,expected:"4.5/7",result:"",ratingChange:"",notes:"Prepare vs Sicilian players"},
                  {id:uid(),name:"Autumn Rapid",start:addDays(t,-25),end:addDays(t,-25),location:"Holon",format:"Rapid",rounds:9,expected:"5/9",result:"6/9",ratingChange:18,notes:""}],
-    skills:{tactics:{level:6,note:"Sees 2–3 move combos quickly"},calculation:{level:4,note:""},endgames:{level:3,note:"Rook endgames are the priority"},openings:{level:4,note:""},strategy:{level:4,note:""},time:{level:2,note:"Frequent time trouble"},psychology:{level:5,note:""}},
     payments:[{id:uid(),date:addDays(t,-14),amount:s.rate,method:"Bank transfer",note:""}], charges:[] });
   s.noId = true;
   const bk1 = {id:uid(), title:"Chess Structures", author:"Mauricio Flores Rios", topic:"Strategy", pages:400, page:112, startPage:58, status:"Reading", started:addDays(t,-40), finished:"", lastRead:addDays(t,-2), notes:"Focus on the Carlsbad and IQP chapters first"};
@@ -2705,6 +2691,7 @@ function pDashboard(v){
   '<div class="stat"><div class="v num">'+sessions.length+'</div><div class="l">Sessions in the next 7 days</div></div>'+
   '<div class="stat"><div class="v num'+(outstanding>0?" money-owed":"")+'">'+money(outstanding)+'</div><div class="l">Outstanding</div></div>'+
   '<div class="stat"><div class="v num">'+money(received)+'</div><div class="l">Received this month</div></div></div>'+
+  backupNote(t)+
   attentionPanel(active, t)+
   '<div class="grid g2">'+
   panel("Coming up this week", sessions.length ? '<ul class="list">'+sessions.map(({s,x})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(x.topics||"No topic yet")+'</div></div><div style="text-align:end"><div class="small">'+esc(x.date===t?"Today":fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(x.time||"")+(x.duration?" · "+x.duration+" min":"")+'</div></div></li>').join("")+'</ul>' : '<p class="empty">No sessions planned for the next 7 days.</p>')+
@@ -2715,7 +2702,15 @@ function pDashboard(v){
   $("#dSes").onclick = ()=>planSession();
   $("#dPay").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
   const find = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && s.sessions.find(y=>y.id===b)]; };
-  bindActions(v,{ done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}) });
+  bindActions(v,{ done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}), backup:()=>downloadBackup() });
+}
+// A reminder on Today when the last backup file is over a month old (or never, once the board has been in use for two weeks).
+const BACKUP_EVERY_DAYS = 30;
+function backupNote(t){
+  const last = state.settings.lastBackup, age = last ? daysBetween(last, t) : null;
+  const since = state.students.reduce((m,s)=>s.createdAt && s.createdAt<m ? s.createdAt : m, t);
+  if (last ? age<BACKUP_EVERY_DAYS : daysBetween(since, t)<14) return "";
+  return '<div class="note-bar"><span>'+(last ? "Last backup: "+age+" days ago — download a fresh copy." : "No backup downloaded yet — keep a copy of your records outside the app.")+'</span><button class="btn small" data-a="backup">Download backup</button></div>';
 }
 const PRACTICE_GAP_DAYS = 7;
 // Things that slip through: lessons never marked done (so never charged), students with nothing planned,
@@ -2835,7 +2830,6 @@ function pStudents(v){
   $("#sf").onchange = e=>{ studentFilter.show = e.target.value; draw(); };
   $("#sAdd").onclick = ()=>editStudent(null);
 }
-function rankBar(n){ let h = '<span class="rank" aria-label="Level '+n+' of 8">'; for (let i=1;i<=8;i++) h += '<i class="'+(i<=n?"on":"")+'"></i>'; return h+'</span>'; }
 
 const RATING_SOURCES = ["FIDE","FIDE Rapid","FIDE Blitz","ICF","Online"];
 const mainSource = s => s.ratingType==="ICF" ? "ICF" : s.ratingType==="Online" ? "Online" : "FIDE";
@@ -2866,7 +2860,7 @@ function editStudent(s){
       {name:"goals",label:"Goals",type:"textarea",value:x.goals},
       {name:"notes",label:"Coach notes",type:"textarea",value:x.notes}
     ],
-    danger: isNew?null:{label:"Delete student", onClick:()=>confirmBox("Delete "+x.name+"?","This removes all of their sessions, homework, assignments, repertoire, tournaments, skills and payment history. To keep the history, archive them instead.","Delete permanently",()=>{
+    danger: isNew?null:{label:"Delete student", onClick:()=>confirmBox("Delete "+x.name+"?","This removes all of their sessions, homework, assignments, repertoire, tournaments and payment history. To keep the history, archive them instead.","Delete permanently",()=>{
       state.students = state.students.filter(y=>y.id!==x.id); store.deleteStudent(x.id); state.assignments.filter(a=>a.studentId===x.id).forEach(a=>store.deleteAssignment(a.id)); state.assignments = state.assignments.filter(a=>a.studentId!==x.id); state.games.filter(g=>g.studentId===x.id).forEach(g=>store.deleteGame(g.id)); state.games = state.games.filter(g=>g.studentId!==x.id); location.hash="#/students"; toast("Student deleted"); })},
     onSubmit:d=>{
       if (!d.name) return "Enter the student's name.";
@@ -4417,18 +4411,12 @@ function pSettings(v){
       '<div class="field full"><label for="s6">Language</label><select id="s6" name="lang"><option value="en"'+(lang()==="en"?" selected":"")+'>English</option><option value="he"'+(lang()==="he"?" selected":"")+'>עברית (Hebrew)</option></select></div>'+
       '<div class="field full"><label for="s5">Week starts on</label><select id="s5" name="weekStart"><option value="0"'+(+st.weekStart===0?" selected":"")+'>Sunday</option><option value="1"'+(+st.weekStart===1?" selected":"")+'>Monday</option></select></div>'+
       '<div class="full"><button class="btn primary" type="submit">Save settings</button></div></form>')+
-    panel("Backup", '<p class="small muted" style="margin-top:0">'+(store&&store.kind==="db"?"Your data is saved to your account and is private to you, even if you share this page.":"Your data is saved in this browser only. Download a backup regularly.")+'</p><div class="row-actions"><button class="btn" id="exp">Download backup</button><label class="btn" for="imp">Restore from backup</label><input id="imp" type="file" accept="application/json,.json" hidden></div>')+
+    panel("Backup", '<p class="small muted" style="margin-top:0">'+(store&&store.kind==="db"?"Your data is saved to your account and is private to you, even if you share this page.":"Your data is saved in this browser only. Download a backup regularly.")+'</p><p class="small" style="margin-top:0">'+(st.lastBackup?"Last backup: "+esc(fmtDate(st.lastBackup)):"No backup downloaded yet.")+'</p><div class="row-actions"><button class="btn" id="exp">Download backup</button><label class="btn" for="imp">Restore from backup</label><input id="imp" type="file" accept="application/json,.json" hidden></div>')+
   '</div>';
   $("#setF").onsubmit = e=>{ e.preventDefault(); const f = e.target.elements;
     st.coachName = f.coachName.value.trim(); st.currency = f.currency.value.trim(); st.defaultRate = +f.defaultRate.value||0; st.weekStart = +f.weekStart.value; schedWeek = null; st.overdueDays = Math.max(1,+f.overdueDays.value||30); st.lang = f.lang.value;
     saveSettings(); render(); toast("Settings saved"); };
-  $("#exp").onclick = async ()=>{
-    const data = JSON.stringify({app:"coachs-board",version:1,exportedAt:new Date().toISOString(),...state},null,2);
-    const name = "coachs-board-backup-"+today()+".json";
-    let dl = null; try { dl = window.claude && await window.claude.use("downloads"); } catch(e){}
-    if (dl){ try { await dl.save({filename:name,data}); } catch(e){ if (e && e.code!=="cancelled") toast("The backup wasn't saved."); } }
-    else { toast("Downloads aren't available here."); }
-  };
+  $("#exp").onclick = downloadBackup;
   $("#imp").onchange = e=>{
     const file = e.target.files[0]; if (!file) return;
     file.text().then(txt=>{
@@ -4455,7 +4443,7 @@ const HE = {
   "Coach's Board":"הלוח של המאמן", "Today":"היום", "Students":"תלמידים", "Schedule":"לוח זמנים", "Assignments":"משימות", "Payments":"תשלומים", "Settings":"הגדרות",
   "Search":"חיפוש", "Loading your students…":"טוען את התלמידים…", "All changes saved":"כל השינויים נשמרו", "Saving…":"שומר…", "Saved on this device only":"נשמר במכשיר הזה בלבד",
   "Couldn't save":"השמירה נכשלה", "Couldn't save the last change":"השינוי האחרון לא נשמר", "Storage is full":"האחסון מלא", "This browser's storage is full":"האחסון בדפדפן מלא",
-  "Set up your coaching board":"הקמת לוח האימון", "Add a student to start tracking lessons, homework, openings, tournaments, skills and payments in one place.":"הוספת תלמיד מתחילה מעקב אחר שיעורים, שיעורי בית, פתיחות, טורנירים ותשלומים במקום אחד.",
+  "Set up your coaching board":"הקמת לוח האימון", "Add a student to start tracking lessons, homework, openings, tournaments and payments in one place.":"הוספת תלמיד מתחילה מעקב אחר שיעורים, שיעורי בית, פתיחות, טורנירים ותשלומים במקום אחד.",
   "Add a student":"הוספת תלמיד", "Explore with a sample student":"התנסות עם תלמיד לדוגמה",
   // common buttons
   "Add":"הוספה", "Edit":"עריכה", "Delete":"מחיקה", "Save":"שמירה", "Save changes":"שמירת שינויים", "Cancel":"ביטול", "Close":"סגירה", "Continue":"המשך", "Remove":"הסרה",
@@ -4481,7 +4469,7 @@ const HE = {
   "Parent / guardian":"הורה / אפוטרופוס", "Status":"סטטוס", "Goals":"מטרות", "Coach notes":"הערות המאמן", "Delete student":"מחיקת תלמיד", "Delete permanently":"מחיקה לצמיתות",
   "The number on the player's ratings.fide.com profile":"המספר בפרופיל השחקן ב־ratings.fide.com", "The Id= number on chess.org.il":"המספר שאחרי Id= באתר chess.org.il",
   "e.g. Club player, U14 champion":"למשל: שחקן מועדון, אלוף עד גיל 14",
-  "This removes all of their sessions, homework, assignments, repertoire, tournaments, skills and payment history. To keep the history, archive them instead.":"פעולה זו מוחקת את כל השיעורים, שיעורי הבית, המשימות, הרפרטואר, הטורנירים והיסטוריית התשלומים. כדי לשמור את ההיסטוריה, עדיף להעביר לארכיון.",
+  "This removes all of their sessions, homework, assignments, repertoire, tournaments and payment history. To keep the history, archive them instead.":"פעולה זו מוחקת את כל השיעורים, שיעורי הבית, המשימות, הרפרטואר, הטורנירים והיסטוריית התשלומים. כדי לשמור את ההיסטוריה, עדיף להעביר לארכיון.",
   "Enter the student's name.":"יש להזין את שם התלמיד.", "Enter the player's FIDE ID or Israeli Chess Federation ID, or choose “No ID yet”.":"יש להזין מספר פיד״ה או מספר איגוד, או לבחור ״עדיין אין מספר״.",
   "The FIDE ID should be digits only, like 2807681.":"מספר פיד״ה צריך להכיל ספרות בלבד, למשל 2807681.", "The ICF ID should be digits only, like 20256.":"מספר האיגוד צריך להכיל ספרות בלבד, למשל 20256.",
   "Student added":"התלמיד נוסף", "Changes saved":"השינויים נשמרו", "Student deleted":"התלמיד נמחק",
@@ -4651,6 +4639,7 @@ Object.assign(HE, {
   "No assignments yet. Add a task like “30 puzzles on pins”, or upload games in PGN for":"עדיין אין משימות. אפשר להוסיף משימה כמו ״30 פאזלים על ריתוקים״, או להעלות משחקים ב־PGN עבור",
   "The line, its moves and notes will be removed. This can't be undone.":"הוריאנט, המסעים וההערות יימחקו. אי אפשר לבטל את הפעולה.",
   "FIDE":"פיד״ה", "FIDE Rapid":"פיד״ה רפיד", "FIDE Blitz":"פיד״ה בליץ", "ICF":"איגוד", "min":"דק׳", "Marked done":"סומן כבוצע",
+  "Backup downloaded":"הגיבוי הורד", "No backup downloaded yet.":"עדיין לא הורד גיבוי.", "No backup downloaded yet — keep a copy of your records outside the app.":"עדיין לא הורד גיבוי — כדאי לשמור עותק של הנתונים מחוץ לאפליקציה.",
   "Next lesson":"השיעור הבא", "Owed":"חוב", "Open homework":"שיעורי בית פתוחים", "Line to review":"וריאנט לחזרה", "Lines to review":"וריאנטים לחזרה",
   "Repertoire up to date":"הרפרטואר מעודכן", "Yesterday":"אתמול", "No practice logged":"לא נרשם תרגול", "Last practice":"תרגול אחרון", "Goals & notes":"מטרות והערות", "Details":"פרטים",
   "Performance":"דירוג ביצוע", "Openings in games":"פתיחות במשחקים", "Every opening met has a line":"לכל פתיחה שנפגשה יש וריאנט", "Opponent played":"היריב שיחק",
@@ -4702,7 +4691,7 @@ const HE_RX = [
   [/^Add the moves \(PGN\) to games in Game history to see which openings (.+) meets and how they score\.$/, "הוספת המסעים (PGN) למשחקים בהיסטוריית המשחקים תראה אילו פתיחות $1 פוגש ומה הניקוד בהן."],
   [/^(\d+) openings? without a line$/, (m,n)=>+n===1 ? "פתיחה אחת בלי וריאנט" : n+" פתיחות בלי וריאנט"],
   [/^(\d+) rated games?$/, "$1 משחקים מדורגים"], [/^[Aa]verage opponent (\d+)$/, "יריב ממוצע $1"],
-  [/^(\d+) overdue$/, "$1 באיחור"], [/^(\d+)d$/, "$1 ימים"],
+  [/^(\d+) overdue$/, "$1 באיחור"], [/^Last backup: (\d+) days ago — download a fresh copy\.$/, "הגיבוי האחרון לפני $1 ימים — כדאי להוריד עותק חדש."], [/^Last backup: (.+)$/, "גיבוי אחרון: $1"], [/^(\d+)d$/, "$1 ימים"],
   [/^From (.+) until (.+)$/, "מ־$1 עד $2"], [/^From (.+)$/, "מ־$1"],
   [/^(Good morning|Good afternoon|Good evening), (.+)$/, (m,g,n)=>HE[g]+", "+n],
   [/^In (\d+) days$/, "בעוד $1 ימים"],
