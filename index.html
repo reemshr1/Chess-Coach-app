@@ -65,6 +65,12 @@ img{max-width:100%}
 .side-search span{flex:1}
 kbd{font-family:var(--body);font-size:.75rem;border:1px solid var(--line);border-radius:4px;padding:0 6px;background:var(--surface);color:var(--muted)}
 .topbar{display:none}
+.btn.lang-btn{display:none}
+.student-mode .btn.lang-btn{display:inline-flex}
+.student-mode .side-search,.student-mode .topbar a[href="#/search"]{display:none}
+.code-box{font-family:var(--display);font-size:1.6rem;font-weight:700;letter-spacing:.18em;background:var(--paper);border:1px dashed var(--line);border-radius:var(--r-sm);padding:6px 14px;display:inline-block;direction:ltr}
+.steps{margin:8px 0 12px;padding-inline-start:20px;font-size:.92rem}
+.steps li{margin-bottom:4px}
 .search-big{width:100%;font-size:1.05rem;padding:10px 14px;margin-bottom:18px}
 .hit{display:block;padding:10px 0;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}
 .hit:first-child{border-top:0}
@@ -87,6 +93,8 @@ main{padding:32px clamp(16px,4vw,48px) 96px;max-width:1180px;width:100%;min-widt
   .bottom-nav a{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.7rem;color:var(--muted);text-decoration:none;padding:4px 8px;border-radius:var(--r-sm);min-width:56px}
   .bottom-nav a[aria-current="page"]{color:var(--ink);background:var(--sq-light)}
   .bottom-nav svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .student-mode .bottom-nav a{min-width:0;flex:1 1 0;padding:4px 1px;font-size:.6rem;overflow:hidden}
+  .student-mode .bottom-nav a span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 
 /* Common */
@@ -369,12 +377,13 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 </style>
 </head>
 <body>
-<header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>Coach's Board</b></div><a class="btn ghost small" href="#/search" aria-label="Search"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></a></header>
+<header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>Coach's Board</b></div><button type="button" class="btn small ghost lang-btn" data-lang>עברית</button><a class="btn ghost small" href="#/search" aria-label="Search"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></a></header>
 <div class="app">
   <aside class="side">
     <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>Coach's Board</b></div>
     <a class="side-search" href="#/search"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Search</span><kbd>/</kbd></a>
     <nav class="nav" id="nav"></nav>
+    <button type="button" class="btn small lang-btn" data-lang style="margin:0 8px 10px;align-self:flex-start">עברית</button>
     <div class="side-foot" id="syncState"><span class="dot local"></span>Loading…</div>
   </aside>
   <main id="view" tabindex="-1"></main>
@@ -2199,6 +2208,10 @@ const ICONS = {
   students:'<svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="3"/><path d="M9 11h6l-1 5h-4z"/><path d="M7 21h10M8.5 16h7l1 5h-9z"/></svg>',
   schedule:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   assign:'<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+  practice:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/></svg>',
+  games:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16"/><path d="M4 8h4v4H4zM12 12h4v4h-4zM8 4h4v4H8zM16 8h4v4h-4zM8 16h4v4H8zM16 16h4v4h-4z" fill="currentColor" stroke="none" opacity=".35"/></svg>',
+  book:'<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5"/></svg>',
+  tree:'<svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10M6 12c0-4 4-5 10-0"/></svg>',
   pay:'<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20M6 15h4"/></svg>',
   settings:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>'
 };
@@ -2292,7 +2305,7 @@ new MutationObserver(ms=>{ if (appliedLang!=="he") return; ms.forEach(m=>m.added
 function blankStudent(){
   return { id:"st-"+uid(), name:"", rating:"", ratingType:"FIDE", level:"", birthYear:"", contact:"", guardian:"", rate:state.settings.defaultRate||0, fideId:"", icfId:"", noId:false, fide:{}, icf:{},
     billing:"per session", goals:"", notes:"", active:true, createdAt:today(),
-    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], payments:[], charges:[], books:[], slots:[] };
+    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], payments:[], charges:[], books:[], slots:[], training:[], requests:[] };
 }
 function normalize(s){
   const b = blankStudent();
@@ -2465,6 +2478,199 @@ function makeDbStore(db, userId){
     }
   };
 }
+/* ---------- student portal ---------- */
+// Students are invited to the app (as Editors) and each gets portal/<their account id>/:
+//   the document itself: the invite code they typed, their language, and the coach app's reply (linked / error)
+//   view/<doc>:  what the coach's app shows them, written only by the coach's app (never payments, fees,
+//                contact details or notes the coach hasn't shared)
+//   inbox/<op>:  what they add or change, written by them, taken in by the coach's app and then deleted.
+// The storage rules declared at publish let a student read and write only their own portal/<id>/ and let only
+// the owner (the coach) read all of them; the coach's own records stay in data/users/<coach id>/.
+let ROLE = "coach", portal = null;
+const STUDENT = ()=>ROLE==="student";
+const coachOnly = html=>STUDENT() ? "" : html;
+const PORTAL_KEYS = ["worklog","tournaments","books","training"]; // lists a student may add to and change
+function studentView(s){
+  return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
+    goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
+    sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, notes:x.shareNotes?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
+    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments, books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[],
+    coachName:state.settings.coachName||"", weekStart:state.settings.weekStart||0}));
+}
+// Every document the student's app reads, by id.
+function portalDocs(s){
+  const out = {}, parts = splitStudent(studentView(s));
+  out.student = parts.main; Object.keys(parts.logs).forEach(k=>{ out[k] = parts.logs[k]; });
+  state.assignments.filter(a=>a.studentId===s.id).forEach(a=>{ out[a.id] = a; });
+  state.games.filter(g=>g.studentId===s.id).forEach(g=>{ out[g.id] = g; });
+  return out;
+}
+// One change from a student. The coach's app applies it to the records (coachSide); the student's app applies it
+// on top of its copy to show changes the coach's app hasn't taken in yet. Anything not allowed is ignored:
+// a student only adds or edits practice, tournaments, books, own training, own games and homework status,
+// only deletes what they added, and asks for lessons rather than booking them.
+function applyOp(s, op, coachSide){
+  const t = op.type, it = op.item, mine = x=>x && x.by==="student", list = k=>(s[k] = s[k]||[]);
+  let m = /^(worklog|tournaments|books|training)\.(upsert|delete)$/.exec(t);
+  if (m){
+    const L = list(m[1]), i = L.findIndex(x=>x.id===(m[2]==="delete" ? op.id : it && it.id));
+    if (m[2]==="delete"){ if (i>=0 && mine(L[i])) L.splice(i,1); return true; }
+    if (!it || !it.id) return false;
+    const item = Object.assign({}, i>=0 ? L[i] : {}, it, i>=0 ? {} : {by:"student"});
+    if (i>=0) L[i] = item; else L.push(item);
+    if (coachSide && m[1]==="worklog"){
+      if (item.bookId) syncBook(s, s.books.find(b=>b.id===item.bookId), item);
+      const g = item.gameId && state.games.find(x=>x.id===item.gameId && x.studentId===s.id);
+      if (g && item.gStatus && (!g.lastAnalysed || item.date>=g.lastAnalysed)){ g.analysis = item.gStatus; g.lastAnalysed = item.date; saveGame(g); }
+    }
+    return true;
+  }
+  if (t==="game.upsert"){
+    if (!it || !/^gm-/.test(it.id||"")) return false;
+    const i = state.games.findIndex(g=>g.id===it.id); if (i>=0 && state.games[i].studentId!==s.id) return false;
+    const g = Object.assign({}, i>=0 ? state.games[i] : {by:"student"}, it, {studentId:s.id});
+    if (i>=0) state.games[i] = g; else state.games.push(g);
+    if (coachSide) saveGame(g); return true;
+  }
+  if (t==="game.delete"){
+    const g = state.games.find(x=>x.id===op.id && x.studentId===s.id);
+    if (g && mine(g)){ state.games = state.games.filter(x=>x!==g); if (coachSide) store.deleteGame(g.id); }
+    return true;
+  }
+  if (t==="assignment.status"){
+    const a = state.assignments.find(x=>x.id===op.id && x.studentId===s.id);
+    if (!a || a.status==="Reviewed" || !["Assigned","Submitted"].includes(op.status)) return false;
+    a.status = op.status; a.submitted = op.status==="Submitted" ? (a.submitted || op.date || today()) : "";
+    if (coachSide) saveAssignment(a); return true;
+  }
+  if (t==="request"){
+    if (!it || !it.id || !it.date) return false;
+    const L = list("requests"); if (!L.some(r=>r.id===it.id)) L.push({id:it.id, date:it.date, time:it.time||"", duration:+it.duration||60, format:it.format||"In person", note:it.note||"", status:"pending", asked:(op.at||"").slice(0,10)||today()});
+    return true;
+  }
+  if (t==="request.cancel"){ const r = list("requests").find(x=>x.id===op.id); if (r && r.status==="pending") r.status = "cancelled"; return true; }
+  return false;
+}
+// The coach's side: link students who typed their invite code, keep each linked student's view up to date,
+// and take in what they send.
+function makePortal(db){
+  const cache = {}, timers = {}, subs = {}, taken = new Set();
+  async function sync(s){
+    if (!s || !s.portal || !s.portal.uid) return;
+    const uid = s.portal.uid, col = db.collection("portal/"+uid+"/view");
+    if (!cache[uid]){ const c = {}; (await col.get()).docs.forEach(d=>{ c[d.id] = JSON.stringify(d.data()); }); cache[uid] = c; }
+    const want = portalDocs(s), have = cache[uid], writes = [];
+    Object.keys(want).forEach(id=>{ const j = JSON.stringify(want[id]); if (have[id]!==j && j.length<=DOC_LIMIT) writes.push(col.doc(id).set(want[id]).then(()=>{ have[id] = j; })); });
+    Object.keys(have).forEach(id=>{ if (!want[id]) writes.push(col.doc(id).delete().then(()=>{ delete have[id]; })); });
+    await Promise.all(writes);
+  }
+  function schedule(sid){
+    const s = byId(sid); if (!s || !s.portal || !s.portal.uid) return;
+    clearTimeout(timers[sid]); timers[sid] = setTimeout(()=>{ sync(byId(sid)).catch(()=>{}); }, 900);
+  }
+  function watchInbox(s){
+    const uid = s.portal.uid; if (subs[uid]) return;
+    subs[uid] = db.collection("portal/"+uid+"/inbox").onSnapshot(snap=>{
+      const st = state.students.find(x=>x.portal && x.portal.uid===uid); if (!st) return;
+      const ops = snap.docs.map(d=>Object.assign({_id:d.id}, d.data())).filter(o=>o.type).sort((a,b)=>(a.at||"")<(b.at||"")?-1:1);
+      const fresh = ops.filter(o=>!taken.has(o._id)); if (!fresh.length) return;
+      fresh.forEach(o=>{ taken.add(o._id); applyOp(st, o, true); });
+      saveStudent(st);
+      // The student's copy is updated before their changes leave the inbox, so nothing they added flickers away.
+      clearTimeout(timers[st.id]);
+      sync(st).then(()=>fresh.forEach(o=>db.doc("portal/"+uid+"/inbox/"+o._id).delete().catch(()=>{}))).catch(()=>{});
+      if (!$("#modal").open && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render();
+    }, ()=>{});
+  }
+  function watchLinks(){
+    db.collection("portal").onSnapshot(snap=>{
+      snap.docChanges().filter(ch=>ch.type!=="removed").map(ch=>ch.doc).forEach(d=>{
+        const v = d.data()||{}, uid = d.id, code = String(v.code||"").trim().toUpperCase();
+        if (!code || v.linked) return;
+        const ref = db.doc("portal/"+uid);
+        const s = state.students.find(x=>x.invite && x.invite.code===code);
+        if (!s){ if (v.error!==code) ref.set(Object.assign({}, v, {error:code})).catch(()=>{}); return; }
+        state.students.forEach(o=>{ if (o!==s && o.portal && o.portal.uid===uid){ delete o.portal; saveStudent(o); } }); // one account, one student
+        s.portal = {uid, linkedAt:today()}; delete s.invite; saveStudent(s);
+        ref.set({code, lang:v.lang||"", linked:true, error:""}).catch(()=>{});
+        watchInbox(s); schedule(s.id);
+        toast(s.name+" is now connected to the app"); render();
+      });
+    }, ()=>{});
+  }
+  return {
+    start(){ watchLinks(); state.students.forEach(s=>{ if (s.portal && s.portal.uid){ watchInbox(s); schedule(s.id); } }); },
+    schedule, scheduleAll(){ state.students.forEach(s=>schedule(s.id)); },
+    unlink(s){
+      const uid = s.portal && s.portal.uid; if (!uid) return;
+      clearTimeout(timers[s.id]);
+      db.doc("portal/"+uid).set({linked:false, unlinked:true}).catch(()=>{});
+      const view = db.collection("portal/"+uid+"/view");
+      view.get().then(snap=>snap.docs.forEach(d=>view.doc(d.id).delete().catch(()=>{}))).catch(()=>{});
+      delete cache[uid]; if (subs[uid]){ try { subs[uid](); } catch(e){} delete subs[uid]; }
+      delete s.portal; saveStudent(s);
+    }
+  };
+}
+// The student's side: their copy of the records (view), plus their own changes (inbox) on top.
+function makeStudentStore(db, account){
+  const root = db.doc("portal/"+account), view = {}, inbox = {};
+  let me = {}, base = null, rebuildLater = false;
+  const clone = v=>JSON.parse(JSON.stringify(v));
+  function rebuild(){
+    const main = view.student;
+    if (!main){ state.students = []; state.assignments = []; state.games = []; base = null; return; }
+    const s = joinStudent(main, Object.keys(view).filter(k=>k.startsWith("lg-")).map(k=>view[k]));
+    state.assignments = Object.keys(view).filter(k=>k.startsWith("as-")).map(k=>clone(view[k]));
+    state.games = Object.keys(view).filter(k=>k.startsWith("gm-")).map(k=>clone(view[k]));
+    state.students = [s];
+    Object.values(inbox).sort((a,b)=>(a.at||"")<(b.at||"")?-1:1).forEach(op=>applyOp(s, op, false));
+    Object.assign(state.settings, {coachName:main.coachName||"", weekStart:main.weekStart||0, currency:""});
+    base = clone(s);
+  }
+  // Rebuilding swaps the student object, so it waits while a form is open (the form edits the current one).
+  const refresh = ()=>{ if ($("#modal").open){ rebuildLater = true; return; } rebuild(); render(); };
+  $("#modal").addEventListener("close", ()=>{ if (rebuildLater){ rebuildLater = false; setTimeout(()=>{ rebuild(); render(); }, 0); } });
+  function send(op){
+    op.at = new Date().toISOString();
+    const id = "op-"+uid(); inbox[id] = op; setSync("busy");
+    return root.collection("inbox").doc(id).set(op).then(()=>setSync("ok"), ()=>setSync("err"));
+  }
+  const track = (col, snap)=>snap.docChanges().forEach(ch=>{ if (ch.type==="removed") delete col[ch.doc.id]; else col[ch.doc.id] = clone(ch.doc.data()); });
+  return {
+    kind:"student",
+    me:()=>me,
+    async loadAll(){
+      const [r, v, i] = await Promise.all([root.get(), root.collection("view").get(), root.collection("inbox").get()]);
+      me = r.exists ? clone(r.data()) : {};
+      v.docs.forEach(d=>{ view[d.id] = clone(d.data()); }); i.docs.forEach(d=>{ inbox[d.id] = clone(d.data()); });
+      if (me.lang) state.settings.lang = me.lang;
+      rebuild();
+    },
+    subscribe(){
+      root.onSnapshot(d=>{ me = d.exists ? clone(d.data()) : {}; if (!$("#modal").open) render(); }, ()=>{});
+      root.collection("view").onSnapshot(snap=>{ track(view, snap); refresh(); }, ()=>{});
+      root.collection("inbox").onSnapshot(snap=>{ if (snap.metadata && snap.metadata.hasPendingWrites) return; track(inbox, snap); refresh(); }, ()=>{});
+    },
+    link(code){ me = Object.assign({}, me, {code:String(code).trim().toUpperCase(), lang:state.settings.lang||"en", linked:false, error:"", unlinked:false}); return root.set(me); },
+    saveLang(){ me = Object.assign({}, me, {lang:state.settings.lang}); root.set(me).catch(()=>{}); },
+    send,
+    // What the student changed in the lists they may edit becomes inbox changes.
+    saveStudent(){
+      const s = state.students[0]; if (!s || !base) return;
+      PORTAL_KEYS.forEach(k=>{
+        const before = new Map((base[k]||[]).map(x=>[x.id, JSON.stringify(x)])), now = s[k]||[];
+        now.forEach(x=>{ if (before.get(x.id)!==JSON.stringify(x)) send({type:k+".upsert", item:clone(x)}); });
+        before.forEach((j, id)=>{ if (!now.some(x=>x.id===id)) send({type:k+".delete", id}); });
+      });
+      base = clone(s);
+    },
+    saveGame(id){ const g = state.games.find(x=>x.id===id); if (g) send({type:"game.upsert", item:clone(g)}); },
+    deleteGame(id){ send({type:"game.delete", id}); },
+    saveAssignment(id){ const a = state.assignments.find(x=>x.id===id); if (a) send({type:"assignment.status", id, status:a.status, date:today()}); },
+    deleteAssignment(){}, deleteStudent(){}, saveSettings(){ this.saveLang(); }
+  };
+}
 function setSync(kind, msg){
   const el = $("#syncState"); if (!el) return;
   const text = {ok:"All changes saved", busy:"Saving…", local:"Saved on this device only", err: msg||"Couldn't save"}[kind];
@@ -2489,17 +2695,28 @@ async function initStore(){
       if (userApi) userId = await userApi.id();
     }
   } catch(e){ db = null; }
+  // Anyone but the owner is a student: they get their own page, never the coach's records.
+  const owner = userApi && typeof userApi.isOwner==="function" ? await userApi.isOwner().catch(()=>true) : true;
+  if (db && userId && !owner){
+    ROLE = "student"; document.body.classList.add("student-mode");
+    store = makeStudentStore(db, userId);
+    try { await store.loadAll(); setSync("ok"); store.subscribe(); } catch(e){ setSync("err", "Couldn't load your board"); }
+    loaded = true; render(); return;
+  }
   if (db && userId){
     store = makeDbStore(db, userId);
-    try { applyLoaded(await store.loadAll()); setSync("ok"); store.tidy(); store.subscribe(); }
+    try { applyLoaded(await store.loadAll()); setSync("ok"); store.tidy(); store.subscribe(); portal = makePortal(db); portal.start();
+      // Deleting a game or assignment also takes it off that student's page.
+      const dg = store.deleteGame, da = store.deleteAssignment;
+      store.deleteGame = id=>{ dg(id); portal.scheduleAll(); }; store.deleteAssignment = id=>{ da(id); portal.scheduleAll(); }; }
     catch(e){ store = makeLocalStore(); applyLoaded(await store.loadAll()); setSync("local"); }
   } else { store = makeLocalStore(); applyLoaded(await store.loadAll()); setSync("local"); }
   loaded = true; render();
 }
-const saveStudent = s => { store && store.saveStudent(s.id); };
-const saveSettings = () => { store && store.saveSettings(); };
-const saveAssignment = a => { store && store.saveAssignment(a.id); };
-const saveGame = g => { store && store.saveGame(g.id); };
+const saveStudent = s => { store && store.saveStudent(s.id); portal && portal.schedule(s.id); };
+const saveSettings = () => { store && store.saveSettings(); portal && portal.scheduleAll(); };
+const saveAssignment = a => { store && store.saveAssignment(a.id); portal && portal.schedule(a.studentId); };
+const saveGame = g => { store && store.saveGame(g.id); portal && portal.schedule(g.studentId); };
 
 /* ---------- UI utilities ---------- */
 let toastTimer;
@@ -2583,10 +2800,21 @@ function route(){ const h = location.hash.replace(/^#\/?/,"").split("/"); return
 window.addEventListener("hashchange", ()=>{ render(); $("#view").focus({preventScroll:true}); window.scrollTo(0,0); });
 
 function renderNav(){
-  const r = route(); const cur = r.page==="student" ? "students" : r.page==="assignment" ? "assignments" : r.page;
+  const r = route();
+  document.querySelectorAll("[data-lang]").forEach(b=>{ b.textContent = lang()==="he" ? "English" : "עברית"; });
+  if (STUDENT()){
+    const s = state.students[0], cur = r.page==="student" ? ({games:"tournaments", studied:"work"}[r.tab]||r.tab) : r.page==="assignment" ? "assignments" : r.page==="schedule" ? "schedule" : "home";
+    const html = s ? studentNav(s).map(([k,href,l,ic])=>'<a href="'+href+'"'+(cur===k?' aria-current="page"':"")+'>'+ic+'<span>'+l+'</span></a>').join("") : "";
+    $("#nav").innerHTML = html; $("#bnav").innerHTML = html; return;
+  }
+  const cur = r.page==="student" ? "students" : r.page==="assignment" ? "assignments" : r.page;
   const html = NAV.map(([k,l,ic])=>'<a href="#/'+k+'"'+(cur===k?' aria-current="page"':"")+'>'+ic+'<span>'+l+'</span></a>').join("");
   $("#nav").innerHTML = html; $("#bnav").innerHTML = html;
 }
+const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash],["work",b+"work","Practice",ICONS.practice],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Homework",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
+// The language button students have (the coach changes language in Settings).
+document.addEventListener("click", e=>{ const b = e.target.closest("[data-lang]"); if (!b) return;
+  state.settings.lang = lang()==="he" ? "en" : "he"; if (store && store.saveLang) store.saveLang(); render(); });
 
 function render(){
   applyLang();
@@ -2594,11 +2822,122 @@ function render(){
   const v = $("#view");
   if (!loaded){ v.innerHTML = '<p class="muted">Loading your students…</p>'; return; }
   const r = route();
+  if (STUDENT()) return renderStudent(v, r);
   if (!state.students.length && ["dashboard","students","schedule","payments","assignments"].includes(r.page)){ v.innerHTML = welcome(); bindWelcome(); return; }
   const pages = {dashboard:pDashboard, students:pStudents, student:pStudent, schedule:pSchedule, payments:pPayments, settings:pSettings, assignments:pAssignments, assignment:pAssignment, search:pSearch};
   (pages[r.page]||pDashboard)(v, r);
 }
 
+/* ---------- the student's pages ---------- */
+const STUDENT_TABS = {work:"Practice", studied:"Practice", tournaments:"Games", games:"Games", assignments:"Homework", books:"Reading", repertoire:"Openings"};
+function renderStudent(v, r){
+  const s = state.students[0];
+  if (!s){ v.innerHTML = linkPage(store.me()); bindLink(); return; }
+  if (r.page==="student" && r.id===s.id && STUDENT_TABS[r.tab]){
+    v.innerHTML = '<div class="page-head"><div><h1>'+esc(STUDENT_TABS[r.tab])+'</h1></div></div><div id="tab"></div>';
+    ({work:tWork, studied:tStudied, tournaments:tTournaments, games:tGames, assignments:tAssignments, books:tBooks, repertoire:tRepertoire})[r.tab]($("#tab"), s);
+    return;
+  }
+  if (r.page==="assignment") return pAssignment(v, r);
+  if (r.page==="schedule") return pMySchedule(v, s);
+  return pHome(v, s);
+}
+function linkPage(me){
+  let sq = ""; for (let r=0;r<2;r++) for (let c=0;c<8;c++) sq += '<i class="'+((r+c)%2?"d":"l")+'"></i>';
+  const code = me.code||"", bad = code && me.error===code, waiting = code && !me.linked && !bad;
+  return '<div class="welcome"><div class="board" aria-hidden="true">'+sq+'</div><h1>Welcome to Coach\'s Board</h1>'+
+    (me.linked ? '<p class="sub" style="margin:10px 0 0">Connected! Your board is being prepared — it appears here in a moment.</p>' :
+      '<p class="sub" style="margin:10px 0 18px">Enter the code your coach gave you to connect your account.</p>'+
+      (me.unlinked?'<p class="small" style="color:var(--flag)">Your coach has closed access to this board. Ask your coach for a new code.</p>':'')+
+      (bad?'<p class="small" style="color:var(--flag)">That code wasn\'t recognised. Check it with your coach and try again.</p>':'')+
+      (waiting?'<p class="small">Code sent. You\'ll be connected as soon as your coach opens Coach\'s Board.</p>':'')+
+      '<form id="linkF" class="row-actions"><input id="linkCode" class="search" dir="ltr" placeholder="ABC123" autocomplete="off" value="'+esc(code)+'" style="text-transform:uppercase;min-width:170px;letter-spacing:.1em" aria-label="Code from your coach"><button class="btn primary" type="submit">Connect</button></form>')+'</div>';
+}
+function bindLink(){
+  const f = $("#linkF"); if (!f) return;
+  f.onsubmit = e=>{ e.preventDefault(); const c = $("#linkCode").value.replace(/\s/g,"");
+    if (c.length<4) return toast("Enter the code from your coach.");
+    store.link(c).then(()=>{ toast("Code sent"); render(); }, ()=>toast("Couldn't send the code. Check your connection.")); };
+}
+function pHome(v, s){
+  const t = today(), first = s.name.split(" ")[0];
+  const lessons = sortBy(s.sessions.filter(x=>x.status==="planned" && x.date>=t),"date").slice(0,4);
+  const hw = asSort(state.assignments.filter(a=>a.status!=="Reviewed"));
+  const todo = hw.filter(a=>a.status==="Assigned");
+  const week = s.worklog.filter(w=>w.date>=addDays(t,-6)).reduce((a,w)=>a+(+w.minutes||0),0);
+  const tours = sortBy(s.tournaments.filter(x=>(x.end||x.start)>=t),"start").slice(0,3);
+  const pend = (s.requests||[]).filter(r=>r.status==="pending");
+  const recent = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,3);
+  const rt = sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===mainSource(s)),"date").pop();
+  const hr = new Date().getHours(), greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
+  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+greet+', '+esc(first)+'</h1></div><div class="row-actions"><button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
+    '<div class="stats"><div class="stat"><div class="v num">'+(lessons[0]?esc(fmtDate(lessons[0].date,{weekday:"short",day:"numeric",month:"short"})):"—")+'</div><div class="l">'+(lessons[0]?"Next lesson"+(lessons[0].time?" · "+esc(lessons[0].time):""):"No lesson planned")+'</div></div>'+
+      '<div class="stat"><div class="v num'+(todo.some(a=>a.due&&a.due<t)?" money-owed":"")+'">'+todo.length+'</div><div class="l">Homework to do</div></div>'+
+      '<div class="stat"><div class="v num">'+week+'</div><div class="l">Practice minutes this week</div></div>'+
+      '<div class="stat"><div class="v num">'+(rt?esc(rt.value):"—")+'</div><div class="l">'+(rt?esc(rt.source||mainSource(s))+" rating":"Rating")+'</div></div></div>'+
+    '<div class="grid g2">'+
+    panel("Coming up", (lessons.length||tours.length||pend.length) ? '<ul class="list">'+
+        lessons.map(x=>'<li><div class="main"><div class="title">Lesson</div><div class="small muted">'+[x.format, x.duration?x.duration+" min":"", x.topics].filter(Boolean).map(esc).join(" · ")+'</div></div><div style="text-align:end" class="small">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+(x.time?'<div class="muted">'+esc(x.time)+'</div>':'')+'</div></li>').join("")+
+        tours.map(x=>'<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+[x.location, x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">'+esc(fmtShort(x.start))+'</span></li>').join("")+
+        pend.map(r=>'<li><div class="main"><div class="title">Lesson request</div><div class="small muted">'+esc(fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"}))+' · '+esc(r.time)+'</div></div><span class="tag warn">Waiting for your coach</span></li>').join("")+'</ul>'
+      : '<p class="empty">Nothing planned yet.</p>', '<a class="btn small" href="#/schedule">Schedule</a>')+
+    panel("Homework", hw.length ? '<ul class="list">'+hw.map(a=>'<li><div class="main"><div class="title"><a href="#/assignment/'+a.id+'">'+esc(a.title)+'</a></div><div class="small muted">'+esc(a.type)+(a.due?' · due '+esc(fmtShort(a.due)):'')+'</div></div>'+(a.status==="Assigned"?'<button class="btn small" data-a="hwdone" data-id="'+a.id+'">Mark done</button>':'<span class="tag warn">Done · to review</span>')+'</li>').join("")+'</ul>' : '<p class="empty">No homework right now.</p>')+
+    panel("Goals", (s.goals?'<p class="pre" style="margin:0">'+esc(s.goals)+'</p>':'<p class="empty" style="padding:0">Your coach hasn\'t written goals yet.</p>')+
+      (s.notes?'<h3 class="subh">From your coach</h3><p class="pre" style="margin:0">'+esc(s.notes)+'</p>':''))+
+    panel("Recent lessons", recent.length ? '<ul class="list">'+recent.map(x=>'<li style="display:block"><div class="title">'+esc(fmtDate(x.date))+(x.topics?' — '+esc(x.topics):'')+'</div>'+(x.notes?'<div class="small pre">'+esc(x.notes)+'</div>':'')+'</li>').join("")+'</ul>' : '<p class="empty">No lessons yet.</p>')+
+    '</div>';
+  bindActions(v,{ req:()=>requestLesson(s), log:()=>openPractice(s, null),
+    hwdone:id=>{ const a = state.assignments.find(x=>x.id===id); if (!a) return; a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — your coach will review it"); } });
+}
+function requestLesson(s){
+  const tomorrow = addDays(today(),1);
+  openForm({title:"Request a lesson", submit:"Send request", fields:[
+      {name:"date",label:"Date",type:"date",value:tomorrow},
+      {name:"time",label:"Start time",type:"time",value:""},
+      {name:"duration",label:"Duration (minutes)",type:"select",options:[["45","45"],["60","60"],["90","90"],["120","120"]],value:"60"},
+      {name:"format",label:"Format",type:"select",options:["In person","Online"],value:"In person"},
+      {name:"note",label:"Note for your coach",type:"textarea",value:"",placeholder:"e.g. I'd like to prepare for the City Open"}],
+    onSubmit:d=>{
+      if (!d.date || d.date<today()) return "Choose a date from today on.";
+      if (!d.time) return "Choose a start time.";
+      const op = {type:"request", item:{id:uid(), date:d.date, time:d.time, duration:+d.duration, format:d.format, note:d.note}};
+      store.send(op); applyOp(s, op, false); render(); toast("Request sent to your coach");
+    }});
+}
+function editTraining(s, x){
+  crud(s,"training",x,[
+    {name:"date",label:"Date",type:"date",value:x?.date||today()},
+    {name:"time",label:"Start time",type:"time",value:x?.time||""},
+    {name:"duration",label:"Duration (minutes)",type:"number",value:x?.duration??45,min:5},
+    {name:"what",label:"What you'll work on",type:"select",options:TASK_CATS,value:x?.what||"Tactics"},
+    {name:"note",label:"Notes",type:"textarea",value:x?.note||"",placeholder:"e.g. Puzzle Rush, then the Lucena chapter"}],
+  "training","Training", d=>!d.date ? "Choose a date." : null);
+}
+function pMySchedule(v, s){
+  const t = today(), end = addDays(t, 56);
+  const items = [];
+  s.sessions.forEach(x=>{ if (x.status!=="cancelled" && x.date>=t && x.date<=end) items.push({kind:"lesson", date:x.date, time:x.time||"", x}); });
+  s.tournaments.forEach(x=>{ if (x.start && (x.end||x.start)>=t && x.start<=end) items.push({kind:"tour", date:x.start<t?t:x.start, time:"", x}); });
+  state.assignments.forEach(a=>{ if (a.status==="Assigned" && a.due && a.due>=t && a.due<=end) items.push({kind:"due", date:a.due, time:"", x:a}); });
+  (s.training||[]).forEach(x=>{ if (x.date>=t && x.date<=end) items.push({kind:"train", date:x.date, time:x.time||"", x}); });
+  (s.requests||[]).forEach(r=>{ if (r.status==="pending" || (r.status==="declined" && r.date>=t)) items.push({kind:"req", date:r.date, time:r.time||"", x:r}); });
+  const groups = {}; items.forEach(i=>(groups[i.date]=groups[i.date]||[]).push(i));
+  const ord = {tour:0, due:1, lesson:2, req:3, train:4};
+  const row = i=>{ const x = i.x;
+    if (i.kind==="lesson") return '<li><div class="main"><div class="title">Lesson'+(x.topics?' — '+esc(x.topics):'')+'</div><div class="small muted">'+[x.time||"No time set", x.duration?x.duration+" min":"", x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">Lesson</span></li>';
+    if (i.kind==="tour") return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+[x.location, x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">Tournament</span></li>';
+    if (i.kind==="due") return '<li><div class="main"><div class="title"><a href="#/assignment/'+x.id+'">'+esc(x.title)+'</a></div><div class="small muted">'+esc(x.type)+'</div></div><span class="tag warn">Assignment due</span></li>';
+    if (i.kind==="req") return '<li><div class="main"><div class="title">Lesson request</div><div class="small muted">'+[x.time, x.duration+" min", x.format].filter(Boolean).map(esc).join(" · ")+(x.note?' · '+esc(x.note):'')+'</div></div>'+(x.status==="pending"?'<span class="tag warn">Waiting for your coach</span><button class="btn small ghost" data-a="unreq" data-id="'+x.id+'">Cancel</button>':'<span class="tag flag">Declined</span>')+'</li>';
+    return '<li><div class="main"><div class="title">Training · '+esc(x.what||"")+'</div><div class="small muted">'+[x.time, x.duration?x.duration+" min":"", x.note].filter(Boolean).map(esc).join(" · ")+'</div></div><button class="btn small ghost" data-a="train" data-id="'+x.id+'">Edit</button></li>';
+  };
+  const past = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,8);
+  v.innerHTML = '<div class="page-head"><div><h1>Schedule</h1><p class="sub">Your lessons, tournaments, homework and own training for the next 8 weeks</p></div><div class="row-actions"><button class="btn" data-a="plan">Plan training</button><button class="btn primary" data-a="req">Request a lesson</button></div></div>'+
+    (Object.keys(groups).length ? Object.keys(groups).sort().map(d=>'<div class="date-group"><h3>'+(d===t?"Today":d===addDays(t,1)?"Tomorrow":esc(fmtDay(d)))+'</h3><section class="panel" style="padding:4px 18px"><ul class="list">'+groups[d].sort((a,b)=>(ord[a.kind]-ord[b.kind])||(a.time<b.time?-1:1)).map(row).join("")+'</ul></section></div>').join("")
+      : '<p class="empty">Nothing on the calendar in the next 8 weeks.</p>')+
+    panel("Past lessons", past.length ? '<ul class="list">'+past.map(x=>'<li style="display:block"><div class="title">'+esc(fmtDate(x.date))+(x.topics?' — '+esc(x.topics):'')+'</div>'+(x.notes?'<div class="small pre">'+esc(x.notes)+'</div>':'')+'</li>').join("")+'</ul>' : '<p class="empty">No lessons yet.</p>');
+  bindActions(v,{ req:()=>requestLesson(s), plan:()=>editTraining(s, null), train:id=>editTraining(s, (s.training||[]).find(x=>x.id===id)),
+    unreq:id=>{ const op = {type:"request.cancel", id}; store.send(op); applyOp(s, op, false); render(); toast("Request cancelled"); } });
+}
 /* ---------- welcome ---------- */
 function welcome(){
   let sq = ""; for (let r=0;r<2;r++) for (let c=0;c<8;c++) sq += '<i class="'+((r+c)%2?"d":"l")+'"></i>';
@@ -2692,6 +3031,7 @@ function pDashboard(v){
   '<div class="stat"><div class="v num'+(outstanding>0?" money-owed":"")+'">'+money(outstanding)+'</div><div class="l">Outstanding</div></div>'+
   '<div class="stat"><div class="v num">'+money(received)+'</div><div class="l">Received this month</div></div></div>'+
   backupNote(t)+
+  requestsPanel()+
   attentionPanel(active, t)+
   '<div class="grid g2">'+
   panel("Coming up this week", sessions.length ? '<ul class="list">'+sessions.map(({s,x})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(x.topics||"No topic yet")+'</div></div><div style="text-align:end"><div class="small">'+esc(x.date===t?"Today":fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(x.time||"")+(x.duration?" · "+x.duration+" min":"")+'</div></div></li>').join("")+'</ul>' : '<p class="empty">No sessions planned for the next 7 days.</p>')+
@@ -2702,7 +3042,37 @@ function pDashboard(v){
   $("#dSes").onclick = ()=>planSession();
   $("#dPay").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
   const find = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && s.sessions.find(y=>y.id===b)]; };
-  bindActions(v,{ done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}), backup:()=>downloadBackup() });
+  const req = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && (s.requests||[]).find(y=>y.id===b)]; };
+  bindActions(v,{ done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}), backup:()=>downloadBackup(),
+    approve:id=>{ const [s,r] = req(id); if (r) approveRequest(s,r); },
+    decline:id=>{ const [s,r] = req(id); if (!r) return;
+      confirmBox("Decline this request?", s.name+" asked for "+fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"})+" "+r.time+". They'll see it as declined.","Decline",()=>{ r.status = "declined"; saveStudent(s); render(); toast("Request declined"); }); } });
+}
+// Lessons students asked for in their app, waiting for the coach.
+function requestsPanel(){
+  const reqs = [];
+  state.students.forEach(s=>(s.requests||[]).forEach(r=>{ if (r.status==="pending") reqs.push({s,r}); }));
+  if (!reqs.length) return "";
+  reqs.sort((a,b)=>(a.r.date+a.r.time)<(b.r.date+b.r.time)?-1:1);
+  return '<section class="panel" style="margin-bottom:16px;border-color:var(--board)"><div class="panel-head"><h2>Lesson requests ('+reqs.length+')</h2></div><ul class="list">'+
+    reqs.map(({s,r})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"}))+' · '+esc(r.time)+' · '+r.duration+' min · '+esc(r.format)+(r.note?' · '+esc(r.note):'')+'</div>'+
+      (r.date<today()?'<div class="small" style="color:var(--flag)">This date has passed</div>':'')+'</div><div class="row-actions"><button class="btn small ghost" data-a="decline" data-id="'+s.id+'|'+r.id+'">Decline</button><button class="btn small primary" data-a="approve" data-id="'+s.id+'|'+r.id+'">Approve</button></div></li>').join("")+'</ul></section>';
+}
+function approveRequest(s, r){
+  const ack = {};
+  openForm({title:"Approve lesson — "+s.name, submit:"Approve", fields:[
+      {name:"date",label:"Date",type:"date",value:r.date},
+      {name:"time",label:"Start time",type:"time",value:r.time},
+      {name:"duration",label:"Duration (minutes)",type:"number",value:r.duration||60,min:15},
+      {name:"format",label:"Format",type:"select",options:["In person","Online","Group"],value:r.format||"In person"},
+      {name:"fee",label:"Fee ("+state.settings.currency+")",type:"number",value:s.rate,min:0,step:"any"},
+      {name:"topics",label:"Topics",value:r.note||"",full:true}],
+    onSubmit:d=>{
+      if (!d.date) return "Choose a date.";
+      const x = {id:uid(), date:d.date, time:d.time, duration:d.duration===""?60:+d.duration, format:d.format, status:"planned", topics:d.topics, notes:"", fee:d.fee===""?s.rate:+d.fee};
+      const err = clashCheck(s.id, x, ack); if (err) return err;
+      s.sessions.push(x); r.status = "approved"; r.sessionId = x.id; saveStudent(s); render(); toast("Lesson added — "+s.name.split(" ")[0]+" will see it in their app");
+    }});
 }
 // A reminder on Today when the last backup file is over a month old (or never, once the board has been in use for two weeks).
 const BACKUP_EVERY_DAYS = 30;
@@ -2801,7 +3171,7 @@ function pSearch(v, r){
 }
 // Press "/" anywhere (outside a text field or dialog) to search.
 document.addEventListener("keydown", e=>{
-  if (e.key!=="/" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key!=="/" || e.ctrlKey || e.metaKey || e.altKey || STUDENT()) return;
   const el = document.activeElement; if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName) || el && el.isContentEditable || $("#modal").open) return;
   e.preventDefault();
   if (route().page==="search"){ const i = $("#gq"); if (i) i.focus(); } else location.hash = "#/search";
@@ -2858,7 +3228,8 @@ function editStudent(s){
       {name:"rate",label:"Fee per session ("+state.settings.currency+")",type:"number",value:x.rate,min:0,step:"any"},
       {name:"active",label:"Status",type:"select",options:[["1","Active"],["0","Archived"]],value:x.active?"1":"0"},
       {name:"goals",label:"Goals",type:"textarea",value:x.goals},
-      {name:"notes",label:"Coach notes",type:"textarea",value:x.notes}
+      {name:"notes",label:"Coach notes",type:"textarea",value:x.notes},
+      {name:"notesShared",label:"Coach notes in the student app",type:"select",options:[["0","Private — only you see them"],["1","Visible to the student"]],value:x.notesShared?"1":"0",full:true}
     ],
     danger: isNew?null:{label:"Delete student", onClick:()=>confirmBox("Delete "+x.name+"?","This removes all of their sessions, homework, assignments, repertoire, tournaments and payment history. To keep the history, archive them instead.","Delete permanently",()=>{
       state.students = state.students.filter(y=>y.id!==x.id); store.deleteStudent(x.id); state.assignments.filter(a=>a.studentId===x.id).forEach(a=>store.deleteAssignment(a.id)); state.assignments = state.assignments.filter(a=>a.studentId!==x.id); state.games.filter(g=>g.studentId===x.id).forEach(g=>store.deleteGame(g.id)); state.games = state.games.filter(g=>g.studentId!==x.id); location.hash="#/students"; toast("Student deleted"); })},
@@ -2872,7 +3243,7 @@ function editStudent(s){
       if (iid && state.students.some(y=>y.id!==x.id && y.icfId===iid)) return "Another student already has ICF ID "+iid+".";
       const oldRating = x.rating, oldRate = +x.rate||0;
       if (fid!==x.fideId) x.fide = {}; if (iid!==x.icfId) x.icf = {};
-      Object.assign(x,{name:d.name,fideId:fid,icfId:iid,noId:d.idStatus==="none"&&!fid&&!iid,rating:d.rating,ratingType:d.ratingType,level:d.level,birthYear:d.birthYear,contact:d.contact,guardian:d.guardian,rate:d.rate===""?0:d.rate,active:d.active==="1",goals:d.goals,notes:d.notes});
+      Object.assign(x,{name:d.name,fideId:fid,icfId:iid,noId:d.idStatus==="none"&&!fid&&!iid,rating:d.rating,ratingType:d.ratingType,level:d.level,birthYear:d.birthYear,contact:d.contact,guardian:d.guardian,rate:d.rate===""?0:d.rate,active:d.active==="1",goals:d.goals,notes:d.notes,notesShared:d.notesShared==="1"});
       if (d.rating!=="" && d.rating!==oldRating && d.ratingType!=="Unrated") addRating(x, mainSource(x), d.rating);
       // A new fee applies to weekly slots and upcoming planned sessions that were on the old fee.
       // Sessions and slots with a fee of their own, and anything already done, keep their price.
@@ -2910,9 +3281,9 @@ function bindActions(root, handlers){
 function crud(s, key, item, fields, title, toastWord, validate, transform, after, beforeDelete){
   const isNew = !item; const x = item ? item : {id:uid()};
   return openForm({title:(isNew?"Add ":"Edit ")+title, submit:isNew?"Add":"Save changes", fields,
-    danger: isNew?null:{label:"Delete", onClick:()=>confirmBox("Delete this "+title+"?","This can't be undone.","Delete",()=>{
+    danger: isNew || (STUDENT() && x.by!=="student") ? null : {label:"Delete", onClick:()=>confirmBox("Delete this "+title+"?","This can't be undone.","Delete",()=>{
       if (beforeDelete) beforeDelete(x); s[key] = s[key].filter(y=>y.id!==x.id); saveStudent(s); render(); toast(toastWord+" deleted"); })},
-    onSubmit:d=>{ const err = validate && validate(d); if (err) return err; if (transform) d = transform(d); Object.assign(x,d); if (isNew) s[key].push(x); if (after) after(x, isNew); saveStudent(s); render(); toast(toastWord+(isNew?" added":" updated")); }});
+    onSubmit:d=>{ const err = validate && validate(d); if (err) return err; if (transform) d = transform(d); Object.assign(x,d); if (isNew && STUDENT()) x.by = "student"; if (isNew) s[key].push(x); if (after) after(x, isNew); saveStudent(s); render(); toast(toastWord+(isNew?" added":" updated")); }});
 }
 
 function ratingChart(pts){
@@ -2965,9 +3336,11 @@ function tOverview(el, s){
     '</div>'+
     '<div class="grid g2">'+
     panel("Rating history", (sources.length>1?'<div class="seg" role="group" aria-label="Rating list">'+sources.map(x=>'<button type="button" class="'+(x===src?"on":"")+'" data-a="src" data-id="'+esc(x)+'">'+esc(x)+'</button>').join("")+'</div>':"")+ratingChart(pts)+(pts.length?'<p class="small muted" style="margin:8px 0 0">'+pts.length+' entries · started at '+esc(pts[0].value)+', now '+esc(pts[pts.length-1].value)+' ('+((pts[pts.length-1].value-pts[0].value)>=0?"+":"")+(pts[pts.length-1].value-pts[0].value)+')</p>':"")+officialLine(s), '<button class="btn small" data-a="addRating">Add rating</button>')+
-    panel("Goals & notes", '<h3 class="subh" style="margin-top:0">Goals</h3>'+(s.goals?'<p class="pre" style="margin:0">'+esc(s.goals)+'</p>':'<p class="empty" style="padding:0">No goals written yet.</p>')+
-      '<h3 class="subh">Coach notes</h3>'+(s.notes?'<p class="pre" style="margin:0">'+esc(s.notes)+'</p>':'<p class="empty" style="padding:0">No notes yet.</p>'),'<button class="btn small" data-a="edit">Edit</button>')+
+    panel("Goals & notes", '<h3 class="subh" style="margin-top:0">Goals'+(s.portal?' <span class="tag ok">Visible to student</span>':'')+'</h3>'+(s.goals?'<p class="pre" style="margin:0">'+esc(s.goals)+'</p>':'<p class="empty" style="padding:0">No goals written yet.</p>')+
+      '<h3 class="subh">Coach notes '+(s.notesShared?'<span class="tag ok">Visible to student</span>':'<span class="tag">Private</span>')+'</h3>'+(s.notes?'<p class="pre" style="margin:0">'+esc(s.notes)+'</p>':'<p class="empty" style="padding:0">No notes yet.</p>')+
+      (s.notes?'<button class="btn small ghost" data-a="shareNotes" style="margin-top:8px">'+(s.notesShared?"Make private":"Show to student")+'</button>':''),'<button class="btn small" data-a="edit">Edit</button>')+
     '</div>'+
+    appPanel(s)+
     '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Details</h2></div><dl class="kv">'+
       '<dt>Sessions done</dt><dd class="num">'+done.length+' ('+hours.toFixed(1)+' h)</dd><dt>Last session</dt><dd>'+(last?esc(fmtDate(last.date))+' — '+esc(last.topics||""):"—")+'</dd>'+
       '<dt>Next tournament</dt><dd>'+(nextT?esc(nextT.name)+", "+esc(fmtShort(nextT.start)):"—")+'</dd>'+
@@ -2988,8 +3361,27 @@ function tOverview(el, s){
         saveStudent(s); render(); toast("Ratings saved"); }}),
     delRating:id=>{ const p = s.ratings.find(y=>y.id===id); if (!p) return;
       confirmBox("Remove this rating?", (p.source||mainSource(s))+" "+p.value+" from "+fmtDate(p.date)+" will be removed from the history.","Remove",()=>{ s.ratings = s.ratings.filter(y=>y.id!==id); saveStudent(s); render(); toast("Rating removed"); }); },
-    edit:()=>editStudent(s)
+    edit:()=>editStudent(s),
+    shareNotes:()=>{ s.notesShared = !s.notesShared; saveStudent(s); render(); toast(s.notesShared?"Notes are now visible to "+s.name.split(" ")[0]:"Notes are private again"); },
+    invite:()=>{ s.invite = {code:inviteCode(), created:today()}; saveStudent(s); render(); },
+    uninvite:()=>{ delete s.invite; saveStudent(s); render(); toast("Invite cancelled"); },
+    unlink:()=>confirmBox("Disconnect "+s.name+"?", "They will no longer see their board in the app. Their records stay here, and you can invite them again later.","Disconnect",()=>{ portal.unlink(s); render(); toast(s.name+" disconnected"); })
   });
+}
+// Codes avoid letters and digits that are easy to mix up (O/0, I/1).
+function inviteCode(){
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c;
+  do { c = ""; const r = crypto.getRandomValues(new Uint32Array(6)); r.forEach(n=>{ c += A[n % A.length]; }); } while (state.students.some(x=>x.invite && x.invite.code===c));
+  return c;
+}
+function appPanel(s){
+  const first = esc(s.name.split(" ")[0]);
+  let body;
+  if (store.kind!=="db") body = '<p class="small muted" style="margin:0">The student app works in the published Coach\'s Board on claude.ai, where your records are stored in your account.</p>';
+  else if (s.portal) body = '<p style="margin:0">'+first+' is connected to the app since '+esc(fmtDate(s.portal.linkedAt))+'.</p><p class="small muted">They see their lessons, homework, goals, games, practice, reading and repertoire. They don\'t see payments, fees, contact details, other students or notes you keep private.</p><button class="btn small ghost danger" data-a="unlink">Disconnect</button>';
+  else if (s.invite) body = '<ol class="steps"><li>Share Coach\'s Board with '+first+' (or a parent) by email and give them Editor access. Don\'t turn on a public link.</li><li>Give them this code: <span class="code-box">'+esc(s.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Coach\'s Board.</li></ol><button class="btn small ghost" data-a="uninvite">Cancel invite</button>';
+  else body = '<p class="small muted" style="margin:0 0 10px">'+first+' can see their homework, lessons and goals, log practice and games, and ask you for lessons — in their own account.</p><button class="btn small primary" data-a="invite">Invite to the app</button>';
+  return '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Student app</h2>'+(s.portal?'<span class="tag ok">Connected</span>':s.invite?'<span class="tag warn">Waiting for '+first+'</span>':'')+'</div>'+body+'</section>';
 }
 
 function editSession(s, x){
@@ -3002,7 +3394,8 @@ function editSession(s, x){
     {name:"status",label:"Status",type:"select",options:SESSION_STATUS,value:x?.status||"planned"},
     {name:"fee",label:"Fee ("+state.settings.currency+")",type:"number",value:x?.fee??s.rate,min:0,step:"any",hint:"Charged once the session is marked done"},
     {name:"topics",label:"Topics",value:x?.topics||"",full:true,placeholder:"e.g. Rook endgames, Najdorf 6.Bg5"},
-    {name:"notes",label:"Notes & observations",type:"textarea",value:x?.notes||""}
+    {name:"notes",label:"Notes & observations",type:"textarea",value:x?.notes||""},
+    {name:"shareNotes",label:"Notes in the student app",type:"select",options:[["0","Private"],["1","Visible to the student"]],value:x?.shareNotes?"1":"0"}
   ],"session","Session",
   d=>d.status==="cancelled" ? null : clashCheck(s.id, {id:x?x.id:"-", date:d.date, time:d.time, duration:d.duration, format:d.format}, ack),
   null,
@@ -3015,10 +3408,11 @@ function markDone(s, x){
   openForm({title:"Mark done — "+s.name, submit:"Mark done", fields:[
       {name:"topics",label:"What you covered",value:x.topics||"",full:true,placeholder:"e.g. Rook endgames: Lucena & Philidor"},
       {name:"notes",label:"Notes & observations",type:"textarea",value:x.notes||"",placeholder:"What went well, what to work on next. Private unless you choose to share it."},
+      {name:"shareNotes",label:"Notes in the student app",type:"select",options:[["0","Private"],["1","Visible to the student"]],value:x.shareNotes?"1":"0"},
       {name:"fee",label:"Fee ("+state.settings.currency+")",type:"number",value:x.fee??s.rate,min:0,step:"any",hint:"Added to "+s.name.split(" ")[0]+"’s balance"},
       {name:"then",label:"Then",type:"select",options:[["","Nothing else"],["summary","Write a summary for the parents"]],value:""}],
     onSubmit:d=>{
-      Object.assign(x, {status:"done", topics:d.topics, notes:d.notes, fee:d.fee===""?0:d.fee});
+      Object.assign(x, {status:"done", topics:d.topics, notes:d.notes, shareNotes:d.shareNotes==="1", fee:d.fee===""?0:d.fee});
       saveStudent(s); render(); toast("Marked done — "+money(x.fee)+" added to "+s.name.split(" ")[0]+"’s balance");
       if (d.then==="summary") setTimeout(()=>shareSummary(s, x), 0);
     }});
@@ -3084,7 +3478,8 @@ function tSessions(el, s){
   const slots = s.slots||[];
   el.innerHTML = panel("Weekly slots", slots.length ? '<ul class="list">'+slots.map(sl=>'<li><div class="main"><div class="title">↻ '+esc(slotLabel(sl))+'</div><div class="small muted">From '+esc(fmtDate(sl.start))+(sl.end?' until '+esc(fmtDate(sl.end)):' · no end date')+'</div></div><button class="btn small ghost" data-a="editSlot" data-id="'+sl.id+'">Edit</button></li>').join("")+'</ul>' : '<p class="empty" style="padding:4px 0">No weekly slot. If '+esc(s.name.split(" ")[0])+' has a fixed lesson time, add it here and the sessions are planned automatically, 8 weeks ahead.</p>', '<button class="btn small" data-a="addSlot">Add weekly slot</button>')+
     '<div class="grid g2" style="margin-top:16px">'+panel("Planned"+(upAll.length>up.length?" (next "+up.length+" of "+upAll.length+")":""), up.length?'<ul class="list">'+up.map(row).join("")+'</ul>':'<p class="empty">Nothing planned. Add the next session to keep momentum.</p>','<button class="btn small primary" data-a="add">Add session</button>')+
-    panel("History", past.length?'<ul class="list">'+past.map(row).join("")+'</ul>':'<p class="empty">Finished sessions appear here.</p>')+'</div>';
+    panel("History", past.length?'<ul class="list">'+past.map(row).join("")+'</ul>':'<p class="empty">Finished sessions appear here.</p>')+'</div>'+
+    (()=>{ const tr = sortBy((s.training||[]).filter(x=>x.date>=addDays(t,-14)),"date"); return tr.length ? '<div style="margin-top:16px">'+panel(s.name.split(" ")[0]+"’s own training plan", '<ul class="list">'+tr.map(x=>'<li><div class="main"><div class="title">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+(x.time?' <span class="muted small">'+esc(x.time)+'</span>':'')+' · '+esc(x.what||"")+'</div>'+(x.note?'<div class="small muted">'+esc(x.note)+'</div>':'')+'</div><span class="small muted">'+(x.duration?esc(x.duration)+" min":"")+'</span></li>').join("")+'</ul>')+'</div>' : ""; })();
   bindActions(el,{ add:()=>editSession(s,null), edit:id=>editSession(s,s.sessions.find(x=>x.id===id)),
     addSlot:()=>editSlot(s,null), editSlot:id=>editSlot(s, s.slots.find(x=>x.id===id)),
     done:id=>markDone(s, s.sessions.find(y=>y.id===id)), sum:id=>shareSummary(s, s.sessions.find(y=>y.id===id)) });
@@ -3164,7 +3559,7 @@ function tWork(el, s){
   const periods = [[7,"7 days"],[30,"30 days"],[90,"90 days"],[0,"All time"]];
   el.innerHTML = workNav(s,"work")+'<div class="grid g2">'+
     panel("Daily practice", '<p style="margin:0"><b class="num">'+total+' min</b> <span class="muted">over '+active+' of the last 7 days'+(streak>1?" · "+streak+"-day streak":"")+'</span></p><div class="week">'+days.map(x=>'<div><span class="'+lvl(x.m)+'" title="'+x.m+' min"></span>'+esc(new Date(x.d+"T00:00").toLocaleDateString(LOCALE(),{weekday:"narrow"}))+'</div>').join("")+'</div>'+
-      '<ul class="list" style="margin-top:14px">'+(sortBy(s.worklog,"date",-1).slice(0,workShown[s.id]||25).map(w=>{ const res = practiceResult(w); return '<li><div class="main"><div class="title">'+practiceLabel(w,s)+(w.what==="Tactics"&&w.site&&exKind(w.site,w.exercise)==="score"&&runsOf(w).length&&(personalBest(s,w.site,w.exercise)||{}).entry===w?' <span class="tag ok">Personal best</span>':'')+'</div><div class="small muted">'+esc(fmtDate(w.date))+(res?" · "+esc(res):"")+(w.note?" · "+esc(w.note):"")+'</div></div><span class="num">'+esc(w.minutes)+' min</span><button class="btn small ghost" data-a="editLog" data-id="'+w.id+'">Edit</button></li>'; }).join("")||'<li class="empty">No practice logged yet.</li>')+'</ul>'+
+      '<ul class="list" style="margin-top:14px">'+(sortBy(s.worklog,"date",-1).slice(0,workShown[s.id]||25).map(w=>{ const res = practiceResult(w); return '<li><div class="main"><div class="title">'+practiceLabel(w,s)+(w.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+(w.what==="Tactics"&&w.site&&exKind(w.site,w.exercise)==="score"&&runsOf(w).length&&(personalBest(s,w.site,w.exercise)||{}).entry===w?' <span class="tag ok">Personal best</span>':'')+'</div><div class="small muted">'+esc(fmtDate(w.date))+(res?" · "+esc(res):"")+(w.note?" · "+esc(w.note):"")+'</div></div><span class="num">'+esc(w.minutes)+' min</span><button class="btn small ghost" data-a="editLog" data-id="'+w.id+'">Edit</button></li>'; }).join("")||'<li class="empty">No practice logged yet.</li>')+'</ul>'+
       (()=>{ const n = s.worklog.length, shown = Math.min(n, workShown[s.id]||25); return n>shown ? '<div class="row-actions" style="margin-top:8px;align-items:center"><span class="small muted" style="margin-inline-end:auto">Showing '+shown+' of '+n+'</span><button class="btn small" data-a="more">Show 25 more</button><button class="btn small ghost" data-a="all">Show all</button></div>' : ""; })(),
       '<button class="btn small primary" data-a="addLog">Log practice</button>')+
     panel("Tactics statistics", '<div class="seg" role="group" aria-label="Period">'+periods.map(([n,l])=>'<button type="button" class="'+(tacPeriod===n?"on":"")+'" data-a="period" data-id="'+n+'">'+l+'</button>').join("")+'</div>'+tacticsStats(s, tacPeriod))+
@@ -3202,7 +3597,7 @@ function openPractice(s, entry, preset){
   const fields = [
     {name:"date",label:"Date",type:"date",value:x?.date||t},
     {name:"minutes",label:"Minutes",type:"number",value:x?.minutes??30,min:0},
-    {name:"what",label:"What they worked on",type:"select",options:TASK_CATS,value:x?.what||"Tactics",full:true},
+    {name:"what",label:STUDENT()?"What you worked on":"What they worked on",type:"select",options:TASK_CATS,value:x?.what||"Tactics",full:true},
     {name:"site",label:"Where",type:"select",options:Object.keys(TACTICS_SITES),value:x?.site||"Chess.com",show:isTac},
     {name:"exercise",label:"Type of exercise",type:"select",options:v=>(TACTICS_SITES[v.site]||[]).map(e=>e[0]),value:x?.exercise||"",show:isTac},
     {name:"src",label:"Where",type:"select",options:SOURCES,value:x?.src||"Book",show:isSrc},
@@ -3288,14 +3683,14 @@ function editBook(s, b){
       {name:"started",label:"Started",type:"date",value:x.started},
       {name:"finished",label:"Finished",type:"date",value:x.finished,show:v=>v.status==="Finished"},
       {name:"notes",label:"Notes",type:"textarea",value:x.notes,placeholder:"e.g. Skip chapter 4 for now; focus on the IQP chapters"}],
-    danger: isNew?null:{label:"Delete book", onClick:()=>confirmBox("Delete “"+x.title+"”?","The book is removed from the list. Practice sessions already logged with it stay in the practice log.","Delete",()=>{
+    danger: isNew || (STUDENT() && x.by!=="student") ? null : {label:"Delete book", onClick:()=>confirmBox("Delete “"+x.title+"”?","The book is removed from the list. Practice sessions already logged with it stay in the practice log.","Delete",()=>{
       s.books = s.books.filter(y=>y.id!==x.id); s.worklog.forEach(w=>{ if (w.bookId===x.id){ w.bookTitle = x.title; w.bookId = ""; } }); saveStudent(s); render(); toast("Book deleted"); })},
     onSubmit:d=>{
       if (!d.title) return "Enter the book's title.";
       if (d.pages!=="" && d.page!=="" && +d.page > +d.pages) return "The current page is past the end of the book.";
       if (d.status==="Finished" && !d.finished) d.finished = today();
       if (isNew) d.startPage = d.page===""?0:+d.page;
-      Object.assign(x, d, {page:d.page===""?0:+d.page, pages:d.pages===""?"":+d.pages});
+      Object.assign(x, d, {page:d.page===""?0:+d.page, pages:d.pages===""?"":+d.pages}); if (isNew && STUDENT()) x.by = "student";
       if (isNew) s.books.push(x);
       saveStudent(s); render(); toast(isNew?"Book added":"Changes saved");
     }});
@@ -3380,13 +3775,13 @@ function editGame(s, g, preset){
       {name:"analysis",label:"Analysis status",type:"select",options:ANALYSIS_STATUS,value:x.analysis||"Not analysed",full:true},
       {name:"notes",label:"Notes",type:"textarea",value:x.notes,placeholder:"Key moments, what went wrong, what to work on"},
       {name:"pgn",label:"PGN (optional)",type:"textarea",value:x.pgn,placeholder:"Paste the game's PGN to replay it on the board"}],
-    danger: isNew?null:{label:"Delete game", onClick:()=>confirmBox("Delete this game?", gameTitle(x)+" will be removed from the game history. Analysis sessions already logged stay in the practice log.","Delete",()=>{
+    danger: isNew || (STUDENT() && x.by!=="student") ? null : {label:"Delete game", onClick:()=>confirmBox("Delete this game?", gameTitle(x)+" will be removed from the game history. Analysis sessions already logged stay in the practice log.","Delete",()=>{
       state.games = state.games.filter(y=>y.id!==x.id); store.deleteGame(x.id); render(); toast("Game deleted"); })},
     onSubmit:d=>{
       if (!d.opponent) return "Enter the opponent's name.";
       if (d.pgn){ const p = parseGame(d.pgn); if (!p.ok) return "The PGN couldn't be read. Check it, or leave the field empty."; }
       if (d.tournamentId){ const tr = s.tournaments.find(t=>t.id===d.tournamentId); d.event = tr ? tr.name : ""; }
-      Object.assign(x, d, {needsCheck:false});
+      Object.assign(x, d, {needsCheck:false}); if (isNew && STUDENT()) x.by = "student";
       if (isNew) state.games.push(x);
       saveGame(x); render(); toast(isNew?"Game added":"Changes saved");
     }});
@@ -3406,7 +3801,7 @@ function importGames(s, text){
     const res = g.result==="1/2-1/2" ? "½-½" : g.result;
     const game = {id:"gm-"+uid(), studentId:s.id, date, opponent:color==="White"?g.black:g.white, opponentRating:(color==="White"?h.BlackElo:h.WhiteElo)||"",
       color, result:res, tournamentId:tr?tr.id:"", event:tr?tr.name:ev, round:h.Round&&h.Round!=="?"?h.Round:"", timeControl:"Classical", opening:h.Opening||h.ECO||"",
-      analysis:"Not analysed", notes:"", pgn, needsCheck:w===b};
+      analysis:"Not analysed", notes:"", pgn, needsCheck:w===b}; if (STUDENT()) game.by = "student";
     state.games.push(game); saveGame(game); added++;
   }
   render();
@@ -3435,7 +3830,7 @@ function tGames(el, s){
       (trName?'<p class="small" style="margin:0 0 8px">Showing games from <b>'+esc(trName)+'</b> · <button class="btn small ghost" data-a="clearT">Show all tournaments</button></p>':"")+
       (()=>{ const pf = performance(list); return pf ? '<p class="small muted" style="margin:0 0 8px">Performance <b class="num" style="color:var(--ink)">'+pf.rp+'</b> · '+pf.n+' rated game'+(pf.n===1?'':'s')+' · average opponent '+pf.avg+'</p>' : ""; })()+
       (list.length ? '<div class="table-wrap"><table class="cards-m"><thead><tr><th>Date</th><th>Opponent</th><th>Side</th><th>Result</th><th>Tournament</th><th>Analysis</th><th></th></tr></thead><tbody>'+
-        list.map(g=>'<tr><td class="small" style="white-space:nowrap">'+esc(fmtDate(g.date))+'</td><td class="c-main"><b>'+esc(g.opponent)+'</b>'+(g.opponentRating?' <span class="muted small num">'+esc(g.opponentRating)+'</span>':'')+(g.opening?'<div class="small muted">'+esc(g.opening)+'</div>':'')+(g.notes?'<div class="small">'+esc(g.notes)+'</div>':'')+'</td>'+
+        list.map(g=>'<tr><td class="small" style="white-space:nowrap">'+esc(fmtDate(g.date))+'</td><td class="c-main"><b>'+esc(g.opponent)+'</b>'+(g.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+(g.opponentRating?' <span class="muted small num">'+esc(g.opponentRating)+'</span>':'')+(g.opening?'<div class="small muted">'+esc(g.opening)+'</div>':'')+(g.notes?'<div class="small">'+esc(g.notes)+'</div>':'')+'</td>'+
           '<td class="small"><span class="piece '+(g.color==="Black"?"b":"w")+'" style="display:inline-block;vertical-align:-2px;margin-inline-end:4px"></span>'+esc(g.color)+(g.needsCheck?' <span class="tag warn">Check side</span>':'')+'</td>'+
           '<td class="small"><span class="num">'+esc(g.result)+'</span> '+outTag(outcomeOf(g))+'</td>'+
           '<td class="small">'+esc(gameEvent(g,s)||"—")+(g.round?' <span class="muted">R'+esc(g.round)+'</span>':'')+' <span class="muted">· '+esc(g.timeControl||"")+'</span></td>'+
@@ -3501,12 +3896,12 @@ function editStudyGame(s, g){
       {name:"analysis",label:"Analysis status",type:"select",options:ANALYSIS_STATUS,value:x.analysis||"Not analysed"},
       {name:"notes",label:"Lessons learned",type:"textarea",value:x.notes,placeholder:"What the student took from this game"},
       {name:"pgn",label:"PGN (optional)",type:"textarea",value:x.pgn,placeholder:"Paste the game's PGN to replay it on the board"}],
-    danger: isNew?null:{label:"Delete game", onClick:()=>confirmBox("Delete this game?", studyTitle(x)+" will be removed. Analysis sessions already logged stay in the practice log.","Delete",()=>{
+    danger: isNew || (STUDENT() && x.by!=="student") ? null : {label:"Delete game", onClick:()=>confirmBox("Delete this game?", studyTitle(x)+" will be removed. Analysis sessions already logged stay in the practice log.","Delete",()=>{
       state.games = state.games.filter(y=>y.id!==x.id); store.deleteGame(x.id); render(); toast("Game deleted"); })},
     onSubmit:d=>{
       if (!d.white || !d.black) return "Enter the names of both players.";
       if (d.pgn){ const p = parseGame(d.pgn); if (!p.ok) return "The PGN couldn't be read. Check it, or leave the field empty."; }
-      Object.assign(x, d);
+      Object.assign(x, d); if (isNew && STUDENT()) x.by = "student";
       if (isNew) state.games.push(x);
       saveGame(x); render(); toast(isNew?"Game added":"Changes saved");
     }});
@@ -3518,7 +3913,7 @@ function importStudy(s, text){
     const g = parseGame(pgn), h = pgnHeaders(pgn);
     const year = (h.Date||"").replace(/\.\?\?/g,"").replace(/\?/g,"").replace(/\./g,"-").replace(/-+$/,"");
     const game = {id:"gm-"+uid(), kind:"study", studentId:s.id, white:g.white, black:g.black, year, event:g.event, result:g.result==="1/2-1/2"?"½-½":g.result,
-      opening:h.Opening||h.ECO||"", theme:"", source:"Other", analysis:"Not analysed", notes:"", pgn, added:today()};
+      opening:h.Opening||h.ECO||"", theme:"", source:"Other", analysis:"Not analysed", notes:"", pgn, added:today()}; if (STUDENT()) game.by = "student";
     state.games.push(game); saveGame(game); added++;
   }
   render();
@@ -3688,7 +4083,7 @@ function openingsPanel(s){
         (o.color==="Black"?'<div class="small muted"><span>Replies:</span> '+Object.entries(o.replies).sort((a,b)=>b[1]-a[1]).map(([mv,n])=>'<span dir="ltr">'+esc(mv)+(n>1?' ×'+n:'')+'</span>').join(", ")+'</div>':'')+'</td>'+
       '<td class="r num">'+o.games.length+'</td>'+
       '<td class="r num'+(o.sc.n && o.sc.pct<40?' money-owed':'')+'">'+(o.sc.n?ltr(fmtPts(o.sc.pts)+'/'+o.sc.n)+' ('+o.sc.pct+'%)':'—')+'</td>'+
-      '<td>'+(o.have.length?o.have.map(x=>'<span class="tag ok">'+esc(x.name)+'</span>').join(" "):'<span class="tag flag">No line</span> <button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify(o.color==="White"?{color:"White", firstMove:o.firstMove, against:o.against}:{color:"Black", against:o.against}))+'">Add line</button>')+'</td></tr>').join("")+
+      '<td>'+(o.have.length?o.have.map(x=>'<span class="tag ok">'+esc(x.name)+'</span>').join(" "):'<span class="tag flag">No line</span> '+coachOnly('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify(o.color==="White"?{color:"White", firstMove:o.firstMove, against:o.against}:{color:"Black", against:o.against}))+'">Add line</button>'))+'</td></tr>').join("")+
     '</tbody></table></div><p class="small muted" style="margin:8px 0 0">From '+withMoves.length+' game'+(withMoves.length===1?'':'s')+' with moves'+(games.length>withMoves.length?' · '+(games.length-withMoves.length)+' without moves not counted':'')+'.</p></section>';
 }
 function tRepertoire(el, s){
@@ -3707,7 +4102,7 @@ function tRepertoire(el, s){
       (x.againstOther?'<div class="small muted">vs '+ltr(x.againstOther)+'</div>':'')+'</div>'+
       '<span class="tag '+tagCls[r.status]+'">'+esc(r.status)+(r.status==="Developing"&&x.developer?' · by '+(x.developer==="Coach"?"coach":"student"):'')+(r.auto?' · auto':'')+'</span></div>'+
       (x.lines?'<div class="line-box">'+esc(x.lines)+'</div>':'')+(x.notes?'<div class="small" style="margin-top:6px">'+esc(x.notes)+'</div>':'')+
-      '<div class="rep-foot"><span class="small muted">'+(x.reviewed?'Reviewed '+esc(monthsAgo(x.reviewed)):'Never reviewed')+(r.auto?' — over 6 months':'')+'</span><span class="row-actions"><button class="btn small" data-a="rev" data-id="'+x.id+'">Reviewed today</button><button class="btn small ghost" data-a="edit" data-id="'+x.id+'">Edit</button></span></div></div>';
+      '<div class="rep-foot"><span class="small muted">'+(x.reviewed?'Reviewed '+esc(monthsAgo(x.reviewed)):'Never reviewed')+(r.auto?' — over 6 months':'')+'</span><span class="row-actions">'+coachOnly('<button class="btn small" data-a="rev" data-id="'+x.id+'">Reviewed today</button><button class="btn small ghost" data-a="edit" data-id="'+x.id+'">Edit</button>')+'</span></div></div>';
   };
   const groupRows = (keys, lines, keyOf, coreN, presetOf)=>{
     let html = "", missCore = [], missOther = [];
@@ -3718,7 +4113,7 @@ function tRepertoire(el, s){
       if (!shown.length) return;
       html += '<div class="rep-group"><div class="rep-vs">vs '+ltr(k)+'</div>'+shown.map(card).join("")+'</div>';
     });
-    if (repFilter==="all" && !narrowed && (missCore.length||missOther.length)){
+    if (!STUDENT() && repFilter==="all" && !narrowed && (missCore.length||missOther.length)){
       html += '<div class="rep-gaps">'+(missCore.length?'<div class="small"><b>No answer yet against:</b> '+missCore.map(k=>'<button class="chip warn" data-a="addp" data-id="'+esc(JSON.stringify(presetOf(k)))+'">'+ltr(k)+' +</button>').join("")+'</div>':'')+
         (missOther.length?'<div class="small muted" style="margin-top:4px">Less common: '+missOther.filter(k=>!/^(Other|Any)/.test(k)).map(k=>'<button class="chip" data-a="addp" data-id="'+esc(JSON.stringify(presetOf(k)))+'">'+ltr(k)+' +</button>').join("")+'</div>':'')+'</div>';
     }
@@ -3738,8 +4133,8 @@ function tRepertoire(el, s){
     (narrowed?'<p class="small" style="margin:0 0 10px">Showing <b>'+count("all")+'</b> line'+(count("all")===1?"":"s")+(repOpening?' for <b>'+esc(repOpening)+'</b>':'')+(repQuery?' matching “'+esc(repQuery)+'”':'')+'</p>':'')+
     '<div class="seg" role="group" aria-label="Filter by status">'+Object.keys(F).map(k=>'<button type="button" class="'+(repFilter===k?"on":"")+'" data-a="rf" data-id="'+esc(k)+'">'+(k==="all"?"All":k)+' ('+count(k)+')</button>').join("")+'</div>'+
     '<div class="grid g2">'+
-    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece w"></span>White</h3><button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"White"}))+'">Add line</button></div>'+whiteHtml+'</section>'+
-    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece b"></span>Black</h3><button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"Black"}))+'">Add line</button></div>'+blackHtml+'</section></div>';
+    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece w"></span>White</h3>'+coachOnly('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"White"}))+'">Add line</button>')+'</div>'+whiteHtml+'</section>'+
+    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece b"></span>Black</h3>'+coachOnly('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"Black"}))+'">Add line</button>')+'</div>'+blackHtml+'</section></div>';
   bindActions(el,{
     rf:id=>{ repFilter = id; render(); },
     clearRep:()=>{ repOpening = ""; repQuery = ""; render(); },
@@ -3790,7 +4185,7 @@ function tTournaments(el, s){
   const t = today();
   const up = sortBy(s.tournaments.filter(x=>(x.end||x.start)>=t),"start"); const past = sortBy(s.tournaments.filter(x=>(x.end||x.start)<t),"start",-1);
   const row = (x,isUp)=>{ const d = daysBetween(t,x.start);
-    return '<li style="align-items:flex-start"><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+esc(fmtDate(x.start))+(x.end&&x.end!==x.start?" – "+esc(fmtDate(x.end)):"")+[x.location,x.format,x.rounds?x.rounds+" rounds":""].filter(Boolean).map(v=>" · "+esc(v)).join("")+'</div>'+(x.notes?'<div class="small pre" style="margin-top:4px">'+esc(x.notes)+'</div>':"")+
+    return '<li style="align-items:flex-start"><div class="main"><div class="title">'+esc(x.name)+(x.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+'</div><div class="small muted">'+esc(fmtDate(x.start))+(x.end&&x.end!==x.start?" – "+esc(fmtDate(x.end)):"")+[x.location,x.format,x.rounds?x.rounds+" rounds":""].filter(Boolean).map(v=>" · "+esc(v)).join("")+'</div>'+(x.notes?'<div class="small pre" style="margin-top:4px">'+esc(x.notes)+'</div>':"")+
     (()=>{ const ex = parseScore(x.expected, x.rounds), ac = parseScore(resultOf(s,x), x.rounds);
       if (isUp) return '<div class="expect small">'+(ex?'Expected score: <b class="num">'+esc(fmtScore(ex))+'</b>':'<span class="tag warn">No expected score yet</span> <button class="btn small ghost" data-a="expect" data-id="'+x.id+'">Set it</button>')+'</div>';
       if (!ex && !ac) return "";
@@ -3816,7 +4211,7 @@ function tTournaments(el, s){
       hint:x?.ratingAdded?"Added to the "+x.ratingAdded.source+" history as "+x.ratingAdded.value:"Leave empty until results are in"},
     {name:"addRating",label:"Add to rating history",type:"select",options:[["","No"],...RATING_SOURCES.map(r=>[r,"Yes — "+r+" list"])],
       value:(()=>{ const src = tourSource(s, x?.format||"Classical"); return x && ratingBefore(s, src, x.end||x.start) ? src : ""; })(),
-      show:v=>!!v.start && v.start<=today() && v.ratingChange!=="" && !x?.ratingAdded, hint:"Adds a new rating: the last one before the tournament plus the change, dated the last day"},
+      show:v=>!STUDENT() && !!v.start && v.start<=today() && v.ratingChange!=="" && !x?.ratingAdded, hint:"Adds a new rating: the last one before the tournament plus the change, dated the last day"},
     {name:"notes",label:"Preparation & reflection",type:"textarea",value:x?.notes||""}];
   const validate = d=>{
     if (d.expected && !parseScore(d.expected, d.rounds)) return "Write the expected score like 5/9 or 5.5/9 (and no more than the number of rounds).";
@@ -3921,7 +4316,7 @@ function pAssignments(v){
 }
 function tAssignments(el, s){
   const list = asSort(state.assignments.filter(a=>a.studentId===s.id));
-  el.innerHTML = '<section class="panel" style="padding:0"><div class="panel-head" style="padding:16px 18px 4px"><h2>Assignments</h2><button class="btn small primary" data-a="new">New assignment</button></div>'+
+  el.innerHTML = '<section class="panel" style="padding:0"><div class="panel-head" style="padding:16px 18px 4px"><h2>Assignments</h2>'+coachOnly('<button class="btn small primary" data-a="new">New assignment</button>')+'</div>'+
     (list.length ? list.map(a=>'<div class="as-item">'+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">No assignments yet. Add a task like “30 puzzles on pins”, or upload games in PGN for '+esc(s.name)+' to analyse.</p>')+'</section>';
   bindActions(el,{ new:()=>editAssignment(null, s.id),
     done:id=>{ const a = state.assignments.find(x=>x.id===id); a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — waiting for your review"); } });
@@ -3966,19 +4361,21 @@ function pAssignment(v, r){
   const pct = Math.round(JSON.stringify(a).length / MAX_DOC * 100);
   v.innerHTML = '<a class="crumb" href="#/student/'+s.id+'/assignments">‹ '+esc(s.name)+'</a>'+
     '<div class="page-head"><div><h1>'+esc(a.title)+'</h1><p class="sub">'+[esc(a.type), "Given "+esc(fmtShort(a.assigned||today())), a.due?"due "+esc(fmtDate(a.due)):""].filter(Boolean).join(" · ")+'</p></div>'+
-    '<div class="row-actions"><div class="seg" role="group" aria-label="Status" style="margin:0">'+AS_STATUS.map(x=>'<button type="button" class="'+(a.status===x?"on":"")+'" data-a="status" data-id="'+x+'">'+STATUS_LABEL[x]+'</button>').join("")+'</div><button class="btn" data-a="edit">Edit</button></div></div>'+
+    '<div class="row-actions"><div class="seg" role="group" aria-label="Status" style="margin:0">'+(STUDENT() && a.status==="Reviewed" ? '<button type="button" class="on">'+STATUS_LABEL.Reviewed+'</button>' : AS_STATUS.filter(x=>!STUDENT() || x!=="Reviewed").map(x=>'<button type="button" class="'+(a.status===x?"on":"")+'" data-a="status" data-id="'+x+'">'+STATUS_LABEL[x]+'</button>').join(""))+'</div>'+coachOnly('<button class="btn" data-a="edit">Edit</button>')+'</div></div>'+
     '<section class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>Games <span class="small muted" style="font-weight:400;font-family:var(--body)">optional</span></h2><div class="row-actions">'+
-      '<label class="btn small primary" for="pgnFile">Upload PGN</label><input id="pgnFile" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain" multiple hidden>'+
-      '<button class="btn small" data-a="paste">Paste PGN</button>'+(a.games.length?'<button class="btn small" data-a="dl">Download PGN</button>':"")+'</div></div>'+
+      coachOnly('<label class="btn small primary" for="pgnFile">Upload PGN</label><input id="pgnFile" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain" multiple hidden>'+
+      '<button class="btn small" data-a="paste">Paste PGN</button>')+(a.games.length?'<button class="btn small" data-a="dl">Download PGN</button>':"")+'</div></div>'+
       (a.games.length ? '<ul class="list">'+a.games.map((g,i)=>'<li style="align-items:flex-start"><div class="main"><div class="title">'+esc(g.white)+' – '+esc(g.black)+' <span class="muted num">'+esc(g.result)+'</span></div><div class="small muted">'+[esc(g.event), esc(g.date), g.ok?g.moves+" half-moves":"moves couldn't be read"].filter(Boolean).join(" · ")+'</div>'+(g.note?'<div class="small" style="margin-top:4px">'+esc(g.note)+'</div>':"")+'</div>'+
-        '<div class="row-actions"><button class="btn small" data-a="view" data-id="'+g.id+'">Open board</button><button class="btn small ghost" data-a="gnote" data-id="'+g.id+'">'+(g.note?"Edit note":"Add note")+'</button><button class="btn small ghost danger" data-a="gdel" data-id="'+g.id+'">Remove</button></div></li>').join("")+'</ul>' : '')+
-      '<div class="drop" id="drop">Drop .pgn files here, or use Upload PGN. Files with many games are split automatically.</div>'+
-      (pct>50?'<p class="small muted" style="margin:8px 0 0">'+pct+'% of this assignment\'s space used.</p>':"")+
+        '<div class="row-actions"><button class="btn small" data-a="view" data-id="'+g.id+'">Open board</button>'+coachOnly('<button class="btn small ghost" data-a="gnote" data-id="'+g.id+'">'+(g.note?"Edit note":"Add note")+'</button><button class="btn small ghost danger" data-a="gdel" data-id="'+g.id+'">Remove</button>')+'</div></li>').join("")+'</ul>' : '')+
+      coachOnly('<div class="drop" id="drop">Drop .pgn files here, or use Upload PGN. Files with many games are split automatically.</div>')+
+      (!a.games.length && STUDENT()?'<p class="empty">No games with this assignment.</p>':'')+
+      (!STUDENT() && pct>50?'<p class="small muted" style="margin:8px 0 0">'+pct+'% of this assignment\'s space used.</p>':"")+
     '</section>'+
-    '<div class="grid g2">'+panel("Instructions", a.instructions?'<p class="pre" style="margin:0">'+esc(a.instructions)+'</p>':'<p class="empty">No instructions written.</p>','<button class="btn small" data-a="edit">Edit</button>')+
-    panel("Coach feedback", '<textarea id="fb" class="fb" placeholder="What did the student find? What should they work on next?">'+esc(a.feedback||"")+'</textarea><div class="row-actions" style="margin-top:8px"><button class="btn small primary" data-a="fb">Save feedback</button>'+(a.status!=="Reviewed"?'<button class="btn small" data-a="fbdone">Save and mark reviewed</button>':"")+'</div>')+'</div>';
+    '<div class="grid g2">'+panel("Instructions", a.instructions?'<p class="pre" style="margin:0">'+esc(a.instructions)+'</p>':'<p class="empty">No instructions written.</p>',coachOnly('<button class="btn small" data-a="edit">Edit</button>'))+
+    (STUDENT() ? panel("Coach feedback", a.feedback?'<p class="pre" style="margin:0">'+esc(a.feedback)+'</p>':'<p class="empty">No feedback yet.</p>') : panel("Coach feedback", '<textarea id="fb" class="fb" placeholder="What did the student find? What should they work on next?">'+esc(a.feedback||"")+'</textarea><div class="row-actions" style="margin-top:8px"><button class="btn small primary" data-a="fb">Save feedback</button>'+(a.status!=="Reviewed"?'<button class="btn small" data-a="fbdone">Save and mark reviewed</button>':"")+'</div>'))+'</div>';
 
   const handleText = txt=>{ const res = addPgnText(a, txt); if (res.added) saveAssignment(a); render(); reportAdd(res); };
+  if (!STUDENT()){
   $("#pgnFile").onchange = async e=>{
     const files = [...e.target.files]; e.target.value = ""; let txt = "";
     for (const f of files){ if (f.size > 2*1024*1024){ toast(f.name+" is too large (over 2 MB)."); continue; } txt += "\n\n" + await f.text(); }
@@ -3988,10 +4385,11 @@ function pAssignment(v, r){
   ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.add("over"); }));
   ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.remove("over"); }));
   drop.addEventListener("drop", async e=>{ let txt = ""; for (const f of [...(e.dataTransfer?.files||[])]){ if (f.size <= 2*1024*1024) txt += "\n\n" + await f.text(); } if (txt.trim()) handleText(txt); });
+  }
   const saveFb = ()=>{ a.feedback = $("#fb").value.trim(); };
   bindActions(v,{
     edit:()=>editAssignment(a),
-    status:id=>{ a.status = id; if (id==="Submitted" && !a.submitted) a.submitted = today(); saveAssignment(a); render(); },
+    status:id=>{ if (STUDENT() && id==="Reviewed") return; a.status = id; if (id==="Submitted" && !a.submitted) a.submitted = today(); saveAssignment(a); render(); if (STUDENT() && id==="Submitted") toast("Marked done — your coach will review it"); },
     paste:()=>openForm({title:"Paste PGN", submit:"Add games", fields:[{name:"pgn",label:"PGN text",type:"textarea",value:"",placeholder:'[Event "City Open"]\n[White "..."]\n[Black "..."]\n\n1. e4 c5 2. Nf3 ...'}],
       onSubmit:d=>{ if (!d.pgn) return "Paste the PGN of one or more games."; const res = addPgnText(a, d.pgn); if (!res.added) return res.full ? "This assignment is full. Create another assignment for these games." : "No games found in that text."; saveAssignment(a); setTimeout(()=>{ render(); reportAdd(res); },0); }}),
     view:id=>openViewer(a, a.games.find(g=>g.id===id), s),
@@ -4439,6 +4837,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Home":"בית", "Openings":"פתיחות", "Schedule":"לוח זמנים", "Lesson":"שיעור", "Training":"אימון", "Declined":"נדחתה", "Request a lesson":"בקשת שיעור", "Send request":"שליחת בקשה", "Request sent to your coach":"הבקשה נשלחה למאמן", "Lesson request":"בקשת שיעור", "Waiting for your coach":"ממתין למאמן", "Request cancelled":"הבקשה בוטלה", "Note for your coach":"הערה למאמן", "e.g. I'd like to prepare for the City Open":"למשל: אני רוצה להתכונן לטורניר", "Choose a date from today on.":"יש לבחור תאריך מהיום והלאה.", "Choose a start time.":"יש לבחור שעת התחלה.", "Choose a date.":"יש לבחור תאריך.", "Plan training":"תכנון אימון", "Add Training":"הוספת אימון", "Edit Training":"עריכת אימון", "Add training":"הוספת אימון", "Edit training":"עריכת אימון", "Delete this training?":"למחוק את האימון?", "No feedback yet.":"עדיין אין משוב.", "No games with this assignment.":"אין משחקים במשימה הזו.", "Training added":"האימון נוסף", "Training updated":"האימון עודכן", "Training deleted":"האימון נמחק", "Delete this Training?":"למחוק את האימון?", "What you'll work on":"על מה תעבוד/י", "What you worked on":"על מה עבדת", "e.g. Puzzle Rush, then the Lucena chapter":"למשל: Puzzle Rush ואז הפרק על לוסנה", "Your lessons, tournaments, homework and own training for the next 8 weeks":"השיעורים, הטורנירים, שיעורי הבית והאימונים שלך ל־8 השבועות הקרובים", "Nothing on the calendar in the next 8 weeks.":"אין כלום ביומן ב־8 השבועות הקרובים.", "Past lessons":"שיעורים קודמים", "No lessons yet.":"עדיין אין שיעורים.", "Recent lessons":"שיעורים אחרונים", "Coming up":"בקרוב", "Nothing planned yet.":"עדיין לא תוכנן כלום.", "Homework":"שיעורי בית", "No homework right now.":"אין כרגע שיעורי בית.", "Homework to do":"שיעורי בית לביצוע", "Practice minutes this week":"דקות תרגול השבוע", "Rating":"דירוג", "No lesson planned":"לא תוכנן שיעור", "Your coach hasn't written goals yet.":"המאמן עדיין לא כתב מטרות.", "From your coach":"מהמאמן", "Welcome to Coach's Board":"ברוכים הבאים ללוח של המאמן", "Enter the code your coach gave you to connect your account.":"יש להזין את הקוד שקיבלת מהמאמן כדי לחבר את החשבון.", "Connect":"חיבור", "Code from your coach":"קוד מהמאמן", "Code sent":"הקוד נשלח", "Enter the code from your coach.":"יש להזין את הקוד מהמאמן.", "Couldn't send the code. Check your connection.":"לא ניתן לשלוח את הקוד. כדאי לבדוק את החיבור.", "That code wasn't recognised. Check it with your coach and try again.":"הקוד לא זוהה. כדאי לבדוק אותו עם המאמן ולנסות שוב.", "Code sent. You'll be connected as soon as your coach opens Coach's Board.":"הקוד נשלח. החיבור יושלם ברגע שהמאמן יפתח את הלוח של המאמן.", "Your coach has closed access to this board. Ask your coach for a new code.":"המאמן סגר את הגישה ללוח. אפשר לבקש מהמאמן קוד חדש.", "Connected! Your board is being prepared — it appears here in a moment.":"מחובר! הלוח שלך בהכנה — הוא יופיע כאן בעוד רגע.", "Couldn't load your board":"לא ניתן לטעון את הלוח שלך", "Marked done — your coach will review it":"סומן כבוצע — המאמן יבדוק", "Done · to review":"בוצע · לבדיקה", "by student":"של התלמיד", "Student app":"אפליקציית התלמיד", "Invite to the app":"הזמנה לאפליקציה", "Cancel invite":"ביטול ההזמנה", "Invite cancelled":"ההזמנה בוטלה", "Connected":"מחובר", "Disconnect":"ניתוק", "Visible to student":"גלוי לתלמיד", "Private":"פרטי", "Make private":"הפיכה לפרטי", "Show to student":"הצגה לתלמיד", "Notes are private again":"ההערות שוב פרטיות", "Coach notes in the student app":"הערות המאמן באפליקציית התלמיד", "Private — only you see them":"פרטי — רק את/ה רואה", "Visible to the student":"גלוי לתלמיד", "Notes in the student app":"הערות באפליקציית התלמיד", "The student app works in the published Coach's Board on claude.ai, where your records are stored in your account.":"אפליקציית התלמיד פועלת בלוח של המאמן שפורסם ב־claude.ai, שם הנתונים נשמרים בחשבון שלך.", "They see their lessons, homework, goals, games, practice, reading and repertoire. They don't see payments, fees, contact details, other students or notes you keep private.":"התלמיד רואה את השיעורים, שיעורי הבית, המטרות, המשחקים, התרגול, הקריאה והרפרטואר שלו. הוא לא רואה תשלומים, מחירים, פרטי קשר, תלמידים אחרים או הערות פרטיות.", "Lesson requests":"בקשות לשיעור", "Approve":"אישור", "Decline":"דחייה", "Decline this request?":"לדחות את הבקשה?", "Request declined":"הבקשה נדחתה", "This date has passed":"התאריך עבר",
   // navigation, page titles
   "Coach's Board":"הלוח של המאמן", "Today":"היום", "Students":"תלמידים", "Schedule":"לוח זמנים", "Assignments":"משימות", "Payments":"תשלומים", "Settings":"הגדרות",
   "Search":"חיפוש", "Loading your students…":"טוען את התלמידים…", "All changes saved":"כל השינויים נשמרו", "Saving…":"שומר…", "Saved on this device only":"נשמר במכשיר הזה בלבד",
@@ -4654,6 +5053,21 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Lesson — (.+)$/, (m,x)=>"שיעור — "+x], [/^Training · (.+)$/, (m,x)=>"אימון · "+heT(x)],
+  [/^(.+) rating$/, (m,x)=>"דירוג "+x], [/^Next lesson · (.+)$/, "שיעור הבא · $1"],
+  [/^Approve lesson — (.+)$/, "אישור שיעור — $1"],
+  [/^Lesson requests \((\d+)\)$/, "בקשות לשיעור ($1)"],
+  [/^Disconnect (.+)\?$/, "לנתק את $1?"], [/^(.+) disconnected$/, "$1 נותק/ה"], [/^(.+) is now connected to the app$/, "$1 מחובר/ת לאפליקציה"],
+  [/^Waiting for (.+)$/, "ממתין ל־$1"], [/^Notes are now visible to (.+)$/, "ההערות גלויות עכשיו ל־$1"],
+  [/^(.+) is connected to the app since (.+)\.$/, "$1 מחובר/ת לאפליקציה מאז $2."],
+  [/^(.+) can see their homework, lessons and goals, log practice and games, and ask you for lessons — in their own account\.$/, "$1 יכול/ה לראות שיעורי בית, שיעורים ומטרות, לרשום תרגול ומשחקים ולבקש שיעורים — בחשבון שלו/ה."],
+  [/^Lesson added — (.+) will see it in their app$/, "השיעור נוסף — $1 יראה אותו באפליקציה"],
+  [/^(.+) asked for (.+)\. They'll see it as declined\.$/, "$1 ביקש/ה $2. הבקשה תופיע כנדחתה."],
+  [/^They will no longer see their board in the app\. .*$/, "הלוח לא יוצג יותר באפליקציה. הנתונים נשארים כאן, ואפשר להזמין שוב בהמשך."],
+  [/^(.+)’s own training plan$/, "תוכנית האימונים של $1"],
+  [/^Share Coach's Board with (.+) \(or a parent\) by email and give them Editor access\. Don't turn on a public link\.$/, "יש לשתף את הלוח של המאמן עם $1 (או הורה) במייל, עם הרשאת Editor. לא להפעיל קישור ציבורי."],
+  [/^Give them this code:$/, "למסור את הקוד הזה:"],
+  [/^They open the app and enter the code\. They're connected the next time you open Coach's Board\.$/, "התלמיד פותח את האפליקציה ומזין את הקוד. החיבור יושלם בפעם הבאה שתפתח/י את הלוח של המאמן."],
   [/^(\d+) min$/, "$1 דק׳"],
   [/^(\d+) active$/, "$1 פעילים"],
   [/^(\d+) reading now$/, "$1 בקריאה"], [/^(\d+) finished in (\d{4})$/, "$1 הסתיימו ב־$2"], [/^(\d+) pages in the last 4 weeks$/, "$1 עמודים ב־4 השבועות האחרונים"],

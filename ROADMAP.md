@@ -5,11 +5,9 @@ app, check here first.
 
 ## Next phase
 
-- **Student version of the app.** A separate page where a student (or parent)
-  marks homework done and logs their own practice. To be built once the coach
-  dashboard is finished. The coach's data is private to the coach's account
-  (`data/users/<id>/`), so the student page needs its own shared storage and
-  access rules rather than reading the coach's records.
+- **Parents' view.** The student app is built (each student links their own
+  claude.ai account with an invite code). Parents come next, separately:
+  the same linking, plus payments and the balance, which students never see.
 
 ## Later
 
