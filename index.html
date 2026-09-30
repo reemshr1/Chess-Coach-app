@@ -2517,6 +2517,7 @@ function applyOp(s, op, coachSide){
     if (m[2]==="delete"){ if (i>=0 && mine(L[i])) L.splice(i,1); return true; }
     if (!it || !it.id) return false;
     const item = Object.assign({}, i>=0 ? L[i] : {}, it, i>=0 ? {} : {by:"student"});
+    if (m[1]==="worklog" && item.bookId && item.page!=="" && item.page!=null && pageOrderError(s, (s.books||[]).find(b=>b.id===item.bookId), item.date, +item.page, item.id)) item.page = "";
     if (i>=0) L[i] = item; else L.push(item);
     if (coachSide && m[1]==="worklog"){
       if (item.bookId) syncBook(s, s.books.find(b=>b.id===item.bookId), item);
@@ -3618,7 +3619,8 @@ function openPractice(s, entry, preset){
     if ((d.what==="Tactics" && d.site==="Book / workbook") || (SOURCE_CATS.includes(d.what) && d.src==="Book")){ if (!d.bookId) return "Add this book in the Books tab first, then log the session."; }
     if (SOURCE_CATS.includes(d.what) && d.src==="ChessBase file" && !d.cbFile) return "Enter the name of the ChessBase file.";
     if (d.what==="Game analysis" && !d.gameId) return d.gWhose==="other" ? "Pick the game. If it isn't listed, add it in Daily work → Studied games first." : "Pick the game. If it isn't listed, add it in Tournaments → Game history first.";
-    if (d.bookId && d.page!==""){ const b = s.books.find(y=>y.id===d.bookId); if (b && b.pages && +d.page > +b.pages) return "Page "+d.page+" is past the end of the book ("+b.pages+" pages)."; }
+    if (d.bookId && d.page!==""){ const b = s.books.find(y=>y.id===d.bookId); if (b && b.pages && +d.page > +b.pages) return "Page "+d.page+" is past the end of the book ("+b.pages+" pages).";
+      const err = pageOrderError(s, b, d.date||t, +d.page, entry && entry.id); if (err) return err; }
     if (d.what!=="Tactics") return;
     const k = exKind(d.site, d.exercise);
     if (k==="score") return parseScores(d.scores).length ? undefined : "Enter the score of each attempt, e.g. 24, 31, 27.";
@@ -3643,6 +3645,23 @@ function openPractice(s, entry, preset){
       if (g && (!g.lastAnalysed || w.date>=g.lastAnalysed)){ g.analysis = w.gStatus; g.lastAnalysed = w.date; saveGame(g); } }
   };
   crud(s,"worklog",entry||null,fields,"practice","Practice",validate,clean,after);
+}
+// The page reached can't go back: it must be at least the page logged on or before that date
+// (or the book's start page) and at most the page logged on any later date.
+function pageRange(s, b, date, skipId){
+  let lo = +b.startPage||0, loDate = "", hi = Infinity, hiDate = "";
+  // The book's current page counts too (it may have been set by hand), unless it came from the entry being edited.
+  const self = skipId && s.worklog.find(w=>w.id===skipId);
+  if (!(self && self.bookId===b.id && self.date===b.lastRead && +self.page===+b.page) && (!b.lastRead || date>=b.lastRead) && +b.page>lo) lo = +b.page;
+  s.worklog.forEach(w=>{ if (w.bookId!==b.id || w.id===skipId || w.page==="" || w.page==null) return;
+    if (w.date<=date){ if (+w.page>lo){ lo = +w.page; loDate = w.date; } } else if (+w.page<hi){ hi = +w.page; hiDate = w.date; } });
+  return {lo, loDate, hi, hiDate};
+}
+function pageOrderError(s, b, date, page, skipId){
+  if (!b) return;
+  const r = pageRange(s, b, date, skipId);
+  if (page<r.lo) return "Page "+page+" is before page "+r.lo+(r.loDate?", already reached on "+fmtDate(r.loDate):", where this book is already")+". Enter the page reached in this session.";
+  if (page>r.hi) return "Page "+page+" is after page "+r.hi+", logged later on "+fmtDate(r.hiDate)+". Check the date or the page.";
 }
 // Keep a book's current page, last-read date and status in step with the practice log.
 function syncBook(s, b, w){
@@ -5053,6 +5072,9 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Page (\d+) is before page (\d+), already reached on (.+)\. Enter the page reached in this session\.$/, "עמוד $1 לפני עמוד $2, שכבר הגיעו אליו ב־$3. יש להזין את העמוד שהגיעו אליו באימון הזה."],
+  [/^Page (\d+) is before page (\d+), where this book is already\. Enter the page reached in this session\.$/, "עמוד $1 לפני עמוד $2, שבו הספר כבר נמצא. יש להזין את העמוד שהגיעו אליו באימון הזה."],
+  [/^Page (\d+) is after page (\d+), logged later on (.+)\. Check the date or the page\.$/, "עמוד $1 אחרי עמוד $2, שנרשם מאוחר יותר ב־$3. כדאי לבדוק את התאריך או העמוד."],
   [/^Lesson — (.+)$/, (m,x)=>"שיעור — "+x], [/^Training · (.+)$/, (m,x)=>"אימון · "+heT(x)],
   [/^(.+) rating$/, (m,x)=>"דירוג "+x], [/^Next lesson · (.+)$/, "שיעור הבא · $1"],
   [/^Approve lesson — (.+)$/, "אישור שיעור — $1"],
