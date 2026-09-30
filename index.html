@@ -6,7 +6,7 @@
 <title>Coach's Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --paper:#F2F4EE; --surface:#FFFFFF; --ink:#1C2620; --muted:#5C695F; --line:#D8DDD2;
@@ -14,8 +14,8 @@
   --flag:#B3412E; --flag-bg:#F7E3DE; --ok:#2F6B4F; --ok-bg:#DDEEE3; --warn:#8A6A12; --warn-bg:#F4ECD2;
   --shadow:0 1px 0 rgba(28,38,32,.06);
   --r-sm:6px; --r-md:10px;
-  --display:"Sora", "Segoe UI", system-ui, sans-serif;
-  --body:"Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --display:"Sora", "Heebo", "Segoe UI", system-ui, sans-serif;
+  --body:"Public Sans", "Heebo", "Segoe UI", system-ui, -apple-system, sans-serif;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
@@ -48,7 +48,7 @@ img{max-width:100%}
 
 /* Shell */
 .app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
-.side{position:sticky;top:env(safe-area-inset-top,0px);height:calc(100vh - env(safe-area-inset-top,0px));border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:4px;background:var(--surface)}
+.side{position:sticky;top:env(safe-area-inset-top,0px);height:calc(100vh - env(safe-area-inset-top,0px));border-inline-end:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:4px;background:var(--surface)}
 .brand{display:flex;align-items:center;gap:10px;padding:0 8px 20px}
 .brand-mark{width:28px;height:28px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;border-radius:4px;overflow:hidden;flex:none}
 .brand-mark i:nth-child(1),.brand-mark i:nth-child(4){background:var(--sq-dark)}
@@ -71,7 +71,7 @@ kbd{font-family:var(--body);font-size:.75rem;border:1px solid var(--line);border
 .hit:hover .title{text-decoration:underline}
 .hit .title{font-weight:600}
 .hit mark{background:var(--warn-bg);color:inherit;border-radius:2px}
-.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:middle}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-inline-end:6px;vertical-align:middle}
 .dot.busy{background:var(--warn)} .dot.local{background:var(--muted)} .dot.err{background:var(--flag)}
 main{padding:32px clamp(16px,4vw,48px) 96px;max-width:1180px;width:100%;min-width:0}
 .bottom-nav{display:none}
@@ -124,19 +124,19 @@ main{padding:32px clamp(16px,4vw,48px) 96px;max-width:1180px;width:100%;min-widt
 .money-owed{color:var(--flag);font-weight:600}
 .table-wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:.92rem}
-th{text-align:left;font-weight:600;color:var(--muted);font-size:.8rem;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{text-align:start;font-weight:600;color:var(--muted);font-size:.8rem;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
-td.r,th.r{text-align:right}
+td.r,th.r{text-align:end}
 tr:last-child td{border-bottom:0}
 .pre{white-space:pre-wrap;font-size:.9rem}
 
 /* Stats strip */
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);margin-bottom:20px;overflow:hidden}
-.stat{padding:16px 18px;border-left:1px solid var(--line)}
-.stat:first-child{border-left:0}
+.stat{padding:16px 18px;border-inline-start:1px solid var(--line)}
+.stat:first-child{border-inline-start:0}
 .stat .v{font-family:var(--display);font-size:1.45rem;font-weight:600}
 .stat .l{color:var(--muted);font-size:.85rem}
-@media (max-width:700px){.stats{grid-template-columns:1fr 1fr}.stat:nth-child(3){border-left:0}.stat:nth-child(n+3){border-top:1px solid var(--line)}}
+@media (max-width:700px){.stats{grid-template-columns:1fr 1fr}.stat:nth-child(3){border-inline-start:0}.stat:nth-child(n+3){border-top:1px solid var(--line)}}
 
 /* Students */
 .search{padding:8px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);min-width:220px}
@@ -241,7 +241,7 @@ dialog::backdrop{background:rgba(15,20,17,.45)}
 .welcome .board{display:grid;grid-template-columns:repeat(8,22px);border:1px solid var(--line);width:max-content;margin-bottom:22px;border-radius:4px;overflow:hidden}
 .welcome .board i{height:22px}
 .welcome .board i.d{background:var(--sq-dark)} .welcome .board i.l{background:var(--sq-light)}
-.as-item{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding-right:14px}
+.as-item{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding-inline-end:14px}
 .as-item:first-of-type{border-top:0}
 .as-item .as-row{flex:1;border-top:0;min-width:0}
 .as-row{display:flex;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}
@@ -270,7 +270,7 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .vctl{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
 .moves{display:grid;grid-template-columns:40px 1fr 1fr;gap:2px 4px;max-height:420px;overflow-y:auto;font-variant-numeric:tabular-nums;align-content:start}
 .moves .mn{color:var(--muted);font-size:.85rem;padding:4px 0}
-.moves .mv{border:0;background:transparent;text-align:left;padding:4px 8px;border-radius:4px;cursor:pointer;font-weight:500}
+.moves .mv{border:0;background:transparent;text-align:start;padding:4px 8px;border-radius:4px;cursor:pointer;font-weight:500}
 .moves .mv:hover{background:var(--paper)}
 .moves .mv.cur{background:var(--sq-dark);color:#fff}
 .moves .res{font-weight:600;padding:4px 8px}
@@ -322,31 +322,36 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .wk.wk-few .wk-row{grid-template-columns:44px repeat(var(--days),minmax(0,1fr))}
 .wk-few .ev{padding:3px 4px}
 .wk-corner{border-bottom:1px solid var(--line);padding:6px;display:flex;align-items:flex-end;justify-content:flex-end;font-size:.72rem}
-.wk-dh{border-left:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 8px 6px;display:flex;gap:6px;align-items:baseline}
+.wk-dh{border-inline-start:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 8px 6px;display:flex;gap:6px;align-items:baseline}
 .wk-dh span{font-size:.78rem;color:var(--muted)}
 .wk-dh b{font-family:var(--display);font-size:1.1rem}
 .wk-dh.today b{background:var(--sq-dark);color:#fff;border-radius:6px;padding:0 6px}
-.wk-ad{border-left:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px;display:flex;flex-direction:column;gap:3px;min-height:30px}
-.chip-ev{display:block;font-size:.74rem;padding:3px 6px;border-radius:4px;border:0;text-align:left;text-decoration:none;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-family:inherit;width:100%}
+.wk-ad{border-inline-start:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px;display:flex;flex-direction:column;gap:3px;min-height:30px}
+.chip-ev{display:block;font-size:.74rem;padding:3px 6px;border-radius:4px;border:0;text-align:start;text-decoration:none;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-family:inherit;width:100%}
 .chip-ev.tour{background:var(--sq-dark);color:#fff;cursor:default}
 .chip-ev.due{background:var(--warn-bg);color:var(--warn)}
 .chip-ev.ses{background:var(--sq-light)}
 .chip-ev.cx{opacity:.5;text-decoration:line-through}
 .chip-ev.clash{box-shadow:inset 0 0 0 2px var(--flag)}
 .wk-times{position:relative}
-.wk-times span{position:absolute;right:6px;transform:translateY(-50%);font-size:.7rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.wk-times span{position:absolute;inset-inline-end:6px;transform:translateY(-50%);font-size:.7rem;color:var(--muted);font-variant-numeric:tabular-nums}
 .wk-times span:first-child{transform:none}
-.wk-day{position:relative;border-left:1px solid var(--line);background:repeating-linear-gradient(to bottom,transparent 0 47px,var(--line) 47px 48px);cursor:copy}
+.wk-day{position:relative;border-inline-start:1px solid var(--line);background:repeating-linear-gradient(to bottom,transparent 0 47px,var(--line) 47px 48px);cursor:copy}
 .wk-day.today{background-color:color-mix(in srgb,var(--sq-light) 30%,transparent)}
-.ev{position:absolute;border:0;border-left:3px solid var(--sq-dark);background:var(--sq-light);color:var(--ink);border-radius:5px;padding:3px 6px;text-align:left;font-family:inherit;font-size:.74rem;line-height:1.25;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;gap:1px}
+.ev{position:absolute;border:0;border-inline-start:3px solid var(--sq-dark);background:var(--sq-light);color:var(--ink);border-radius:5px;padding:3px 6px;text-align:start;font-family:inherit;font-size:.74rem;line-height:1.25;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;gap:1px}
 .ev b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ev span{color:var(--muted);white-space:nowrap}
-.ev.st-done{background:var(--ok-bg);border-left-color:var(--ok)}
+.ev.st-done{background:var(--ok-bg);border-inline-start-color:var(--ok)}
 .ev.st-cancelled{opacity:.45;text-decoration:line-through}
-.ev.clash{box-shadow:inset 0 0 0 2px var(--flag);border-left-color:var(--flag)}
+.ev.clash{box-shadow:inset 0 0 0 2px var(--flag);border-inline-start-color:var(--flag)}
 .ev:hover{filter:brightness(.97)}
 .wk-now{position:absolute;left:0;right:0;height:2px;background:var(--flag);z-index:2}
-.wk-now::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--flag)}
+.wk-now::before{content:"";position:absolute;inset-inline-start:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--flag)}
+/* Right-to-left (Hebrew): chess notation, the board and time charts keep reading left to right. */
+.cboard,.moves,.line-box,.wbars,.week,.vctl,.spark,.chart{direction:ltr}
+[dir="rtl"] .line-box{text-align:left}
+[dir="rtl"] h1,[dir="rtl"] h2,[dir="rtl"] h3{letter-spacing:0}
+[dir="rtl"] .crumb{direction:rtl}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -2205,13 +2210,74 @@ const iso = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const today = () => iso(new Date());
 const addDays = (s,n) => { const d = new Date(s+"T00:00"); d.setDate(d.getDate()+n); return iso(d); };
 const daysBetween = (a,b) => Math.round((new Date(b+"T00:00") - new Date(a+"T00:00"))/86400000);
-const fmtDate = (s, opts) => s ? new Date(s+"T00:00").toLocaleDateString(undefined, opts || {day:"numeric",month:"short",year:"numeric"}) : "";
+const fmtDate = (s, opts) => s ? new Date(s+"T00:00").toLocaleDateString(LOCALE(), opts || {day:"numeric",month:"short",year:"numeric"}) : "";
 const fmtShort = s => fmtDate(s,{day:"numeric",month:"short"});
 const fmtDay = s => fmtDate(s,{weekday:"long",day:"numeric",month:"long"});
-const money = n => { const v = Math.round((+n||0)*100)/100; return (state.settings.currency||"") + v.toLocaleString(undefined,{maximumFractionDigits:2}); };
+const money = n => { const v = Math.round((+n||0)*100)/100; return (state.settings.currency||"") + v.toLocaleString(LOCALE(),{maximumFractionDigits:2}); };
 const initials = name => (name||"?").trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase();
 const sortBy = (arr, key, dir=1) => arr.slice().sort((a,b)=> (a[key]>b[key]?1:a[key]<b[key]?-1:0)*dir);
 const byId = id => state.students.find(s=>s.id===id);
+
+/* ---------- language ---------- */
+// Hebrew is applied to what the app shows rather than to its code: every text node, placeholder, title and
+// aria-label the app puts on screen is looked up in HE (whole phrases) and HE_RX (phrases with numbers, names
+// or dates in them) as it appears. Stored values such as categories and statuses stay in English, so the
+// data is the same in either language. Text fields, move lists and the board are never touched.
+const lang = ()=>state.settings.lang==="he" ? "he" : "en";
+const LOCALE = ()=>lang()==="he" ? "he-IL" : undefined;
+const TR_SKIP = "textarea,script,style,.moves,.line-box,.cboard,.no-tr";
+const TR_ATTRS = ["placeholder","title","aria-label"];
+const heWord = w => (Object.prototype.hasOwnProperty.call(HE, w) ? HE[w] : w); // translate a captured value if it is a known word (a category, a status)
+function trPhrase(v){
+  const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(v), out = trCore(m[2]);
+  return out===undefined ? v : m[1]+out+m[3];
+}
+// Whole phrase first, then patterns, then the phrase split at " · ", " — ", "; " or ". " with each piece
+// translated on its own (pieces with no translation, such as names and dates, stay as they are).
+function trCore(core){
+  if (!/[A-Za-z]/.test(core)) return undefined;
+  if (Object.prototype.hasOwnProperty.call(HE, core)) return HE[core];
+  const split = sep=>{
+    if (!core.includes(sep)) return undefined;
+    let changed = false;
+    const parts = core.split(sep).map(p=>{ const t = trCore(p); if (t===undefined) return p; changed = true; return t; });
+    return changed ? parts.join(sep) : undefined;
+  };
+  const dotted = split(" · "); if (dotted!==undefined) return dotted;
+  for (const [rx, rep] of HE_RX){ const mm = rx.exec(core); if (!mm) continue;
+    const r = typeof rep==="function" ? rep(...mm) : core.replace(rx, rep); if (r!==undefined) return r; }
+  for (const sep of [" — ", "; ", ". "]){
+    const r = split(sep); if (r!==undefined) return r;
+  }
+  return undefined;
+}
+function trNode(n){
+  const p = n.parentElement; if (!p || p.closest(TR_SKIP)) return;
+  const v = n.nodeValue, t = trPhrase(v);
+  if (t!==v){ if (n.__en===undefined) n.__en = v; n.nodeValue = t; }
+}
+function trEl(el){
+  if (el.closest(TR_SKIP) && el.tagName!=="TEXTAREA") return;
+  TR_ATTRS.forEach(a=>{ const v = el.getAttribute(a); if (!v) return; const t = trPhrase(v); if (t!==v){ (el.__enA = el.__enA||{})[a] = el.__enA[a] ?? v; el.setAttribute(a, t); } });
+}
+function trTree(root){
+  if (root.nodeType===3) return trNode(root);
+  if (root.nodeType!==1) return;
+  trEl(root); root.querySelectorAll("[placeholder],[title],[aria-label]").forEach(trEl);
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) trNode(n);
+}
+function untrTree(){
+  const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n;
+  while ((n = w.nextNode())) if (n.__en!==undefined){ n.nodeValue = n.__en; delete n.__en; }
+  document.querySelectorAll("*").forEach(el=>{ if (el.__enA){ for (const a in el.__enA) el.setAttribute(a, el.__enA[a]); delete el.__enA; } });
+}
+let appliedLang = "en";
+function applyLang(){
+  const l = lang(); if (l===appliedLang) return; appliedLang = l;
+  document.documentElement.lang = l; document.documentElement.dir = l==="he" ? "rtl" : "ltr";
+  if (l==="he") trTree(document.body); else untrTree();
+}
+new MutationObserver(ms=>{ if (appliedLang!=="he") return; ms.forEach(m=>m.addedNodes.forEach(trTree)); }).observe(document.body, {childList:true, subtree:true});
 
 function blankStudent(){
   return { id:"st-"+uid(), name:"", rating:"", ratingType:"FIDE", level:"", birthYear:"", contact:"", guardian:"", rate:state.settings.defaultRate||0, fideId:"", icfId:"", noId:false, fide:{}, icf:{},
@@ -2449,7 +2515,7 @@ function openForm({title, fields, submit="Save", onSubmit, danger}){
       else input = '<input id="'+id+'" name="'+f.name+'" type="'+(f.type||"text")+'" value="'+esc(v)+'"'+(f.required?" required":"")+(f.step?' step="'+f.step+'"':"")+(f.min!==undefined?' min="'+f.min+'"':"")+' placeholder="'+esc(f.placeholder||"")+'"'+(f.suggest&&f.suggest.length?' list="dl_'+f.name+'" autocomplete="off"':'')+'>'+(f.suggest&&f.suggest.length?'<datalist id="dl_'+f.name+'">'+f.suggest.map(o=>'<option value="'+esc(o)+'"></option>').join("")+'</datalist>':'');
       return '<div class="field'+(f.full||f.type==="textarea"?" full":"")+'" data-field="'+f.name+'"><label for="'+id+'">'+esc(f.label)+'</label>'+input+(f.hint?'<span class="hint">'+esc(f.hint)+'</span>':"")+'</div>';
     }).join("")+
-    '</div><p class="form-err" role="alert" hidden></p><footer>'+(danger?'<button type="button" class="btn danger" data-act="danger" style="margin-right:auto">'+esc(danger.label)+'</button>':"")+'<button type="button" class="btn" data-act="cancel">Cancel</button><button type="submit" class="btn primary">'+esc(submit)+'</button></footer></form>';
+    '</div><p class="form-err" role="alert" hidden></p><footer>'+(danger?'<button type="button" class="btn danger" data-act="danger" style="margin-inline-end:auto">'+esc(danger.label)+'</button>':"")+'<button type="button" class="btn" data-act="cancel">Cancel</button><button type="submit" class="btn primary">'+esc(submit)+'</button></footer></form>';
   const form = m.querySelector("form");
   // Fields can depend on each other: `show(values)` hides a field, `options(values)` rebuilds a select's choices.
   let firstPass = true;
@@ -2507,6 +2573,7 @@ function renderNav(){
 }
 
 function render(){
+  applyLang();
   renderNav();
   const v = $("#view");
   if (!loaded){ v.innerHTML = '<p class="muted">Loading your students…</p>'; return; }
@@ -2611,9 +2678,9 @@ function pDashboard(v){
   '<div class="stat"><div class="v num">'+money(received)+'</div><div class="l">Received this month</div></div></div>'+
   attentionPanel(active, t)+
   '<div class="grid g2">'+
-  panel("Coming up this week", sessions.length ? '<ul class="list">'+sessions.map(({s,x})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(x.topics||"No topic yet")+'</div></div><div style="text-align:right"><div class="small">'+esc(x.date===t?"Today":fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(x.time||"")+(x.duration?" · "+x.duration+" min":"")+'</div></div></li>').join("")+'</ul>' : '<p class="empty">No sessions planned for the next 7 days.</p>')+
-  panel("Who owes you", owing.length ? '<ul class="list">'+owing.slice(0,8).map(({s,l})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a></div><div class="small muted">'+(l.lastPay?"Last paid "+esc(fmtShort(l.lastPay.date)):"No payments yet")+'</div></div><div style="text-align:right"><div class="money-owed num">'+money(l.balance)+'</div>'+(l.overdue?'<span class="tag flag">'+l.age+' days overdue</span>':'')+'</div></li>').join("")+'</ul>' : '<p class="empty">Everyone is paid up.</p>')+
-  panel("Tournaments ahead", tours.length ? '<ul class="list">'+tours.map(({s,x})=>{ const d = daysBetween(t,x.start); return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted"><a href="#/student/'+s.id+'/tournaments">'+esc(s.name)+'</a>'+(x.location?" · "+esc(x.location):"")+'</div></div><div style="text-align:right"><div class="small">'+esc(fmtShort(x.start))+'</div><span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span></div></li>'; }).join("")+'</ul>' : '<p class="empty">No tournaments in the next 60 days.</p>')+
+  panel("Coming up this week", sessions.length ? '<ul class="list">'+sessions.map(({s,x})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(x.topics||"No topic yet")+'</div></div><div style="text-align:end"><div class="small">'+esc(x.date===t?"Today":fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(x.time||"")+(x.duration?" · "+x.duration+" min":"")+'</div></div></li>').join("")+'</ul>' : '<p class="empty">No sessions planned for the next 7 days.</p>')+
+  panel("Who owes you", owing.length ? '<ul class="list">'+owing.slice(0,8).map(({s,l})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a></div><div class="small muted">'+(l.lastPay?"Last paid "+esc(fmtShort(l.lastPay.date)):"No payments yet")+'</div></div><div style="text-align:end"><div class="money-owed num">'+money(l.balance)+'</div>'+(l.overdue?'<span class="tag flag">'+l.age+' days overdue</span>':'')+'</div></li>').join("")+'</ul>' : '<p class="empty">Everyone is paid up.</p>')+
+  panel("Tournaments ahead", tours.length ? '<ul class="list">'+tours.map(({s,x})=>{ const d = daysBetween(t,x.start); return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted"><a href="#/student/'+s.id+'/tournaments">'+esc(s.name)+'</a>'+(x.location?" · "+esc(x.location):"")+'</div></div><div style="text-align:end"><div class="small">'+esc(fmtShort(x.start))+'</div><span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span></div></li>'; }).join("")+'</ul>' : '<p class="empty">No tournaments in the next 60 days.</p>')+
   panel("Assignments due", tasks.length ? '<ul class="list">'+tasks.map(({s,x})=>'<li><div class="main"><div class="title">'+esc(x.title)+'</div><div class="small muted"><a href="'+(x.href||'#/student/'+s.id+'/work')+'">'+esc(s.name)+'</a> · '+esc(x.category)+'</div></div>'+(x.review?'<span class="tag warn">Done · to review</span>':'<span class="tag '+(x.due<t?"flag":x.due===t?"warn":"")+'">'+(x.due<t?"Overdue":x.due===t?"Today":esc(fmtShort(x.due)))+'</span>')+'</li>').join("")+'</ul>' : '<p class="empty">Nothing due in the next 3 days.</p>')+
   '</div>';
   $("#dSes").onclick = ()=>planSession();
@@ -2731,7 +2798,7 @@ function pStudents(v){
       return '<a class="student-row" href="#/student/'+s.id+'"><div class="who"><span class="avatar">'+esc(initials(s.name))+'</span><div style="min-width:0"><div class="name">'+esc(s.name)+'</div><div class="small muted">'+esc(s.level||"")+(s.active?"":" · Archived")+'</div></div></div>'+
         '<div class="num"><div style="font-weight:600">'+esc(s.rating||"—")+'</div>'+(delta!==null?'<div class="small" style="color:'+(delta>=0?"var(--ok)":"var(--flag)")+'">'+(delta>=0?"+":"")+delta+'</div>':"")+'</div>'+
         '<div class="small hide-m">'+(next?"Next: "+esc(fmtDate(next.date,{weekday:"short",day:"numeric",month:"short"}))+(next.time?" "+esc(next.time):""):'<span class="muted">No session planned</span>')+'</div>'+
-        '<div style="text-align:right" class="num">'+(l.balance>0.009?'<span class="'+(l.overdue?"tag flag":"money-owed")+'">'+money(l.balance)+'</span>':'<span class="small muted">Paid up</span>')+'</div></a>';
+        '<div style="text-align:end" class="num">'+(l.balance>0.009?'<span class="'+(l.overdue?"tag flag":"money-owed")+'">'+money(l.balance)+'</span>':'<span class="small muted">Paid up</span>')+'</div></a>';
     }).join("") : '<p class="empty" style="padding:18px">No students match.</p>';
   };
   draw();
@@ -2916,15 +2983,18 @@ function markDone(s, x){
     }});
 }
 // A short message for the parents: what the lesson covered, open homework and the next lesson. Editable before sending.
-function summaryText(s, x, withNotes){
-  const first = s.name.split(" ")[0], t = x.date;
+function summaryText(s, x, withNotes, lng){
+  const he = lng==="he", first = s.name.split(" ")[0], t = x.date;
+  const fd = (d, o)=>new Date(d+"T00:00").toLocaleDateString(he?"he-IL":undefined, o);
   const hw = sortBy(state.assignments.filter(a=>a.studentId===s.id && a.status==="Assigned"),"due");
   const next = sortBy(s.sessions.filter(y=>y.status==="planned" && y.date>t),"date")[0];
-  const out = [(s.guardian ? "Hi "+s.guardian.split(" ")[0] : "Hi")+",", "", "Here is a summary of "+first+"’s chess lesson on "+fmtDate(t,{weekday:"long",day:"numeric",month:"long"})+"."];
-  if (x.topics) out.push("", "We worked on: "+x.topics);
+  const long = {weekday:"long",day:"numeric",month:"long"}, short = {weekday:"short",day:"numeric",month:"short"};
+  const hi = s.guardian ? (he?"שלום ":"Hi ")+s.guardian.split(" ")[0]+"," : (he?"שלום,":"Hi,");
+  const out = [hi, "", he ? "הנה סיכום שיעור השחמט של "+first+" מ"+fd(t,long)+"." : "Here is a summary of "+first+"’s chess lesson on "+fd(t,long)+"."];
+  if (x.topics) out.push("", (he?"עבדנו על: ":"We worked on: ")+x.topics);
   if (withNotes && x.notes) out.push("", x.notes);
-  if (hw.length) out.push("", "Homework:", ...hw.map(a=>"• "+a.title+(a.due?" (by "+fmtDate(a.due,{weekday:"short",day:"numeric",month:"short"})+")":"")));
-  if (next) out.push("", "Next lesson: "+fmtDate(next.date,{weekday:"long",day:"numeric",month:"long"})+(next.time?" at "+next.time:"")+".");
+  if (hw.length) out.push("", he?"שיעורי בית:":"Homework:", ...hw.map(a=>"• "+a.title+(a.due?(he?" (עד ":" (by ")+fd(a.due,short)+")":"")));
+  if (next) out.push("", he ? "השיעור הבא: "+fd(next.date,long)+(next.time?" בשעה "+next.time:"")+"." : "Next lesson: "+fd(next.date,long)+(next.time?" at "+next.time:"")+".");
   if (state.settings.coachName) out.push("", state.settings.coachName);
   return out.join("\n");
 }
@@ -2942,17 +3012,19 @@ function shareSummary(s, x){
   const m = $("#modal"), c = contactParts(s.contact), first = s.name.split(" ")[0];
   m.innerHTML = '<div class="modal-form"><header><h2>Lesson summary — '+esc(s.name)+'</h2><p class="sub small">Edit the message, then send it'+(s.guardian?' to '+esc(s.guardian):'')+'.</p></header>'+
     '<div style="padding:8px 20px;overflow:auto"><textarea id="sumTxt" class="fb" style="min-height:220px" aria-label="Summary message"></textarea>'+
-    (x.notes?'<label class="check small" style="margin-top:8px"><input type="checkbox" id="sumNotes"> Include my notes &amp; observations</label>':'')+
+    '<div class="row-actions" style="margin-top:8px;align-items:center;gap:14px">'+(x.notes?'<label class="check small"><input type="checkbox" id="sumNotes"> Include my notes &amp; observations</label>':'')+
+      '<label class="small" style="display:flex;align-items:center;gap:6px">Language <select id="sumLang" class="search" style="min-width:auto;padding:4px 8px"><option value="en">English</option><option value="he">עברית</option></select></label></div>'+
     (!c.phone&&!c.email?'<p class="small muted" style="margin:8px 0 0">No phone or email saved for '+esc(first)+'. Add one in Edit profile to send in one tap.</p>':'')+'</div>'+
-    '<footer style="flex-wrap:wrap"><button type="button" class="btn ghost" id="sumClose" style="margin-right:auto">Close</button><button type="button" class="btn" id="sumCopy">Copy</button>'+
+    '<footer style="flex-wrap:wrap"><button type="button" class="btn ghost" id="sumClose" style="margin-inline-end:auto">Close</button><button type="button" class="btn" id="sumCopy">Copy</button>'+
     (c.email?'<a class="btn" id="sumMail" target="_blank" rel="noopener" style="text-decoration:none">Email</a>':'')+
     '<a class="btn primary" id="sumWa" target="_blank" rel="noopener" style="text-decoration:none">WhatsApp</a></footer></div>';
   const ta = $("#sumTxt");
   const links = ()=>{ const txt = ta.value;
     $("#sumWa").href = "https://wa.me/"+c.phone+"?text="+encodeURIComponent(txt);
-    const mail = $("#sumMail"); if (mail) mail.href = "mailto:"+c.email+"?subject="+encodeURIComponent("Chess lesson summary — "+first)+"&body="+encodeURIComponent(txt); };
-  const fill = ()=>{ ta.value = summaryText(s, x, !!($("#sumNotes")||{}).checked); links(); };
-  fill(); ta.oninput = links;
+    const mail = $("#sumMail"); if (mail) mail.href = "mailto:"+c.email+"?subject="+encodeURIComponent((sl.value==="he"?"סיכום שיעור שחמט — ":"Chess lesson summary — ")+first)+"&body="+encodeURIComponent(txt); };
+  const sl = $("#sumLang"); sl.value = lang();
+  const fill = ()=>{ ta.value = summaryText(s, x, !!($("#sumNotes")||{}).checked, sl.value); ta.dir = sl.value==="he" ? "rtl" : "ltr"; links(); };
+  fill(); ta.oninput = links; sl.onchange = fill;
   if ($("#sumNotes")) $("#sumNotes").onchange = fill;
   $("#sumClose").onclick = ()=>m.close();
   $("#sumCopy").onclick = async ()=>{
@@ -3050,9 +3122,9 @@ function tWork(el, s){
   const lvl = m => m===0?"":m<30?"l1":m<60?"l2":"l3";
   const periods = [[7,"7 days"],[30,"30 days"],[90,"90 days"],[0,"All time"]];
   el.innerHTML = workNav(s,"work")+'<div class="grid g2">'+
-    panel("Daily practice", '<p style="margin:0"><b class="num">'+total+' min</b> <span class="muted">over '+active+' of the last 7 days'+(streak>1?" · "+streak+"-day streak":"")+'</span></p><div class="week">'+days.map(x=>'<div><span class="'+lvl(x.m)+'" title="'+x.m+' min"></span>'+esc(new Date(x.d+"T00:00").toLocaleDateString(undefined,{weekday:"narrow"}))+'</div>').join("")+'</div>'+
+    panel("Daily practice", '<p style="margin:0"><b class="num">'+total+' min</b> <span class="muted">over '+active+' of the last 7 days'+(streak>1?" · "+streak+"-day streak":"")+'</span></p><div class="week">'+days.map(x=>'<div><span class="'+lvl(x.m)+'" title="'+x.m+' min"></span>'+esc(new Date(x.d+"T00:00").toLocaleDateString(LOCALE(),{weekday:"narrow"}))+'</div>').join("")+'</div>'+
       '<ul class="list" style="margin-top:14px">'+(sortBy(s.worklog,"date",-1).slice(0,workShown[s.id]||25).map(w=>{ const res = practiceResult(w); return '<li><div class="main"><div class="title">'+practiceLabel(w,s)+(w.what==="Tactics"&&w.site&&exKind(w.site,w.exercise)==="score"&&runsOf(w).length&&(personalBest(s,w.site,w.exercise)||{}).entry===w?' <span class="tag ok">Personal best</span>':'')+'</div><div class="small muted">'+esc(fmtDate(w.date))+(res?" · "+esc(res):"")+(w.note?" · "+esc(w.note):"")+'</div></div><span class="num">'+esc(w.minutes)+' min</span><button class="btn small ghost" data-a="editLog" data-id="'+w.id+'">Edit</button></li>'; }).join("")||'<li class="empty">No practice logged yet.</li>')+'</ul>'+
-      (()=>{ const n = s.worklog.length, shown = Math.min(n, workShown[s.id]||25); return n>shown ? '<div class="row-actions" style="margin-top:8px;align-items:center"><span class="small muted" style="margin-right:auto">Showing '+shown+' of '+n+'</span><button class="btn small" data-a="more">Show 25 more</button><button class="btn small ghost" data-a="all">Show all</button></div>' : ""; })(),
+      (()=>{ const n = s.worklog.length, shown = Math.min(n, workShown[s.id]||25); return n>shown ? '<div class="row-actions" style="margin-top:8px;align-items:center"><span class="small muted" style="margin-inline-end:auto">Showing '+shown+' of '+n+'</span><button class="btn small" data-a="more">Show 25 more</button><button class="btn small ghost" data-a="all">Show all</button></div>' : ""; })(),
       '<button class="btn small primary" data-a="addLog">Log practice</button>')+
     panel("Tactics statistics", '<div class="seg" role="group" aria-label="Period">'+periods.map(([n,l])=>'<button type="button" class="'+(tacPeriod===n?"on":"")+'" data-a="period" data-id="'+n+'">'+l+'</button>').join("")+'</div>'+tacticsStats(s, tacPeriod))+
   '</div>';
@@ -3311,7 +3383,7 @@ function tGames(el, s){
       (trName?'<p class="small" style="margin:0 0 8px">Showing games from <b>'+esc(trName)+'</b> · <button class="btn small ghost" data-a="clearT">Show all tournaments</button></p>':"")+
       (list.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Opponent</th><th>Side</th><th>Result</th><th>Tournament</th><th>Analysis</th><th></th></tr></thead><tbody>'+
         list.map(g=>'<tr><td class="small" style="white-space:nowrap">'+esc(fmtDate(g.date))+'</td><td><b>'+esc(g.opponent)+'</b>'+(g.opponentRating?' <span class="muted small num">'+esc(g.opponentRating)+'</span>':'')+(g.opening?'<div class="small muted">'+esc(g.opening)+'</div>':'')+(g.notes?'<div class="small">'+esc(g.notes)+'</div>':'')+'</td>'+
-          '<td class="small"><span class="piece '+(g.color==="Black"?"b":"w")+'" style="display:inline-block;vertical-align:-2px;margin-right:4px"></span>'+esc(g.color)+(g.needsCheck?' <span class="tag warn">Check side</span>':'')+'</td>'+
+          '<td class="small"><span class="piece '+(g.color==="Black"?"b":"w")+'" style="display:inline-block;vertical-align:-2px;margin-inline-end:4px"></span>'+esc(g.color)+(g.needsCheck?' <span class="tag warn">Check side</span>':'')+'</td>'+
           '<td class="small"><span class="num">'+esc(g.result)+'</span> '+outTag(outcomeOf(g))+'</td>'+
           '<td class="small">'+esc(gameEvent(g,s)||"—")+(g.round?' <span class="muted">R'+esc(g.round)+'</span>':'')+' <span class="muted">· '+esc(g.timeControl||"")+'</span></td>'+
           '<td>'+statusTag(g.analysis)+(g.lastAnalysed?'<div class="small muted">'+esc(fmtShort(g.lastAnalysed))+'</div>':'')+'</td>'+
@@ -4054,7 +4126,7 @@ function sessionActions(s, x){
     (cl.length?'<div class="clash-box">'+cl.map(c=>'<div>⚠ '+esc(c.text)+'</div>').join("")+'</div>':'')+
     '<p class="small muted" style="margin:6px 0 0">Status: '+esc({planned:"Planned",done:"Done",cancelled:"Cancelled"}[x.status])+(x.status==="done"?" · "+money(x.fee)+" charged":"")+'</p></div>'+
     '<footer style="flex-wrap:wrap">'+
-      '<a class="btn" href="#/student/'+s.id+'/sessions" style="margin-right:auto;text-decoration:none">Open student</a>'+
+      '<a class="btn" href="#/student/'+s.id+'/sessions" style="margin-inline-end:auto;text-decoration:none">Open student</a>'+
       (x.status==="planned"?'<button type="button" class="btn" data-x="cancel">Cancel session</button><button type="button" class="btn" data-x="move">Move</button><button type="button" class="btn primary" data-x="done">Mark done</button>':'')+
       (x.status==="cancelled"?'<button type="button" class="btn primary" data-x="restore">Restore</button>':'')+
       (x.status==="done"?'<button type="button" class="btn" data-x="edit">Edit details</button><button type="button" class="btn primary" data-x="sum">Send summary</button>':'')+
@@ -4107,7 +4179,7 @@ function pSchedule(v){
   v.innerHTML = '<div class="page-head"><div><h1>Schedule</h1><p class="sub">'+slotsN+' weekly slot'+(slotsN===1?"":"s")+' · sessions are planned 8 weeks ahead automatically</p></div><div class="row-actions"><button class="btn" id="scSlot">Add weekly slot</button><button class="btn primary" id="scAdd">Plan session</button></div></div>'+
     (unmarked.length?'<section class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="panel-head"><h2>Past sessions still marked as planned</h2><span class="small muted">Marking them done adds the fee to the balance</span></div><ul class="list">'+sortBy(unmarked.map(u=>Object.assign({d:u.x.date},u)),"d",-1).map(({s,x})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(x.date))+(x.time?" "+esc(x.time):"")+(x.topics?" · "+esc(x.topics):"")+'</div></div><div class="row-actions"><button class="btn small primary" data-a="done" data-id="'+s.id+'|'+x.id+'">Mark done</button><button class="btn small" data-a="cancel" data-id="'+s.id+'|'+x.id+'">Cancelled</button></div></li>').join("")+'</ul></section>':'')+
     '<div class="sched-bar"><div class="seg" role="group" aria-label="View" style="margin:0"><button type="button" class="'+(schedView==="week"?"on":"")+'" data-a="view" data-id="week">'+(phone?"Days":"Week")+'</button><button type="button" class="'+(schedView==="list"?"on":"")+'" data-a="view" data-id="list">List</button></div>'+
-      (schedView==="week"?'<div class="row-actions"><button class="btn small" data-a="wk" data-id="-1" aria-label="'+(phone?"Earlier days":"Previous week")+'">‹</button><button class="btn small" data-a="wk" data-id="0">Today</button><button class="btn small" data-a="wk" data-id="1" aria-label="'+(phone?"Later days":"Next week")+'">›</button></div>':'')+
+      (schedView==="week"?'<div class="row-actions"><button class="btn small" data-a="wk" data-id="-1" aria-label="'+(phone?"Earlier days":"Previous week")+'"><span dir="ltr">'+(lang()==="he"?"›":"‹")+'</span></button><button class="btn small" data-a="wk" data-id="0">Today</button><button class="btn small" data-a="wk" data-id="1" aria-label="'+(phone?"Later days":"Next week")+'"><span dir="ltr">'+(lang()==="he"?"‹":"›")+'</span></button></div>':'')+
       '<b class="sched-title">'+esc(title)+'</b></div>'+
     (clashes.length?'<div class="clash-box" style="margin-bottom:12px"><b>'+clashes.length+' session'+(clashes.length===1?" has a clash":"s have clashes")+' '+(schedView==="week"?(phone?"in these days":"this week"):"in the next 4 weeks")+'</b>'+clashes.map(i=>'<div>⚠ '+esc(i.s.name)+', '+esc(fmtDate(i.date,{weekday:"short",day:"numeric",month:"short"}))+(i.x.time?" "+esc(i.x.time):"")+': '+esc(i.clash.map(c=>c.text).join("; "))+' <button class="btn small ghost" data-a="open" data-id="'+i.s.id+'|'+i.x.id+'">Fix</button></div>').join("")+'</div>':'')+
     (schedView==="week" ? weekGrid(first, items, n) : listView(items, t));
@@ -4139,7 +4211,7 @@ function weekGrid(ws, items, n=7){
   timed.forEach(i=>{ const a = toMin(i.x.time), b = a+(+i.x.duration||60); h0 = Math.min(h0, Math.floor(a/60)); h1 = Math.max(h1, Math.ceil(b/60)); });
   h0 = Math.max(0, h0-1); h1 = Math.min(24, h1+1);
   const H = h1-h0;
-  const head = '<div class="wk-corner"></div>'+days.map(d=>'<div class="wk-dh'+(d===t?" today":"")+'"><span>'+esc(new Date(d+"T00:00").toLocaleDateString(undefined,{weekday:"short"}))+'</span><b>'+new Date(d+"T00:00").getDate()+'</b></div>').join("");
+  const head = '<div class="wk-corner"></div>'+days.map(d=>'<div class="wk-dh'+(d===t?" today":"")+'"><span>'+esc(new Date(d+"T00:00").toLocaleDateString(LOCALE(),{weekday:"short"}))+'</span><b>'+new Date(d+"T00:00").getDate()+'</b></div>').join("");
   const allday = '<div class="wk-corner small muted">All day</div>'+days.map(d=>{
     const its = items.filter(i=>i.date===d && (i.kind!=="session" || toMin(i.x.time)===null));
     return '<div class="wk-ad">'+its.map(i=>{
@@ -4158,7 +4230,7 @@ function weekGrid(ws, items, n=7){
     const now = d===t ? (()=>{ const n = new Date(); const mm = n.getHours()*60+n.getMinutes(); return mm>=h0*60 && mm<=h1*60 ? '<div class="wk-now" style="top:'+((mm-h0*60)/60*HOUR_PX)+'px"></div>' : ""; })() : "";
     return '<div class="wk-day'+(d===t?" today":"")+'" data-date="'+d+'" data-h0="'+h0+'" style="height:'+(H*HOUR_PX)+'px" title="Click an empty spot to plan a session">'+now+placed.map(e=>{
       const x = e.i.x, top = (e.a-h0*60)/60*HOUR_PX, ht = Math.max(22, (e.b-e.a)/60*HOUR_PX-2);
-      return '<button type="button" class="ev st-'+x.status+(e.i.clash.length?" clash":"")+'" data-a="open" data-id="'+e.i.s.id+'|'+x.id+'" style="top:'+top+'px;height:'+ht+'px;left:calc('+(e.lane/e.n*100)+'% + 2px);width:calc('+(100/e.n)+'% - 4px)">'+
+      return '<button type="button" class="ev st-'+x.status+(e.i.clash.length?" clash":"")+'" data-a="open" data-id="'+e.i.s.id+'|'+x.id+'" style="top:'+top+'px;height:'+ht+'px;inset-inline-start:calc('+(e.lane/e.n*100)+'% + 2px);width:calc('+(100/e.n)+'% - 4px)">'+
         '<b>'+(e.i.clash.length?"⚠ ":"")+esc(e.i.s.name)+'</b><span>'+esc(x.time)+'–'+fmtMin(e.b)+(x.format&&x.format!=="In person"?' · '+esc(x.format):'')+(x.slotId?' ↻':'')+'</span></button>';
     }).join("")+'</div>';
   }).join("");
@@ -4204,9 +4276,9 @@ function pPayments(v){
       const rows = []; state.students.forEach(s=>s.payments.forEach(p=>{ if ((p.date||"").slice(0,4)===y) rows.push([p.date, s.name, +p.amount||0, p.method||"", p.note||""]); }));
       rows.sort((a,b)=>a[0]<b[0]?-1:1);
       if (!rows.length) return toast("No payments recorded in "+y+".");
-      saveFile("payments-"+y+".csv", toCsv([["Date","Student","Amount ("+(state.settings.currency||"")+")","Method","Note"], ...rows])); },
+      saveFile("payments-"+y+".csv", toCsv([lang()==="he"?["תאריך","תלמיד","סכום ("+(state.settings.currency||"")+")","אמצעי תשלום","הערה"]:["Date","Student","Amount ("+(state.settings.currency||"")+")","Method","Note"], ...rows.map(r=>[r[0], r[1], r[2], lang()==="he"?heWord(r[3]):r[3], r[4]])])); },
     csvMonth:()=>{ const d = incomeData();
-      saveFile("income-by-month-"+d.year+".csv", toCsv([["Month","Lessons","Charged","Received"], ...d.months.map(m=>[m.key, m.lessons, m.charged, m.received]), ["Total", d.total.lessons, d.total.charged, d.total.received]])); } });
+      saveFile("income-by-month-"+d.year+".csv", toCsv([lang()==="he"?["חודש","שיעורים","חויב","התקבל"]:["Month","Lessons","Charged","Received"], ...d.months.map(m=>[m.key, m.lessons, m.charged, m.received]), [lang()==="he"?"סה״כ":"Total", d.total.lessons, d.total.charged, d.total.received]])); } });
 }
 /* ---------- income report ---------- */
 let incomeYear = null;
@@ -4246,13 +4318,14 @@ function pSettings(v){
       '<div class="field"><label for="s2">Currency symbol</label><input id="s2" name="currency" value="'+esc(st.currency)+'"></div>'+
       '<div class="field"><label for="s3">Default fee per session</label><input id="s3" name="defaultRate" type="number" min="0" step="any" value="'+esc(st.defaultRate)+'"></div>'+
       '<div class="field full"><label for="s4">Flag unpaid balances after (days)</label><input id="s4" name="overdueDays" type="number" min="1" value="'+esc(st.overdueDays)+'"></div>'+
+      '<div class="field full"><label for="s6">Language</label><select id="s6" name="lang"><option value="en"'+(lang()==="en"?" selected":"")+'>English</option><option value="he"'+(lang()==="he"?" selected":"")+'>עברית (Hebrew)</option></select></div>'+
       '<div class="field full"><label for="s5">Week starts on</label><select id="s5" name="weekStart"><option value="0"'+(+st.weekStart===0?" selected":"")+'>Sunday</option><option value="1"'+(+st.weekStart===1?" selected":"")+'>Monday</option></select></div>'+
       '<div class="full"><button class="btn primary" type="submit">Save settings</button></div></form>')+
     panel("Backup", '<p class="small muted" style="margin-top:0">'+(store&&store.kind==="db"?"Your data is saved to your account and is private to you, even if you share this page.":"Your data is saved in this browser only. Download a backup regularly.")+'</p><div class="row-actions"><button class="btn" id="exp">Download backup</button><label class="btn" for="imp">Restore from backup</label><input id="imp" type="file" accept="application/json,.json" hidden></div>')+
   '</div>';
   $("#setF").onsubmit = e=>{ e.preventDefault(); const f = e.target.elements;
-    st.coachName = f.coachName.value.trim(); st.currency = f.currency.value.trim(); st.defaultRate = +f.defaultRate.value||0; st.weekStart = +f.weekStart.value; schedWeek = null; st.overdueDays = Math.max(1,+f.overdueDays.value||30);
-    saveSettings(); renderNav(); toast("Settings saved"); };
+    st.coachName = f.coachName.value.trim(); st.currency = f.currency.value.trim(); st.defaultRate = +f.defaultRate.value||0; st.weekStart = +f.weekStart.value; schedWeek = null; st.overdueDays = Math.max(1,+f.overdueDays.value||30); st.lang = f.lang.value;
+    saveSettings(); render(); toast("Settings saved"); };
   $("#exp").onclick = async ()=>{
     const data = JSON.stringify({app:"coachs-board",version:1,exportedAt:new Date().toISOString(),...state},null,2);
     const name = "coachs-board-backup-"+today()+".json";
@@ -4279,6 +4352,318 @@ function pSettings(v){
     }); e.target.value = "";
   };
 }
+
+/* ---------- Hebrew ---------- */
+const HE = {
+  // navigation, page titles
+  "Coach's Board":"הלוח של המאמן", "Today":"היום", "Students":"תלמידים", "Schedule":"לוח זמנים", "Assignments":"משימות", "Payments":"תשלומים", "Settings":"הגדרות",
+  "Search":"חיפוש", "Loading your students…":"טוען את התלמידים…", "All changes saved":"כל השינויים נשמרו", "Saving…":"שומר…", "Saved on this device only":"נשמר במכשיר הזה בלבד",
+  "Couldn't save":"השמירה נכשלה", "Couldn't save the last change":"השינוי האחרון לא נשמר", "Storage is full":"האחסון מלא", "This browser's storage is full":"האחסון בדפדפן מלא",
+  "Set up your coaching board":"הקמת לוח האימון", "Add a student to start tracking lessons, homework, openings, tournaments, skills and payments in one place.":"הוספת תלמיד מתחילה מעקב אחר שיעורים, שיעורי בית, פתיחות, טורנירים ותשלומים במקום אחד.",
+  "Add a student":"הוספת תלמיד", "Explore with a sample student":"התנסות עם תלמיד לדוגמה",
+  // common buttons
+  "Add":"הוספה", "Edit":"עריכה", "Delete":"מחיקה", "Save":"שמירה", "Save changes":"שמירת שינויים", "Cancel":"ביטול", "Close":"סגירה", "Continue":"המשך", "Remove":"הסרה",
+  "Restore":"שחזור", "Fix":"תיקון", "More":"עוד", "Move":"העברה", "Plan":"תכנון", "Record":"רישום", "Clear":"ניקוי", "Copy":"העתקה", "Email":"אימייל", "WhatsApp":"וואטסאפ",
+  "Show all":"הצגת הכול", "Show 25 more":"הצגת 25 נוספים", "Show all tournaments":"הצגת כל הטורנירים", "Yes":"כן", "No":"לא", "optional":"לא חובה", "Board":"לוח",
+  // dashboard
+  "Good morning":"בוקר טוב", "Good afternoon":"צהריים טובים", "Good evening":"ערב טוב", "Record payment":"רישום תשלום", "Plan session":"תכנון שיעור",
+  "Active students":"תלמידים פעילים", "Sessions in the next 7 days":"שיעורים ב־7 הימים הקרובים", "Outstanding":"חוב פתוח", "Received this month":"התקבל החודש",
+  "Coming up this week":"השבוע הקרוב", "Who owes you":"מי חייב לך", "Tournaments ahead":"טורנירים קרובים", "Assignments due":"משימות להגשה",
+  "No topic yet":"עדיין אין נושא", "No payments yet":"עדיין אין תשלומים", "Everyone is paid up.":"כולם שילמו.", "No sessions planned for the next 7 days.":"אין שיעורים מתוכננים ב־7 הימים הקרובים.",
+  "No tournaments in the next 60 days.":"אין טורנירים ב־60 הימים הקרובים.", "Nothing due in the next 3 days.":"אין משימות להגשה ב־3 הימים הקרובים.", "In progress":"בתהליך", "Tomorrow":"מחר",
+  "Overdue":"באיחור", "Done · to review":"בוצעה · לבדיקה", "Needs attention":"דורש תשומת לב", "Record a payment from…":"רישום תשלום מ…",
+  "No lessons yet":"עדיין אין שיעורים", "on the Schedule page":"בדף לוח הזמנים", "students":"תלמידים",
+  // students list
+  "Add student":"הוספת תלמיד", "Search by name":"חיפוש לפי שם", "Search students":"חיפוש תלמידים", "Filter":"סינון", "Active":"פעיל", "Archived":"בארכיון", "All":"הכול",
+  "No session planned":"לא מתוכנן שיעור", "Paid up":"שולם", "No students match.":"אין תלמידים מתאימים.",
+  "Official ratings from FIDE and the Israeli Chess Federation are filled in by Claude":"הדירוגים הרשמיים מפיד״ה ומהאיגוד הישראלי לשחמט מתעדכנים על ידי Claude",
+  "Official ratings from FIDE and the Israeli Chess Federation are filled in by Claude. To refresh them, ask Claude in the chat: “Update my students’ ratings.”":"הדירוגים הרשמיים מפיד״ה ומהאיגוד הישראלי לשחמט מתעדכנים על ידי Claude. לרענון, יש לבקש מ־Claude בצ׳אט: ״Update my students’ ratings.״",
+  // student form
+  "Full name":"שם מלא", "FIDE ID":"מספר פיד״ה", "Israeli Chess Federation ID":"מספר באיגוד הישראלי לשחמט", "Player ID":"מספר שחקן", "Has a FIDE or ICF ID":"יש מספר פיד״ה או איגוד",
+  "No ID yet (new player)":"עדיין אין מספר (שחקן חדש)", "Main rating":"דירוג ראשי", "ICF (Israel)":"איגוד (ישראל)", "Unrated":"ללא דירוג", "Current main rating":"דירוג ראשי נוכחי",
+  "Filled in automatically when ratings are updated":"מתעדכן אוטומטית כשהדירוגים מתעדכנים", "Level":"רמה", "Birth year":"שנת לידה", "Phone or email":"טלפון או אימייל",
+  "Parent / guardian":"הורה / אפוטרופוס", "Status":"סטטוס", "Goals":"מטרות", "Coach notes":"הערות המאמן", "Delete student":"מחיקת תלמיד", "Delete permanently":"מחיקה לצמיתות",
+  "The number on the player's ratings.fide.com profile":"המספר בפרופיל השחקן ב־ratings.fide.com", "The Id= number on chess.org.il":"המספר שאחרי Id= באתר chess.org.il",
+  "e.g. Club player, U14 champion":"למשל: שחקן מועדון, אלוף עד גיל 14",
+  "This removes all of their sessions, homework, assignments, repertoire, tournaments, skills and payment history. To keep the history, archive them instead.":"פעולה זו מוחקת את כל השיעורים, שיעורי הבית, המשימות, הרפרטואר, הטורנירים והיסטוריית התשלומים. כדי לשמור את ההיסטוריה, עדיף להעביר לארכיון.",
+  "Enter the student's name.":"יש להזין את שם התלמיד.", "Enter the player's FIDE ID or Israeli Chess Federation ID, or choose “No ID yet”.":"יש להזין מספר פיד״ה או מספר איגוד, או לבחור ״עדיין אין מספר״.",
+  "The FIDE ID should be digits only, like 2807681.":"מספר פיד״ה צריך להכיל ספרות בלבד, למשל 2807681.", "The ICF ID should be digits only, like 20256.":"מספר האיגוד צריך להכיל ספרות בלבד, למשל 20256.",
+  "Student added":"התלמיד נוסף", "Changes saved":"השינויים נשמרו", "Student deleted":"התלמיד נמחק",
+  // student page
+  "Edit profile":"עריכת פרופיל", "Student sections":"אזורי התלמיד", "Overview":"סקירה", "Sessions":"שיעורים", "Daily work":"עבודה יומית", "Books":"ספרים", "Repertoire":"רפרטואר",
+  "Tournaments":"טורנירים", "This student no longer exists.":"התלמיד הזה כבר לא קיים.", "Back to students":"חזרה לתלמידים",
+  "Official ratings":"דירוגים רשמיים", "Enter manually":"הזנה ידנית", "FIDE standard":"פיד״ה קלאסי", "FIDE rapid":"פיד״ה רפיד", "FIDE blitz":"פיד״ה בליץ", "FIDE title":"תואר פיד״ה",
+  "ICF rating":"דירוג איגוד", "FIDE not checked yet":"פיד״ה עוד לא נבדק", "ICF not checked yet":"איגוד עוד לא נבדק", "e.g. CM, FM":"למשל CM, FM",
+  "No player ID yet. Add it in Edit profile once the player registers.":"עדיין אין מספר שחקן. אפשר להוסיף בעריכת הפרופיל אחרי הרישום.",
+  "Add a FIDE or ICF ID in Edit profile to track official ratings.":"להוספת מספר פיד״ה או איגוד בעריכת הפרופיל כדי לעקוב אחר הדירוגים הרשמיים.",
+  "Rating history":"היסטוריית דירוג", "Add rating":"הוספת דירוג", "Rating list":"רשימת דירוג", "Rating":"דירוג", "Date":"תאריך", "Enter a rating.":"יש להזין דירוג.",
+  "Add at least two ratings to see a trend.":"צריך לפחות שני דירוגים כדי לראות מגמה.", "Rating added":"הדירוג נוסף", "Ratings saved":"הדירוגים נשמרו", "Rating removed":"הדירוג הוסר",
+  "Remove this rating?":"להסיר את הדירוג?", "Delete rating":"מחיקת דירוג", "Online":"אונליין",
+  "At a glance":"במבט מהיר", "Sessions done":"שיעורים שבוצעו", "Last session":"השיעור האחרון", "Next session":"השיעור הבא", "Next tournament":"הטורניר הבא",
+  "Open assignments":"משימות פתוחות", "Balance":"יתרה", "Contact":"פרטי קשר", "Not planned":"לא מתוכנן", "No goals written yet.":"עדיין לא נכתבו מטרות.", "No notes yet.":"עדיין אין הערות.",
+  // sessions
+  "Weekly slots":"שיעורים קבועים", "Add weekly slot":"הוספת שיעור קבוע", "Planned":"מתוכנן", "History":"היסטוריה", "Add session":"הוספת שיעור", "Mark done":"סימון כבוצע",
+  "Send summary":"שליחת סיכום", "Done":"בוצע", "Cancelled":"בוטל", "Not marked":"לא סומן", "↻ moved":"↻ הוזז", "↻ weekly":"↻ קבוע",
+  "Nothing planned. Add the next session to keep momentum.":"אין שיעורים מתוכננים. כדאי להוסיף את השיעור הבא כדי לשמור על רצף.", "Finished sessions appear here.":"שיעורים שהסתיימו יופיעו כאן.",
+  "Edit session":"עריכת שיעור", "Duration (minutes)":"משך (דקות)", "Start time":"שעת התחלה", "Format":"מתכונת", "In person":"פרונטלי", "Group":"קבוצתי",
+  "Topics":"נושאים", "Notes & observations":"הערות ותצפיות", "Charged once the session is marked done":"יחויב כשהשיעור יסומן כבוצע", "e.g. Rook endgames, Najdorf 6.Bg5":"למשל: סיומי צריחים, נאידורף 6.Bg5",
+  "Session added":"השיעור נוסף", "Session updated":"השיעור עודכן", "Session deleted":"השיעור נמחק", "Delete this session?":"למחוק את השיעור?", "This can't be undone.":"אי אפשר לבטל את הפעולה.",
+  "What you covered":"מה למדתם", "e.g. Rook endgames: Lucena & Philidor":"למשל: סיומי צריחים: לוסנה ופילידור", "What went well, what to work on next. Private unless you choose to share it.":"מה הלך טוב ועל מה לעבוד בהמשך. פרטי, אלא אם בוחרים לשתף.",
+  "Then":"ואז", "Nothing else":"זהו", "Write a summary for the parents":"כתיבת סיכום להורים", "Marked done":"סומן כבוצע",
+  "Lesson summary":"סיכום שיעור", "Include my notes & observations":"לכלול את ההערות שלי", "Language":"שפה", "Summary copied":"הסיכום הועתק", "Couldn't copy — select the text and copy it yourself.":"ההעתקה נכשלה — אפשר לסמן את הטקסט ולהעתיק ידנית.",
+  "Summary message":"הודעת הסיכום",
+  // slots
+  "Add slot":"הוספה", "Edit weekly slot":"עריכת שיעור קבוע", "Day":"יום", "Starting from":"החל מ־", "Until (optional)":"עד (לא חובה)", "Delete slot":"מחיקת השיעור הקבוע",
+  "e.g. the end of the school year. Leave empty to keep going.":"למשל סוף שנת הלימודים. אפשר להשאיר ריק להמשך ללא הגבלה.", "Delete this weekly slot?":"למחוק את השיעור הקבוע?",
+  "Past sessions are kept.":"שיעורים שעברו נשמרים.", "Choose a start time.":"יש לבחור שעת התחלה.", "The end date is before the start date.":"תאריך הסיום לפני תאריך ההתחלה.",
+  "Weekly slot added — sessions planned 8 weeks ahead":"השיעור הקבוע נוסף — השיעורים מתוכננים 8 שבועות קדימה", "Slot updated":"השיעור הקבוע עודכן", "Weekly slot deleted":"השיעור הקבוע נמחק",
+  "Sunday":"יום ראשון", "Monday":"יום שני", "Tuesday":"יום שלישי", "Wednesday":"יום רביעי", "Thursday":"יום חמישי", "Friday":"יום שישי", "Saturday":"שבת",
+  "no end date":"ללא תאריך סיום", "weekly slot":"שיעור קבוע",
+  // plan / move / session actions
+  "Plan a session":"תכנון שיעור", "Student":"תלמיד", "Repeat":"חזרה", "Just this once":"פעם אחת", "Every week (weekly slot)":"כל שבוע (שיעור קבוע)",
+  "Leave empty to use the student's usual fee":"להשאיר ריק כדי להשתמש במחיר הרגיל של התלמיד", "e.g. Rook endgames":"למשל: סיומי צריחים", "Choose a student.":"יש לבחור תלמיד.",
+  "Choose a start time for a weekly slot.":"יש לבחור שעת התחלה לשיעור קבוע.", "Session planned":"השיעור תוכנן", "Add a student first.":"צריך להוסיף תלמיד קודם.",
+  "Add a weekly slot for…":"הוספת שיעור קבוע ל…", "Open student":"פתיחת התלמיד", "Cancel session":"ביטול השיעור", "Edit details":"עריכת פרטים", "Session cancelled":"השיעור בוטל", "Session restored":"השיעור שוחזר",
+  "no time set":"לא נקבעה שעה", "No time set":"לא נקבעה שעה",
+  // schedule
+  "sessions are planned 8 weeks ahead automatically":"השיעורים מתוכננים אוטומטית 8 שבועות קדימה", "Past sessions still marked as planned":"שיעורים שעברו ועדיין מסומנים כמתוכננים",
+  "Marking them done adds the fee to the balance":"סימון כבוצע מוסיף את המחיר ליתרה", "Week":"שבוע", "Days":"ימים", "List":"רשימה", "View":"תצוגה", "Previous week":"השבוע הקודם", "Next week":"השבוע הבא",
+  "Earlier days":"ימים קודמים", "Later days":"ימים הבאים", "Next 4 weeks":"4 השבועות הקרובים", "All day":"כל היום", "Click an empty spot to plan a session":"לחיצה על מקום ריק מתכננת שיעור",
+  "↻ weekly slot · click a session for actions, or click an empty spot to plan one.":"↻ שיעור קבוע · לחיצה על שיעור לפעולות, או על מקום ריק לתכנון שיעור.",
+  "Nothing on the calendar in the next 4 weeks.":"אין כלום ביומן ב־4 השבועות הקרובים.", "Tournament":"טורניר", "Assignment due":"הגשת משימה", "No time":"ללא שעה", "no time":"ללא שעה",
+  // daily work
+  "Practice":"תרגול", "Studied games":"משחקים נלמדים", "Daily practice":"תרגול יומי", "Log practice":"רישום תרגול", "No practice logged yet.":"עדיין לא נרשם תרגול.",
+  "Tactics statistics":"סטטיסטיקת טקטיקה", "Period":"תקופה", "7 days":"7 ימים", "30 days":"30 ימים", "90 days":"90 ימים", "All time":"כל הזמן",
+  "Attempted":"נוסו", "Correct":"נכונים", "Accuracy":"דיוק", "Puzzles per minute":"פאזלים לדקה", "Best scores":"שיאים", "Accuracy by week":"דיוק לפי שבוע",
+  "Bar height is accuracy; the thin line under each week shows how many puzzles were attempted.":"גובה העמודה הוא הדיוק; הקו הדק מתחת לכל שבוע מראה כמה פאזלים נוסו.",
+  "Weekly tactics accuracy for the last 8 weeks":"דיוק טקטי שבועי ב־8 השבועות האחרונים", "Where":"איפה", "Progress":"התקדמות", "No tactics logged in this period.":"לא נרשמה טקטיקה בתקופה הזו.",
+  "Log a Puzzle Rush, Puzzle Storm, Streak or Battle session to track best scores here.":"רישום Puzzle Rush, Puzzle Storm, Streak או Battle יציג כאן שיאים.", "personal best":"שיא אישי", "Personal best":"שיא אישי",
+  "No attempts in this period":"אין ניסיונות בתקופה הזו", "Add practice":"הוספת תרגול", "Edit practice":"עריכת תרגול", "Practice added":"התרגול נוסף", "Practice updated":"התרגול עודכן",
+  "Practice deleted":"התרגול נמחק", "Delete this practice?":"למחוק את התרגול?", "Minutes":"דקות", "What they worked on":"על מה עבדו", "Type of exercise":"סוג התרגיל",
+  "Chapter or section":"פרק או חלק", "Positions / games covered":"עמדות / משחקים", "ChessBase file":"קובץ ChessBase", "Whose game":"של מי המשחק", "A game by other players":"משחק של שחקנים אחרים",
+  "Which game":"איזה משחק", "Analysis status after this session":"סטטוס הניתוח אחרי התרגול", "Book":"ספר", "Not from a book":"לא מספר", "Page reached":"העמוד שהגיעו אליו", "The page they stopped on":"העמוד שבו עצרו",
+  "Puzzles attempted":"פאזלים שנוסו", "Solved correctly":"נפתרו נכון", "Puzzle rating after":"דירוג פאזלים בסיום", "As shown on the site at the end of the session":"כפי שמופיע באתר בסוף התרגול",
+  "Score of every attempt":"התוצאה בכל ניסיון", "All runs from this session, in order, separated by commas. The best and average are worked out for you.":"כל הניסיונות מהתרגול, לפי הסדר ומופרדים בפסיקים. השיא והממוצע מחושבים אוטומטית.",
+  "Everything they tried, right or wrong. From a book: leave both empty if they only read.":"כל מה שניסו, נכון או לא. מספר: להשאיר את שניהם ריקים אם רק קראו.",
+  "e.g. Missed several back-rank ideas. For games: key moments, mistakes found, questions for the coach.":"למשל: פספס כמה רעיונות של שורה אחורית. במשחקים: רגעי מפתח, טעויות שנמצאו, שאלות למאמן.",
+  "e.g. Rook endings.cbv":"למשל Rook endings.cbv", "e.g. Lucena position":"למשל עמדת לוסנה",
+  "Add this book in the Books tab first, then log the session.":"צריך להוסיף את הספר בלשונית ספרים ואז לרשום את התרגול.", "Enter the name of the ChessBase file.":"יש להזין את שם קובץ ה־ChessBase.",
+  "Pick the game. If it isn't listed, add it in Daily work → Studied games first.":"יש לבחור משחק. אם הוא לא ברשימה, צריך להוסיף אותו קודם בעבודה יומית ← משחקים נלמדים.",
+  "Pick the game. If it isn't listed, add it in Tournaments → Game history first.":"יש לבחור משחק. אם הוא לא ברשימה, צריך להוסיף אותו קודם בטורנירים ← היסטוריית משחקים.",
+  "Enter the score of each attempt, e.g. 24, 31, 27.":"יש להזין את התוצאה בכל ניסיון, למשל 24, 31, 27.", "Enter the page reached, or the exercises attempted and solved.":"יש להזין את העמוד שהגיעו אליו, או את התרגילים שנוסו ונפתרו.",
+  "Enter both exercises attempted and solved correctly, or leave both empty.":"יש להזין גם תרגילים שנוסו וגם שנפתרו נכון, או להשאיר את שניהם ריקים.",
+  "Enter how many puzzles were attempted and how many were solved correctly.":"יש להזין כמה פאזלים נוסו וכמה נפתרו נכון.", "Solved correctly can't be more than puzzles attempted.":"מספר הנפתרים לא יכול להיות גדול ממספר שנוסו.",
+  "No books yet — add one in the Books tab":"עדיין אין ספרים — אפשר להוסיף בלשונית ספרים", "No games yet — add them in Tournaments → Game history":"עדיין אין משחקים — אפשר להוסיף בטורנירים ← היסטוריית משחקים",
+  "No studied games yet — add them in Daily work → Studied games":"עדיין אין משחקים נלמדים — אפשר להוסיף בעבודה יומית ← משחקים נלמדים",
+  // categories and sources
+  "Tactics":"טקטיקה", "Endgames":"סיומים", "Openings":"פתיחות", "Calculation":"חישוב", "Game analysis":"ניתוח משחקים", "Strategy":"אסטרטגיה", "Reading":"קריאה", "Other":"אחר",
+  "Psychology":"פסיכולוגיה", "Games collection":"אוסף משחקים", "Biography":"ביוגרפיה", "Exercises":"תרגילים", "Book / workbook":"ספר / חוברת", "Puzzles (rated)":"פאזלים (מדורגים)",
+  "Tactics (rated)":"טקטיקה (מדורגת)", "Custom problem set":"סט בעיות מותאם", "Custom puzzles (by theme)":"פאזלים מותאמים (לפי נושא)", "Daily Puzzle":"פאזל יומי", "Puzzle Themes":"פאזלים לפי נושא", "Tactics course":"קורס טקטיקה",
+  // books
+  "Add book":"הוספת ספר", "Edit book":"עריכת ספר", "Delete book":"מחיקת ספר", "Title":"כותרת", "Author":"מחבר", "Topic":"נושא", "Total pages":"מספר עמודים", "Current page":"עמוד נוכחי",
+  "Updated automatically when you log reading":"מתעדכן אוטומטית ברישום קריאה", "Started":"התחלה", "Finished":"הסתיים", "Notes":"הערות", "Want to read":"לקריאה בהמשך", "Paused":"מושהה",
+  "Reading now":"בקריאה עכשיו", "Up next":"הבא בתור", "Log reading":"רישום קריאה", "Not started":"עוד לא התחיל", "No reading logged yet":"עדיין לא נרשמה קריאה", "Nothing in progress.":"אין ספר בקריאה.",
+  "e.g. Chess Structures":"למשל Chess Structures", "e.g. Skip chapter 4 for now; focus on the IQP chapters":"למשל: לדלג בינתיים על פרק 4; להתמקד בפרקי הרגלי המבודד",
+  "Enter the book's title.":"יש להזין את שם הספר.", "The current page is past the end of the book.":"העמוד הנוכחי אחרי סוף הספר.", "Book added":"הספר נוסף", "Book deleted":"הספר נמחק",
+  "The book is removed from the list. Practice sessions already logged with it stay in the practice log.":"הספר יוסר מהרשימה. תרגולים שכבר נרשמו איתו נשארים ביומן התרגול.",
+  // games
+  "Game history":"היסטוריית משחקים", "Import PGN":"ייבוא PGN", "Add game":"הוספת משחק", "Edit game":"עריכת משחק", "Delete game":"מחיקת משחק", "Delete this game?":"למחוק את המשחק?",
+  "Analysis filter":"סינון לפי ניתוח", "In analysis":"בניתוח", "Not analysed":"לא נותח", "Analysed by student":"נותח ע״י התלמיד", "Reviewed with coach":"נבדק עם המאמן", "Reviewed":"נבדק",
+  "Opponent":"יריב", "Side":"צבע", "Result":"תוצאה", "Analysis":"ניתוח", "Log analysis":"רישום ניתוח", "Check side":"לבדוק צבע", "White":"לבן", "Black":"שחור", "Win":"ניצחון", "Draw":"תיקו", "Loss":"הפסד",
+  "Opponent's name":"שם היריב", "Opponent's rating":"דירוג היריב", "Date played":"תאריך המשחק", "Time control":"קצב משחק", "Classical":"קלאסי", "Rapid":"רפיד", "Blitz":"בליץ",
+  "Not part of a tournament":"לא חלק מטורניר", "Event name":"שם האירוע", "e.g. Club blitz night":"למשל ערב בליץ במועדון", "Round":"סיבוב", "e.g. 4":"למשל 4", "Opening":"פתיחה",
+  "e.g. Caro-Kann, Advance":"למשל קארו־קאן, התקדמות", "Analysis status":"סטטוס ניתוח", "Key moments, what went wrong, what to work on":"רגעי מפתח, מה השתבש, על מה לעבוד",
+  "PGN (optional)":"PGN (לא חובה)", "Paste the game's PGN to replay it on the board":"הדבקת ה־PGN של המשחק כדי לנגן אותו על הלוח", "Unfinished / unknown":"לא הסתיים / לא ידוע",
+  "Enter the opponent's name.":"יש להזין את שם היריב.", "The PGN couldn't be read. Check it, or leave the field empty.":"לא ניתן לקרוא את ה־PGN. כדאי לבדוק אותו או להשאיר את השדה ריק.",
+  "Game added":"המשחק נוסף", "Game deleted":"המשחק נמחק", "No games match this filter.":"אין משחקים שמתאימים לסינון.", "No games found in that file.":"לא נמצאו משחקים בקובץ.",
+  "Showing games from":"מוצגים משחקים מ־",
+  // studied games
+  "Add studied game":"הוספת משחק נלמד", "Edit studied game":"עריכת משחק נלמד", "Game":"משחק", "Event":"אירוע", "Theme":"נושא", "Time":"זמן", "Year or date":"שנה או תאריך",
+  "Theme / what to learn":"נושא / מה ללמוד", "Found in":"נמצא ב־", "Lessons learned":"מה למדנו", "What the student took from this game":"מה התלמיד לקח מהמשחק",
+  "Enter the names of both players.":"יש להזין את שמות שני השחקנים.", "e.g. Capablanca, José Raúl":"למשל קפבלנקה, חוסה ראול", "e.g. Tartakower, Savielly":"למשל טרטקובר, סבלי",
+  "e.g. New York 1924":"למשל ניו יורק 1924", "e.g. Dutch Defence":"למשל ההגנה ההולנדית", "e.g. Rook endgame technique":"למשל טכניקה בסיומי צריחים",
+  "Chosen by coach":"נבחר ע״י המאמן", "Online database":"מאגר אונליין", "ChessBase":"ChessBase", "Studied game":"משחק נלמד",
+  // repertoire
+  "Add line":"הוספת וריאנט", "Add opening line":"הוספת וריאנט פתיחה", "Edit opening line":"עריכת וריאנט פתיחה", "Delete line":"מחיקת וריאנט", "Colour":"צבע",
+  "White's first move":"המסע הראשון של הלבן", "The move the student opens with":"המסע שבו התלמיד פותח", "Against":"נגד", "What the opponent plays that this line answers":"מה היריב משחק שהוריאנט הזה עונה עליו",
+  "Which move exactly":"איזה מסע בדיוק", "The student's line":"הוריאנט של התלמיד", "e.g. Open Sicilian with 3.d4, or Caro-Kann":"למשל סיציליאנית פתוחה עם 3.d4, או קארו־קאן", "ECO":"ECO",
+  "Who is developing the file":"מי מפתח את הקובץ", "Coach":"מאמן", "Last reviewed":"חזרה אחרונה", "Lines not reviewed for 6 months are flagged as Needs review automatically":"וריאנטים שלא חזרו עליהם 6 חודשים מסומנים אוטומטית כ״דורש חזרה״",
+  "Main lines":"וריאנטים עיקריים", "Key ideas, typical plans, lines still missing":"רעיונות מרכזיים, תוכניות אופייניות, וריאנטים שעדיין חסרים", "Enter the name of the student's line.":"יש להזין את שם הוריאנט.",
+  "Line added":"הוריאנט נוסף", "Line deleted":"הוריאנט נמחק", "Developing":"בפיתוח", "Learning":"בלמידה", "Studied":"נלמד", "Needs review":"דורש חזרה", "Reviewed today":"חזרנו היום",
+  "Never reviewed":"לא חזרו עליו", "over 6 months":"יותר מ־6 חודשים", "Marked as reviewed":"סומן שחזרו עליו", "All openings":"כל הפתיחות", "Filter by opening":"סינון לפי פתיחה",
+  "Search lines, moves, ECO, notes":"חיפוש וריאנטים, מסעים, ECO, הערות", "Search repertoire":"חיפוש ברפרטואר", "Filter by status":"סינון לפי סטטוס", "No answer yet against:":"עדיין אין תשובה נגד:",
+  "Less common:":"פחות נפוצים:", "No White lines match this filter.":"אין וריאנטים בלבן שמתאימים לסינון.", "No Black lines match this filter.":"אין וריאנטים בשחור שמתאימים לסינון.",
+  "No Black repertoire yet.":"עדיין אין רפרטואר בשחור.", "Other first moves":"מסעי פתיחה אחרים", "Other defences":"הגנות אחרות", "Any defence":"כל הגנה", "e.g. 1.b3 or 1...b6":"למשל 1.b3 או 1...b6",
+  // tournaments
+  "Upcoming":"קרובים", "Played":"שוחקו", "Add tournament":"הוספת טורניר", "Edit tournament":"עריכת טורניר", "Edit / result":"עריכה / תוצאה", "Add result":"הוספת תוצאה", "Add games":"הוספת משחקים",
+  "No upcoming tournaments.":"אין טורנירים קרובים.", "Completed tournaments appear here.":"טורנירים שהסתיימו יופיעו כאן.", "No expected score yet":"עדיין אין צפי", "Set it":"הגדרה",
+  "Expected score":"ניקוד צפוי", "Expected score:":"ניקוד צפוי:", "Expected":"צפוי", "→ Actual":"← בפועל", "Actual score":"ניקוד בפועל", "Start date":"תאריך התחלה", "End date":"תאריך סיום",
+  "Location":"מקום", "Rounds":"סיבובים", "Rating change":"שינוי דירוג", "Leave empty until results are in":"להשאיר ריק עד שהתוצאות מתפרסמות", "Preparation & reflection":"הכנה ורפלקציה",
+  "The student's own prediction, written before the first round":"התחזית של התלמיד, לפני הסיבוב הראשון", "The student's own prediction":"התחזית של התלמיד", "Add to rating history":"הוספה להיסטוריית הדירוג",
+  "Adds a new rating: the last one before the tournament plus the change, dated the last day":"מוסיף דירוג חדש: האחרון לפני הטורניר ועוד השינוי, בתאריך היום האחרון",
+  "Expected score saved":"הצפי נשמר", "Write it like 5/9 or 5.5/9.":"לכתוב כמו 5/9 או 5.5/9.", "exactly as expected":"בדיוק כצפוי", "from games":"מהמשחקים", "Worked out from the games in Game history":"חושב מהמשחקים בהיסטוריית המשחקים",
+  "Net rating change:":"שינוי דירוג נטו:", "Met or beat the expected score in":"עמד בצפי או עבר אותו ב־", "Tournament added":"הטורניר נוסף", "Tournament updated":"הטורניר עודכן", "Tournament deleted":"הטורניר נמחק",
+  "Delete this tournament?":"למחוק את הטורניר?", "— add the actual result":"— יש להוסיף את התוצאה בפועל",
+  "Write the expected score like 5/9 or 5.5/9 (and no more than the number of rounds).":"יש לכתוב את הצפי כמו 5/9 או 5.5/9 (ולא יותר ממספר הסיבובים).",
+  "Write the actual score like 5/9 or 5.5/9 (and no more than the number of rounds).":"יש לכתוב את התוצאה כמו 5/9 או 5.5/9 (ולא יותר ממספר הסיבובים).",
+  // payments
+  "Owed now":"חוב נוכחי", "Total charged":"סה״כ חויב", "Total paid":"סה״כ שולם", "Per session":"לשיעור", "Ledger":"כרטסת", "Add charge":"הוספת חיוב", "Item":"פריט", "Charge":"חיוב", "Paid":"שולם",
+  "Edit payment":"עריכת תשלום", "Add payment":"הוספת תשלום", "Edit charge":"עריכת חיוב", "Extra charges":"חיובים נוספים", "Amount":"סכום", "Method":"אמצעי תשלום", "Note":"הערה", "What for":"עבור מה",
+  "Bank transfer":"העברה בנקאית", "Cash":"מזומן", "Bit / PayBox":"ביט / פייבוקס", "Credit card":"כרטיס אשראי", "PayPal":"PayPal", "Payment added":"התשלום נוסף", "Payment updated":"התשלום עודכן",
+  "Payment deleted":"התשלום נמחק", "Delete this payment?":"למחוק את התשלום?", "Charge added":"החיוב נוסף", "Charge updated":"החיוב עודכן", "Charge deleted":"החיוב נמחק", "Delete this charge?":"למחוק את החיוב?",
+  "e.g. Package of 4 sessions":"למשל חבילה של 4 שיעורים", "e.g. Tournament entry fee, game analysis package":"למשל דמי השתתפות בטורניר, חבילת ניתוח משחקים",
+  "Charges appear here when sessions are marked done. Record payments as they come in.":"חיובים מופיעים כאן כשמסמנים שיעורים כבוצעו. את התשלומים רושמים כשהם מתקבלים.",
+  "Students overdue":"תלמידים באיחור", "Payments recorded":"תשלומים שנרשמו", "Balances":"יתרות", "Charged":"חויב", "Last payment":"תשלום אחרון", "Due":"לתשלום", "In credit":"בזכות",
+  "Recent payments":"תשלומים אחרונים", "No payments recorded yet.":"עדיין לא נרשמו תשלומים.", "Income":"הכנסות", "Year":"שנה", "Monthly CSV":"CSV חודשי", "Payments CSV":"CSV תשלומים",
+  "Month":"חודש", "Lessons":"שיעורים", "Received":"התקבל", "Charged counts lessons marked done and extra charges; Received counts payments recorded. Includes archived students.":"״חויב״ כולל שיעורים שסומנו כבוצעו וחיובים נוספים; ״התקבל״ כולל תשלומים שנרשמו. כולל תלמידים בארכיון.",
+  // assignments
+  "New assignment":"משימה חדשה", "Games in PGN and study tasks for your students":"משחקים ב־PGN ומשימות לימוד לתלמידים", "Filter assignments":"סינון משימות", "Assigned":"ניתנה",
+  "Nothing here.":"אין כאן כלום.", "Edit assignment":"עריכת משימה", "Create assignment":"יצירת משימה", "Delete assignment":"מחיקת משימה", "Type":"סוג", "Instructions":"הנחיות",
+  "e.g. 30 puzzles on pins, or Analyse your round 3 loss":"למשל 30 פאזלים על ריתוקים, או ניתוח ההפסד בסיבוב 3", "e.g. Find the moment the position turned. Write down your candidate moves on move 18.":"למשל: למצוא את הרגע שבו העמדה התהפכה. לרשום את המסעים המועמדים במסע 18.",
+  "Give the assignment a title.":"יש לתת למשימה כותרת.", "Assignment created":"המשימה נוצרה", "Assignment deleted":"המשימה נמחקה", "Marked done — waiting for your review":"סומנה כבוצעה — ממתינה לבדיקה שלך",
+  "Games":"משחקים", "Upload PGN":"העלאת PGN", "Paste PGN":"הדבקת PGN", "Download PGN":"הורדת PGN", "Open board":"פתיחת הלוח", "Add note":"הוספת הערה", "Edit note":"עריכת הערה", "Note for this game":"הערה למשחק",
+  "Drop .pgn files here, or use Upload PGN. Files with many games are split automatically.":"אפשר לגרור לכאן קובצי ‎.pgn או להשתמש בהעלאת PGN. קבצים עם הרבה משחקים מתפצלים אוטומטית.",
+  "No instructions written.":"לא נכתבו הנחיות.", "Coach feedback":"משוב המאמן", "What did the student find? What should they work on next?":"מה התלמיד מצא? על מה כדאי לעבוד בהמשך?",
+  "Save feedback":"שמירת משוב", "Save and mark reviewed":"שמירה וסימון כנבדקה", "Feedback saved":"המשוב נשמר", "Feedback saved and marked reviewed":"המשוב נשמר והמשימה סומנה כנבדקה",
+  "PGN text":"טקסט PGN", "Paste the PGN of one or more games.":"יש להדביק PGN של משחק אחד או יותר.", "No games found in that text.":"לא נמצאו משחקים בטקסט.", "Remove this game?":"להסיר את המשחק?",
+  "This assignment is full. Create another assignment for these games.":"המשימה מלאה. אפשר ליצור משימה נוספת למשחקים האלה.", "No games found. Check that the file is a PGN.":"לא נמצאו משחקים. כדאי לוודא שהקובץ הוא PGN.",
+  "Downloads aren't available here.":"הורדות לא זמינות כאן.", "The file wasn't saved.":"הקובץ לא נשמר.", "This assignment no longer exists.":"המשימה הזו כבר לא קיימת.", "Back to assignments":"חזרה למשימות",
+  "Analyse your game":"ניתוח המשחק שלך", "Study model games":"לימוד משחקי מופת", "Opening preparation":"הכנת פתיחה", "Strategy / find the plan":"אסטרטגיה / מציאת תוכנית", "Due:":"להגשה:",
+  "moves couldn't be read":"לא ניתן לקרוא את המסעים", "The moves in this game couldn't be read, so here is the original text.":"לא ניתן לקרוא את המסעים במשחק, אז הנה הטקסט המקורי.",
+  // board viewer
+  "Chess board":"לוח שחמט", "Start":"התחלה", "Previous move":"המסע הקודם", "Next move":"המסע הבא", "End":"סוף", "Flip board":"היפוך הלוח", "Use the ← → keys to step through moves.":"החצים ← → עוברים בין המסעים.",
+  // settings
+  "Coaching details":"פרטי האימון", "Your name":"השם שלך", "Currency symbol":"סמל מטבע", "Default fee per session":"מחיר ברירת מחדל לשיעור", "Flag unpaid balances after (days)":"סימון חוב פתוח אחרי (ימים)",
+  "Week starts on":"השבוע מתחיל ב־", "Save settings":"שמירת הגדרות", "Settings saved":"ההגדרות נשמרו", "Backup":"גיבוי", "Download backup":"הורדת גיבוי", "Restore from backup":"שחזור מגיבוי",
+  "Your data is saved to your account and is private to you, even if you share this page.":"הנתונים נשמרים בחשבון שלך ופרטיים לך, גם אם משתפים את הדף.",
+  "Your data is saved in this browser only. Download a backup regularly.":"הנתונים נשמרים רק בדפדפן הזה. כדאי להוריד גיבוי באופן קבוע.", "The backup wasn't saved.":"הגיבוי לא נשמר.",
+  "That file isn't a valid backup.":"הקובץ אינו גיבוי תקין.", "That file isn't a Coach's Board backup.":"הקובץ אינו גיבוי של הלוח של המאמן.", "Restore backup?":"לשחזר מגיבוי?", "Backup restored":"הגיבוי שוחזר",
+  "English":"English",
+  // search
+  "Search everything":"חיפוש בכול", "Student, opponent, opening, lesson topic, assignment…":"תלמיד, יריב, פתיחה, נושא שיעור, משימה…",
+  "Search across all students: names, lesson topics and notes, games and opponents, openings and repertoire lines, assignments, tournaments and books. Press":"חיפוש בכל התלמידים: שמות, נושאי שיעורים והערות, משחקים ויריבים, פתיחות ורפרטואר, משימות, טורנירים וספרים. אפשר ללחוץ על",
+  "anywhere to jump here.":"מכל מקום כדי להגיע לכאן.", "Lesson notes":"הערות שיעור",
+  // misc
+  "Payment":"תשלום", "Session":"שיעור"
+};
+Object.assign(HE, {
+  "With White":"עם לבן", "With Black":"עם שחור", "by coach":"ע״י המאמן", "by student":"ע״י התלמיד", "auto":"אוטומטית", "Reading history":"היסטוריית קריאה", "Showing":"מוצגים",
+  "event":"אירוע", "events":"אירועים", "on average":"בממוצע", "point vs. expectation":"נקודות ביחס לצפי", "points vs. expectation":"נקודות ביחס לצפי",
+  "This assignment is full — split the rest into another assignment":"המשימה מלאה — את השאר אפשר לפצל למשימה נוספת", "Edit the message, then send it.":"אפשר לערוך את ההודעה ואז לשלוח.",
+  "No assignments yet. Create one, then upload the PGN of the games you want the student to work on.":"עדיין אין משימות. אפשר ליצור משימה ואז להעלות PGN של המשחקים שהתלמיד יעבוד עליהם.",
+  "Lessons not marked done":"שיעורים שלא סומנו כבוצעו", "No lesson planned":"לא מתוכנן שיעור", "Lesson summary":"סיכום שיעור", "Move session":"העברת שיעור",
+  "No assignments yet. Add a task like “30 puzzles on pins”, or upload games in PGN for":"עדיין אין משימות. אפשר להוסיף משימה כמו ״30 פאזלים על ריתוקים״, או להעלות משחקים ב־PGN עבור",
+  "The line, its moves and notes will be removed. This can't be undone.":"הוריאנט, המסעים וההערות יימחקו. אי אפשר לבטל את הפעולה.",
+  "FIDE":"פיד״ה", "FIDE Rapid":"פיד״ה רפיד", "FIDE Blitz":"פיד״ה בליץ", "ICF":"איגוד", "min":"דק׳", "Marked done":"סומן כבוצע",
+  "lines":"וריאנטים", "line":"וריאנט", "for":"עבור", "today":"היום", "yesterday":"אתמול", "Given":"ניתנה", "Status:":"סטטוס:"
+});
+// Which of the numbers in a phrase decides singular / plural is always the first captured one.
+const heAgo = x=>{ if (x==="today") return "היום"; if (x==="yesterday") return "אתמול";
+  let m = /^(\d+) days? ago$/.exec(x); if (m) return +m[1]===1 ? "לפני יום" : "לפני "+m[1]+" ימים";
+  m = /^(\d+) months? ago$/.exec(x); if (m) return +m[1]===1 ? "לפני חודש" : "לפני "+m[1]+" חודשים"; return x; };
+const heT = x=>trCore(x) ?? x;
+const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
+const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
+const HE_RX = [
+  [/^(\d+) min$/, "$1 דק׳"],
+  [/^(\d+) active$/, "$1 פעילים"],
+  [/^(\d+) reading now$/, "$1 בקריאה"], [/^(\d+) finished in (\d{4})$/, "$1 הסתיימו ב־$2"], [/^(\d+) pages in the last 4 weeks$/, "$1 עמודים ב־4 השבועות האחרונים"],
+  [/^(\d+) studied$/, "$1 נלמדו"], [/^(\d+) learning$/, "$1 בלמידה"],
+  [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
+  [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
+  [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^of (\d+)$/, "מתוך $1"],
+  [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
+  [/^(\d+) attempts? in period$/, "$1 ניסיונות בתקופה"], [/^(\d+) attempts?$/, "$1 ניסיונות"], [/^best (\d+)$/, "שיא $1"], [/^avg ([\d.]+)$/, "ממוצע $1"], [/^score (\d+)$/, "תוצאה $1"],
+  [/^(\d+) entries$/, "$1 רישומים"], [/^started at (\d+), now (\d+) \((.+)\)$/, "התחיל ב־$1, עכשיו $2 ($3)"],
+  [/^(\d+) games? by other players$/, "$1 משחקים של שחקנים אחרים"], [/^([\d.]+) h of analysis logged$/, "$1 שעות ניתוח"], [/^themes: (.+)$/, "נושאים: $1"],
+  [/^(\d+) sessions? (?:has a clash|have clashes) (this week|in these days|in the next 4 weeks)$/, (m,n,w)=>n+" שיעורים עם התנגשות "+({"this week":"השבוע","in these days":"בימים האלה","in the next 4 weeks":"ב־4 השבועות הקרובים"})[w]],
+  [/^(\d{4}) total$/, "סה״כ $1"],
+  [/^(\d+) games?$/, (m,n)=>+n===1 ? "משחק אחד" : n+" משחקים"], [/^(\d+) results?$/, (m,n)=>+n===1 ? "תוצאה אחת" : n+" תוצאות"],
+  [/^(\d+) days overdue$/, "באיחור של $1 ימים"],
+  [/^A game (.+) played$/, "משחק של $1"], [/^(\S+) played$/, "הצבע של $1"],
+  [/^Planned \(next (\d+) of (\d+)\)$/, "מתוכנן (הבאים $1 מתוך $2)"],
+  [/^(.+) \((\d+)\)$/, (m,x,n)=>{ const t = trCore(x); return t===undefined ? undefined : t+" ("+n+")"; }],
+  [/^Added to (.+)’s balance$/, "יתווסף ליתרה של $1"],
+  [/^([^—]+) added to (.+)’s balance$/, "$1 נוסף ליתרה של $2"],
+  [/^(.+): no puzzles$/, "$1: אין פאזלים"], [/^(.+): (\d+)\/(\d+) correct$/, "$1: $2/$3 נכונים"],
+  [/^(\d+)\/(\d+) correct \((\d+)%\)$/, "$1/$2 נכונים ($3%)"], [/^puzzle rating (\d+)$/, "דירוג פאזלים $1"], [/^(\d+) solved$/, "$1 נפתרו"], [/^(\d+) positions$/, "$1 עמדות"],
+  [/^played (.+)$/, "שוחק $1"],
+  [/^(.*) \(p\. (\d+)(\/\d+)?\)$/, "$1 (עמ׳ $2$3)"], [/^to p\. (\d+)$/, "עד עמ׳ $1"], [/^p\. (\d+)(\/\d+)?$/, "עמ׳ $1$2"], [/^(\d+) \(([\d.]+) h\)$/, "$1 ($2 שעות)"],
+  [/^Due: (.+)$/, "להגשה: $1"], [/^due (.+)$/, "להגשה $1"], [/^Given (.+)$/, "ניתנה $1"],
+  [/^Edit the message, then send it to (.+)\.$/, "אפשר לערוך את ההודעה ולשלוח אל $1."],
+  [/^Edit (.+)$/, "עריכת $1"], [/^‹ (.+)$/, (m,x)=>"› "+heT(x)], [/^(.+) ↻$/, (m,x)=>heT(x)+" ↻"],
+  [/^(.+) from (.+) will be removed from the history\.$/, (m,a,d)=>a.replace(/^(FIDE Rapid|FIDE Blitz|FIDE|ICF|Online)/, heRating)+" מ־"+d+" יוסר מההיסטוריה."],
+  [/^(FIDE|ICF) checked (.+)$/, (m,a,d)=>heRating(a)+" נבדק "+d],
+  [/^(.+) rating entries$/, (m,a)=>"רישומי דירוג "+heRating(a)],
+  [/^Finished (.+)$/, "הסתיים $1"], [/^took (\d+) weeks?$/, "לקח $1 שבועות"],
+  [/^From the (\d+) games? in Game history: (\S+)( \(not every round has a game yet\))?$/, (m,n,sc,part)=>"לפי "+n+" המשחקים בהיסטוריה: "+sc+(part?" (עדיין אין משחק לכל סיבוב)":"")],
+  [/^From (.+) until (.+)$/, "מ־$1 עד $2"], [/^From (.+)$/, "מ־$1"],
+  [/^(Good morning|Good afternoon|Good evening), (.+)$/, (m,g,n)=>HE[g]+", "+n],
+  [/^In (\d+) days$/, "בעוד $1 ימים"],
+  [/^Last paid (.+)$/, "שולם לאחרונה $1"], [/^Last practice (\d+) days ago$/, "תרגול אחרון לפני $1 ימים"], [/^Last read (.+)$/, (m,x)=>"נקרא לאחרונה "+heAgo(x)], [/^Last lesson (.+)$/, "שיעור אחרון $1"],
+  [/^Next: (.+)$/, "הבא: $1"],
+  [/^No White repertoire yet\. Start with the first move (.+) plays, then add an answer to each defence\.$/, "עדיין אין רפרטואר בלבן. כדאי להתחיל מהמסע הראשון של $1, ואז להוסיף תשובה לכל הגנה."],
+  [/^No assignments yet\. Add a task like “30 puzzles on pins”, or upload games in PGN for (.+) to analyse\.$/, "עדיין אין משימות. אפשר להוסיף משימה כמו ״30 פאזלים על ריתוקים״, או להעלות משחקים ב־PGN לניתוח של $1."],
+  [/^No books yet\. Add the books (.+) is working through — then log reading here or from Daily work, and the current page, last-read date and pace update on their own\.$/, "עדיין אין ספרים. אפשר להוסיף את הספרים של $1 — ואז לרשום קריאה כאן או בעבודה יומית, והעמוד הנוכחי, תאריך הקריאה האחרון והקצב יתעדכנו מעצמם."],
+  [/^No games yet\. Add them one by one, or import a PGN file from a tournament — games are matched to (.+)’s side and to tournaments automatically\.$/, "עדיין אין משחקים. אפשר להוסיף אחד־אחד או לייבא קובץ PGN מטורניר — המשחקים משויכים אוטומטית לצבע של $1 ולטורנירים."],
+  [/^No studied games yet\. Add classic or model games (.+) analyses — from a book, a ChessBase database, or games you choose — and log each analysis session against them\.$/, "עדיין אין משחקים נלמדים. אפשר להוסיף משחקי מופת לניתוח של $1 — מספר, ממאגר ChessBase או משחקים שבוחרים — ולרשום כל תרגול ניתוח."],
+  [/^No weekly slot\. If (.+) has a fixed lesson time, add it here and the sessions are planned automatically, 8 weeks ahead\.$/, "אין שיעור קבוע. אם יש שעת שיעור קבועה עבור $1, אפשר להוסיף אותה כאן והשיעורים יתוכננו אוטומטית 8 שבועות קדימה."],
+  [/^Not opened in (\d+) days$/, "לא נפתח $1 ימים"],
+  [/^Nothing matches “(.*)”\.$/, "אין תוצאות עבור ״$1״."],
+  [/^(\d+) rounds$/, "$1 סיבובים"],
+  [/^Oldest unpaid charge is from (.+) — (\d+) days ago\.$/, "החיוב הישן ביותר שלא שולם הוא מ־$1 — לפני $2 ימים."],
+  [/^(.+) ·$/, (m,x)=>{ const t = trCore(x); return t===undefined ? undefined : t+" ·"; }], [/^· (.+)$/, (m,x)=>{ const t = trCore(x); return t===undefined ? undefined : "· "+t; }],
+  [/^Owes (.+)$/, "חוב: $1"], [/^(.+) owed$/, "חוב של $1"], [/^In credit: (.+)$/, "בזכות: $1"],
+  [/^(\d+) half-moves$/, "$1 חצאי מסעים"],
+  [/^Rating (\d+)(?: \((.+)\))?$/, (m,r,d)=>"דירוג "+r+(d?" ("+d+")":"")],
+  [/^Reviewed (today|\d+ days? ago|\d+ months? ago)$/, (m,x)=>"חזרה אחרונה "+heAgo(x)],
+  [/^Session moved to (.+)$/, "השיעור הועבר ל־$1"], [/^Session: (.+)$/, "שיעור: $1"],
+  [/^Showing (\d+) of (\d+)$/, "מוצגים $1 מתוך $2"],
+  [/^Status: (.+)$/, (m,x)=>"סטטוס: "+heT(x)], [/^([^·—]+) charged$/, "$1 חויבו"],
+  [/^day (\d+) of (\d+)$/, "יום $1 מתוך $2"],
+  [/^over (\d+) of the last 7 days$/, "ב־$1 מתוך 7 הימים האחרונים"], [/^(\d+)-day streak$/, "רצף של $1 ימים"], [/^over (\d+) events?$/, "ב־$1 אירועים"],
+  [/^(.+) vs (.+) \((White|Black)\)(.*)$/, (m,a,b,c,r)=>a+" נגד "+b+" ("+heSide(c)+")"+r],
+  [/^vs (.+) \((White|Black)\)(.*)$/, (m,b,c,r)=>"נגד "+b+" ("+heSide(c)+")"+r],
+  [/^vs (.+)$/, (m,x)=>"נגד "+heT(x)],
+  [/^Yes — (.+) list$/, (m,x)=>"כן — רשימת "+heRating(x)],
+  [/^↻ Every (\w+)$/, (m,d)=>"↻ כל "+(HE[d]||d)],
+  [/^Another session with (.+) (\d\d:\d\d–\d\d:\d\d)$/, "שיעור נוסף עם $1 $2"], [/^(.+)’s session (\d\d:\d\d–\d\d:\d\d)$/, "השיעור של $1 $2"],
+  [/^(.+) is playing (.+) that day$/, "$1 בטורניר $2 באותו יום"],
+  [/^(⚠ .*?\d\d:\d\d: )(.+)$/, (m,a,b)=>a+b.split("; ").map(heT).join("; ")],
+  [/^Clash: (.+)\. Press Save again to keep it anyway\.$/, (m,x)=>"התנגשות: "+x.split("; ").map(heT).join("; ")+". לחיצה נוספת על שמירה תשמור בכל זאת."],
+  [/^Clashes with (\d+) upcoming sessions? \(e\.g\. (.+?): (.+)\)\. Press Save again to keep it anyway\.$/, (m,n,d,x)=>"מתנגש עם "+n+" שיעורים קרובים (למשל "+d+": "+heT(x)+"). לחיצה נוספת על שמירה תשמור בכל זאת."],
+  [/^new fee applied to (\d+) planned sessions?$/, "המחיר החדש הוחל על $1 שיעורים מתוכננים"],
+  [/^New personal best in (.+): (\d+) \(was (\d+)\)$/, "שיא אישי חדש ב־$1: $2 (לפני כן $3)"],
+  [/^First (.+) entry — personal best set at (\d+)$/, "רישום ראשון של $1 — שיא אישי: $2"],
+  [/^(\S+) finished “(.+)”$/, "$1 סיים את ״$2״"],
+  [/^Weekly slot added for (.+)$/, "נוסף שיעור קבוע עבור $1"],
+  [/^Imported (\d+) games?$/, "יובאו $1 משחקים"], [/^Check the side played for (\d+) — marked “Check side”$/, "יש לבדוק את הצבע ב־$1 משחקים — סומנו ״לבדוק צבע״"],
+  [/^(\d+) too large to import\.?$/, "$1 גדולים מדי לייבוא."], [/^Added (\d+) games?$/, "נוספו $1 משחקים"],
+  [/^(\d+) couldn't be read move by move but the text was kept\.?$/, "$1 לא נקראו מסע אחר מסע, אבל הטקסט נשמר."],
+  [/^(.+) is too large \(over (\d) MB\)\.$/, "$1 גדול מדי (מעל $2MB)."],
+  [/^(.+) rating (\d+) added to the history$/, (m,r,v)=>"דירוג "+heRating(r)+" "+v+" נוסף להיסטוריה"],
+  [/^Too much data to save for (.+)$/, "יותר מדי נתונים לשמירה עבור $1"],
+  [/^No payments recorded in (\d{4})\.$/, "לא נרשמו תשלומים ב־$1."],
+  [/^There’s no (.+) rating from before this tournament to add the change to\. Add it in Overview → Add rating first, or choose No\.$/, (m,r)=>"אין דירוג "+heRating(r)+" מלפני הטורניר להוסיף אליו את השינוי. אפשר להוסיף אותו קודם בסקירה ← הוספת דירוג, או לבחור ״לא״."],
+  [/^Page (\d+) is past the end of the book \((\d+) pages\)\.$/, "עמוד $1 אחרי סוף הספר ($2 עמודים)."],
+  [/^Another student already has (FIDE|ICF) ID (\d+)\.$/, (m,k,n)=>"לתלמיד אחר כבר יש מספר "+(k==="FIDE"?"פיד״ה":"איגוד")+" "+n+"."],
+  [/^Delete (.+)\?$/, "למחוק את $1?"],
+  [/^The assignment and its (\d+) uploaded game\(s\) will be removed\.$/, "המשימה ו־$1 המשחקים שהועלו יימחקו."],
+  [/^(.+) will be removed from the game history\. Analysis sessions already logged stay in the practice log\.$/, "$1 יוסר מהיסטוריית המשחקים. תרגולי ניתוח שכבר נרשמו נשארים ביומן."],
+  [/^(.+) will be removed\. Analysis sessions already logged stay in the practice log\.$/, "$1 יוסר. תרגולי ניתוח שכבר נרשמו נשארים ביומן."],
+  [/^(.+) will be removed from the assignment\.$/, "$1 יוסר מהמשימה."],
+  [/^This adds (\d+) students from the file\. Students with the same ID are replaced; others are kept\.$/, "יתווספו $1 תלמידים מהקובץ. תלמידים עם אותו מזהה יוחלפו; האחרים יישמרו."],
+  [/^The (\d+) upcoming planned sessions? it created will be removed too$/, "$1 השיעורים המתוכננים שנוצרו ממנו יימחקו גם הם"],
+  [/^No phone or email saved for (.+)\. Add one in Edit profile to send in one tap\.$/, "לא נשמר טלפון או אימייל עבור $1. אפשר להוסיף בעריכת הפרופיל כדי לשלוח בלחיצה."],
+  [/^(\d+)% of this assignment's space used\.$/, "נוצלו $1% מהמקום במשימה."],
+  [/^Unpaid is anything older than (\d+) days — change this in Settings$/, "חוב נחשב פתוח אחרי $1 ימים — אפשר לשנות בהגדרות"],
+  [/^(\d+) h in total$/, "$1 שעות בסה״כ"], [/^~(\d+) pages\/week$/, "~$1 עמודים בשבוע"], [/^done in about (\d+) weeks?$/, "יסתיים בעוד כ־$1 שבועות"],
+  [/^([+−-][\d½]+%?) (?:points? )?(above|below) expectation$/, (m,v,d)=>v+(d==="above"?" מעל הצפי":" מתחת לצפי")],
+  [/^matching “(.*)”$/, "שתואמים ל״$1״"],
+  [/^No practice for (\d+)\+ days$/, "ללא תרגול $1+ ימים"],
+  [/^Amount \((.+)\)$/, "סכום ($1)"], [/^Fee \((.+)\)$/, "מחיר ($1)"], [/^Fee per session \((.+)\)$/, "מחיר לשיעור ($1)"]
+];
 
 /* ---------- boot ---------- */
 render();
