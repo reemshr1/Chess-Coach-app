@@ -2565,8 +2565,18 @@ function applyOp(s, op, coachSide){
     // a change must be for one of the student's own upcoming lessons, and only one change per lesson at a time
     const les = kind!=="new" && s.sessions.find(x=>x.id===it.sessionId);
     if (kind!=="new" && (!les || les.status!=="planned" || les.date<today() || list("requests").some(r=>r.status==="pending" && r.sessionId===les.id && r.id!==it.id))) return false;
+    // a new change for a lesson answers an earlier declined move ("try another time")
+    if (les) list("requests").forEach(r=>{ if (r.needsAnswer && r.sessionId===les.id){ r.needsAnswer = false; r.answer = "retry"; r.answered = (op.at||"").slice(0,10)||today(); } });
     const L = list("requests"); if (!L.some(r=>r.id===it.id)) L.push(Object.assign({id:it.id, kind, date:it.date, time:it.time||"", duration:+it.duration||60, format:it.format||"In person", note:it.note||"", status:"pending", asked:(op.at||"").slice(0,10)||today()},
       les ? {sessionId:les.id, was:{date:les.date, time:les.time||"", duration:+les.duration||60}} : {}));
+    return true;
+  }
+  // After the coach declined a move: cancel the lesson, or keep it as planned.
+  if (t==="move.answer"){
+    const r = list("requests").find(x=>x.id===op.id && x.needsAnswer); if (!r || !["cancel","keep"].includes(op.choice)) return false;
+    const les = s.sessions.find(x=>x.id===r.sessionId);
+    if (op.choice==="cancel" && les && les.status==="planned" && les.date>=today()) les.status = "cancelled";
+    r.needsAnswer = false; r.answer = op.choice; r.answered = (op.at||"").slice(0,10)||today();
     return true;
   }
   if (t==="request.cancel"){ const r = list("requests").find(x=>x.id===op.id); if (r && r.status==="pending") r.status = "cancelled"; return true; }
@@ -2917,11 +2927,12 @@ function pHome(v, s){
       '<div class="stat"><div class="v num'+(todo.some(a=>a.due&&a.due<t)?" money-owed":"")+'">'+todo.length+'</div><div class="l">Assignments to do</div></div>'+
       '<div class="stat"><div class="v num">'+week+'</div><div class="l">Practice minutes this week</div></div>'+
       '<div class="stat"><div class="v num">'+(rt?esc(rt.value):"—")+'</div><div class="l">'+(rt?esc(rt.source||mainSource(s))+" rating":"Rating")+'</div></div></div>'+
+    answerBox(s)+
     '<div class="grid g2">'+
     updatesPanel(s)+
     panel("Coming up", (lessons.length||tours.length||pend.length) ? '<ul class="list">'+
-        lessons.map(x=>{ const pc = pendingChange(s, x); return '<li><div class="main"><div class="title">Lesson'+(pc?' <span class="tag warn">'+(pc.kind==="cancel"?"Cancel requested":"Move requested")+'</span>':'')+'</div><div class="small muted">'+[x.format, x.duration?x.duration+" min":"", x.topics].filter(Boolean).map(esc).join(" · ")+'</div>'+
-          (changeable(x)?'<button class="btn small ghost" data-a="les" data-id="'+x.id+'" style="margin-top:4px;padding:2px 8px">'+(pc?"Withdraw request":"Can\'t make it?")+'</button>':'')+'</div><div style="text-align:end" class="small">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+(x.time?'<div class="muted">'+esc(x.time)+'</div>':'')+'</div></li>'; }).join("")+
+        lessons.map(x=>{ const pc = pendingChange(s, x); return '<li><div class="main"><div class="title">Lesson'+(needsAnswer(s, x)?' <span class="tag warn">Answer needed</span>':'')+(pc?' <span class="tag warn">'+(pc.kind==="cancel"?"Cancel requested":"Move requested")+'</span>':'')+'</div><div class="small muted">'+[x.format, x.duration?x.duration+" min":"", x.topics].filter(Boolean).map(esc).join(" · ")+'</div>'+
+          (changeable(x)?'<button class="btn small ghost" data-a="les" data-id="'+x.id+'" style="margin-top:4px;padding:2px 8px">'+(needsAnswer(s, x)?"Answer":pc?"Withdraw request":"Can\'t make it?")+'</button>':'')+'</div><div style="text-align:end" class="small">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+(x.time?'<div class="muted">'+esc(x.time)+'</div>':'')+'</div></li>'; }).join("")+
         tours.map(x=>'<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+[x.location, x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">'+esc(fmtShort(x.start))+'</span></li>').join("")+
         pend.filter(r=>r.kind!=="cancel").map(r=>'<li><div class="main"><div class="title">'+(r.kind==="move"?"Move request":"Lesson request")+'</div><div class="small muted">'+esc(fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"}))+' · '+esc(r.time)+'</div></div><span class="tag warn">Waiting for your coach</span></li>').join("")+'</ul>'
       : '<p class="empty">Nothing planned yet.</p>', '<a class="btn small" href="#/schedule">Schedule</a>')+
@@ -2931,7 +2942,8 @@ function pHome(v, s){
       (s.notes?'<h3 class="subh">From your coach</h3><p class="pre" style="margin:0">'+esc(s.notes)+'</p>':''))+
     panel("Recent lessons", recent.length ? '<ul class="list">'+recent.map(x=>'<li style="display:block"><div class="title">'+esc(fmtDate(x.date))+(x.topics?' — '+esc(x.topics):'')+'</div>'+(x.notes?'<div class="small pre">'+esc(x.notes)+'</div>':'')+'</li>').join("")+'</ul>' : '<p class="empty">No lessons yet.</p>')+
     '</div>';
-  bindActions(v,{ req:()=>requestLesson(s), log:()=>openPractice(s, null), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
+  bindActions(v,{ ans:id=>{ const [rid, c] = id.split("|"), r = (s.requests||[]).find(x=>x.id===rid); if (r) answerMove(s, r, c); },
+    req:()=>requestLesson(s), log:()=>openPractice(s, null), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
     hwdone:id=>{ const a = state.assignments.find(x=>x.id===id); if (!a) return; a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — your coach will review it"); } });
 }
 // Start times (every 30 minutes) at which a lesson of `dur` minutes fits in the coach's open windows that day.
@@ -2951,7 +2963,8 @@ function studentUpdates(s){
       else if (r.kind==="move") out.push({date:r.decided, kind:"ok", text:"Your lesson moved to "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"});
       else out.push({date:r.decided, kind:"ok", text:"Your coach approved your lesson on "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); }
     else if (r.status==="declined") out.push({date:r.decided, kind:"flag", text:r.kind==="cancel" ? "Your request to cancel the lesson on "+day(r.was.date)+" was declined — the lesson stays"
-      : r.kind==="move" ? "Your request to move the lesson on "+day(r.was.date)+" was declined — it stays as planned" : "Your request for "+day(r.date)+" "+r.time+" was declined — try another time", href:"#/schedule"}); });
+      : r.kind==="move" ? (r.needsAnswer ? "Your coach can't meet at the new time — choose what to do with your lesson on "+day(r.was.date)
+          : r.answer==="cancel" ? "You cancelled your lesson on "+day(r.was.date) : r.answer==="keep" ? "You kept your lesson on "+day(r.was.date)+" as planned" : "Your coach couldn't meet at the new time for your lesson on "+day(r.was.date)) : "Your request for "+day(r.date)+" "+r.time+" was declined — try another time", href:"#/schedule"}); });
   state.assignments.forEach(a=>{
     if (a.assigned && a.assigned>=from && a.status==="Assigned") out.push({date:a.assigned, kind:"board", text:"New assignment: "+a.title+(a.due?" (due "+fmtShort(a.due)+")":""), href:"#/assignment/"+a.id});
     if (a.status==="Reviewed" && a.reviewedOn && a.reviewedOn>=from) out.push({date:a.reviewedOn, kind:"ok", text:(a.feedback?"New feedback on ":"Reviewed: ")+a.title, href:"#/assignment/"+a.id}); });
@@ -2967,16 +2980,38 @@ function updatesPanel(s){
   return panel("Updates", '<ul class="list">'+ups.map(u=>'<li><div class="main"><div class="title"><a href="'+u.href+'">'+esc(u.text)+'</a></div><div class="small muted">'+esc(fmtDate(u.date,{weekday:"short",day:"numeric",month:"short"}))+'</div></div>'+(u.date>=lastSeenUpdates && lastSeenUpdates?'<span class="tag '+u.kind+'">New</span>':'')+'</li>').join("")+'</ul>');
 }
 const pendingChange = (s, x)=>(s.requests||[]).find(r=>r.status==="pending" && r.sessionId===x.id);
+// A move the coach declined, waiting for the student to say what to do with the lesson.
+const needsAnswer = (s, x)=>(s.requests||[]).find(r=>r.needsAnswer && r.sessionId===x.id && x.status==="planned" && x.date>=today());
+function answerMove(s, r, choice){
+  const les = s.sessions.find(x=>x.id===r.sessionId); if (!les) return;
+  if (choice==="retry"){ lessonActions(s, les, true); return; }
+  const go = ()=>{ const op = {type:"move.answer", id:r.id, choice}; store.send(op); applyOp(s, op, false); render();
+    toast(choice==="cancel" ? "Lesson cancelled — your coach will see it" : "Lesson kept as planned"); };
+  const when = fmtDate(les.date,{weekday:"long",day:"numeric",month:"short"})+(les.time?" at "+les.time:"");
+  if (choice==="cancel") confirmBox("Cancel the lesson?", "Your lesson on "+when+" will be cancelled.", "Cancel lesson", go); else go();
+}
+function answerBox(s){
+  const open = (s.requests||[]).filter(r=>r.needsAnswer).map(r=>({r, les:s.sessions.find(x=>x.id===r.sessionId)})).filter(o=>o.les && needsAnswer(s, o.les));
+  if (!open.length) return "";
+  const day = d=>fmtDate(d,{weekday:"long",day:"numeric",month:"short"});
+  return open.map(({r, les})=>'<section class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="panel-head"><h2>Answer needed</h2><span class="tag warn">Your lesson on '+esc(day(les.date))+'</span></div>'+
+    '<p style="margin:0 0 6px">Your coach can\'t meet on '+esc(day(r.date))+' at '+esc(r.time)+'. What would you like to do with your lesson on '+esc(day(les.date))+(les.time?' at '+esc(les.time):'')+'?</p>'+
+    (r.reply?'<p class="small" style="margin:0 0 10px"><b>Your coach:</b> '+esc(r.reply)+'</p>':'')+
+    '<div class="row-actions"><button class="btn" data-a="ans" data-id="'+r.id+'|cancel">Cancel the lesson</button><button class="btn" data-a="ans" data-id="'+r.id+'|keep">Keep it as planned</button><button class="btn primary" data-a="ans" data-id="'+r.id+'|retry">Try another time</button></div></section>').join("");
+}
 // A lesson the student can still ask to change: planned, not yet started.
 const changeable = x=>x.status==="planned" && (x.date>today() || (x.date===today() && (toMin(x.time)??0) > new Date().getHours()*60+new Date().getMinutes()));
-function lessonActions(s, x){
+function lessonActions(s, x, retry){
   const day = fmtDate(x.date,{weekday:"long",day:"numeric",month:"short"})+(x.time?" · "+x.time:"");
-  const pc = pendingChange(s, x);
+  const pc = pendingChange(s, x), na = !retry && needsAnswer(s, x);
+  if (na) return openForm({title:"Lesson on "+day, submit:"Continue", fields:[
+      {name:"c",label:"Your coach can't meet at the time you asked. What would you like to do?",type:"select",options:[["keep","Keep it as planned"],["cancel","Cancel the lesson"],["retry","Try another time"]],value:"keep",full:true}],
+    onSubmit:d=>{ setTimeout(()=>answerMove(s, na, d.c), 0); }});
   if (pc) return confirmBox("Withdraw your request?", "You asked to "+(pc.kind==="cancel"?"cancel":"move")+" the lesson on "+day+". Withdraw that request?", "Withdraw", ()=>cancelRequest(s, pc.id));
   if (!changeable(x)){ toast(x.status==="done" ? "This lesson is done" : "This lesson can't be changed any more"); return; }
   const picks = !!s.freeSet, free = s.free||[], dates = [...new Set(free.map(f=>f.date))].sort();
   openForm({title:"Lesson on "+day, submit:"Send to your coach", fields:[
-      {name:"what",label:"What do you need?",type:"select",options:[["cancel","I can't make it — cancel the lesson"],["move","Move it to another time"]],value:"cancel",full:true},
+      {name:"what",label:"What do you need?",type:"select",options:[["cancel","I can't make it — cancel the lesson"],["move","Move it to another time"]],value:retry?"move":"cancel",full:true},
       picks ? {name:"date",label:"New date",type:"select",options:dates.length?dates.map(d=>[d, fmtDate(d,{weekday:"long",day:"numeric",month:"short"})]):[["","No free time in the coming weeks"]],value:dates[0]||"",show:v=>v.what==="move"}
             : {name:"date",label:"New date",type:"date",value:x.date,show:v=>v.what==="move"},
       picks ? {name:"time",label:"New start time",type:"select",value:"",show:v=>v.what==="move",options:v=>{ const ts = startTimes(free, v.date, +x.duration||60); return ts.length ? ts : [["","No free time that day for this length"]]; }}
@@ -3138,14 +3173,26 @@ function pDashboard(v){
   bindActions(v,{ done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}), backup:()=>downloadBackup(),
     approve:id=>{ const [s,r] = req(id); if (r) approveRequest(s,r); },
     decline:id=>{ const [s,r] = req(id); if (!r) return;
+      if (r.kind==="move") return openForm({title:"Can't meet then — "+s.name, submit:"Decline the move", fields:[
+          {name:"note",label:"Message to "+s.name.split(" ")[0]+" (optional)",type:"textarea",value:"",placeholder:"e.g. How about Sunday at 17:00?"}],
+        onSubmit:d=>{ r.status = "declined"; r.decided = today(); r.reply = d.note; r.needsAnswer = true; saveStudent(s); render(); toast(s.name.split(" ")[0]+" will be asked to cancel, keep the lesson or try another time"); }});
       confirmBox("Decline this request?", r.kind==="cancel" ? s.name+" asked to cancel the lesson on "+fmtDate(r.was.date,{weekday:"short",day:"numeric",month:"short"})+". The lesson stays as planned and they'll see the request as declined."
         : s.name+" asked for "+fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"})+" "+r.time+". They'll see it as declined.","Decline",()=>{ r.status = "declined"; r.decided = today(); saveStudent(s); render(); toast("Request declined"); }); } });
 }
-// Lessons students asked for in their app, waiting for the coach.
+// Lessons students asked for in their app, waiting for the coach; and students' answers after a declined move.
 function requestsPanel(){
-  const reqs = [];
-  state.students.forEach(s=>(s.requests||[]).forEach(r=>{ if (r.status==="pending") reqs.push({s,r}); }));
-  if (!reqs.length) return "";
+  const reqs = [], answers = [], t = today(), day = d=>fmtDate(d,{weekday:"short",day:"numeric",month:"short"});
+  state.students.forEach(s=>(s.requests||[]).forEach(r=>{ if (r.status==="pending") reqs.push({s,r});
+    if (r.kind==="move" && r.status==="declined" && (r.needsAnswer || (r.answered && daysBetween(r.answered, t)<=3))) answers.push({s,r}); }));
+  if (!reqs.length && !answers.length) return "";
+  const ansLine = ({s,r})=>{ const les = s.sessions.find(x=>x.id===r.sessionId), when = day(r.was.date)+(r.was.time?" "+r.was.time:"");
+    return '<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+
+      (r.needsAnswer ? 'You declined the move of the '+esc(when)+' lesson · waiting for their answer'
+        : r.answer==="cancel" ? 'Cancelled the '+esc(when)+' lesson after you declined the move'
+        : r.answer==="keep" ? 'Will come to the '+esc(when)+' lesson as planned'
+        : 'Asked for another time for the '+esc(when)+' lesson')+'</div></div>'+
+      (r.needsAnswer ? '<span class="tag">Waiting</span>' : r.answer==="cancel" ? '<span class="tag flag">Cancelled</span>' : r.answer==="keep" ? '<span class="tag ok">Kept</span>' : '<span class="tag warn">New request</span>')+'</li>'; };
+  if (!reqs.length) return '<section class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>Answers to declined moves</h2></div><ul class="list">'+answers.map(ansLine).join("")+'</ul></section>';
   reqs.sort((a,b)=>(a.r.date+a.r.time)<(b.r.date+b.r.time)?-1:1);
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--sq-dark)"><div class="panel-head"><h2>Lesson requests ('+reqs.length+')</h2></div><ul class="list">'+
     reqs.map(({s,r})=>{ const day = d=>fmtDate(d,{weekday:"short",day:"numeric",month:"short"});
@@ -3153,7 +3200,7 @@ function requestsPanel(){
         : r.kind==="move" ? '<span class="tag warn">Move lesson</span> '+esc(day(r.was.date))+(r.was.time?' '+esc(r.was.time):'')+' → '+esc(day(r.date))+' · '+esc(r.time)+' · '+r.duration+' min'
         : '<span class="tag board">New lesson</span> '+esc(day(r.date))+' · '+esc(r.time)+' · '+r.duration+' min · '+esc(r.format);
       return '<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+what+(r.note?' · '+esc(r.note):'')+'</div>'+
-      (r.date<today()?'<div class="small" style="color:var(--flag)">This date has passed</div>':'')+'</div><div class="row-actions"><button class="btn small ghost" data-a="decline" data-id="'+s.id+'|'+r.id+'">Decline</button><button class="btn small primary" data-a="approve" data-id="'+s.id+'|'+r.id+'">Approve</button></div></li>'; }).join("")+'</ul></section>';
+      (r.date<today()?'<div class="small" style="color:var(--flag)">This date has passed</div>':'')+'</div><div class="row-actions"><button class="btn small ghost" data-a="decline" data-id="'+s.id+'|'+r.id+'">Decline</button><button class="btn small primary" data-a="approve" data-id="'+s.id+'|'+r.id+'">Approve</button></div></li>'; }).join("")+answers.map(ansLine).join("")+'</ul></section>';
 }
 function approveRequest(s, r){
   const ack = {}, les = r.sessionId && s.sessions.find(x=>x.id===r.sessionId);
@@ -4923,6 +4970,7 @@ const evLabel = i => {
   if (i.kind==="train") return "Training · "+(i.x.what||"");
   if (i.kind==="req") return i.x.status==="declined" ? "Declined request" : i.x.kind==="move" ? "Requested move" : "Requested lesson";
   const pc = i.kind==="session" && pendingChange(i.s, i.x);
+  if (i.kind==="session" && needsAnswer(i.s, i.x)) return "Lesson · answer needed";
   return pc ? (pc.kind==="cancel" ? "Lesson · cancel requested" : "Lesson · move requested") : "Lesson";
 };
 const evAct = i => i.kind==="train" ? 'data-a="train" data-id="'+i.x.id+'"' : i.kind==="req" ? 'data-a="reqx" data-id="'+i.x.id+'"' : 'data-a="open" data-id="'+i.s.id+'|'+i.x.id+'"';
@@ -4985,9 +5033,9 @@ function listView(items, t){
       if (i.kind==="taken") return '<li><div class="main"><div class="title muted">Taken '+esc(x.from)+'–'+esc(x.to)+'</div><div class="small muted">Another lesson</div></div><span class="tag">Booked</span></li>';
       if (i.kind==="free") return '<li><div class="main"><div class="title">Coach free '+esc(x.from)+'–'+esc(x.to)+'</div><div class="small muted">Open for lessons</div></div><button class="btn small" data-a="reqat" data-id="'+x.date+'|'+x.from+'">Request</button></li>';
       if (i.kind==="train") return '<li><div class="main"><div class="title">Training · '+esc(x.what||"")+'</div><div class="small muted">'+[x.time, x.duration?x.duration+" min":"", x.note].filter(Boolean).map(esc).join(" · ")+'</div></div><button class="btn small ghost" data-a="train" data-id="'+x.id+'">Edit</button></li>';
-      if (st){ const pc = pendingChange(i.s, x);
+      if (st){ const pc = pendingChange(i.s, x), na = needsAnswer(i.s, x);
         return '<li><div class="main"><div class="title">Lesson'+(x.topics?' — '+esc(x.topics):'')+(x.slotId?' <span class="muted small">↻ weekly</span>':'')+'</div><div class="small muted">'+[x.time||"No time set", x.duration?x.duration+" min":"", x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><div class="row-actions">'+
-          (x.status==="done"?'<span class="tag ok">Done</span>' : pc ? '<span class="tag warn">'+(pc.kind==="cancel"?"Cancel requested":"Move requested")+'</span><button class="btn small ghost" data-a="open" data-id="'+i.s.id+'|'+x.id+'">Withdraw</button>' : changeable(x) ? '<button class="btn small ghost" data-a="open" data-id="'+i.s.id+'|'+x.id+'">Can\'t make it?</button>' : '<span class="tag board">Lesson</span>')+'</div></li>'; }
+          (x.status==="done"?'<span class="tag ok">Done</span>' : na ? '<span class="tag warn">Answer needed</span><button class="btn small" data-a="open" data-id="'+i.s.id+'|'+x.id+'">Answer</button>' : pc ? '<span class="tag warn">'+(pc.kind==="cancel"?"Cancel requested":"Move requested")+'</span><button class="btn small ghost" data-a="open" data-id="'+i.s.id+'|'+x.id+'">Withdraw</button>' : changeable(x) ? '<button class="btn small ghost" data-a="open" data-id="'+i.s.id+'|'+x.id+'">Can\'t make it?</button>' : '<span class="tag board">Lesson</span>')+'</div></li>'; }
       return '<li><div class="main"><div class="title"><a href="#/student/'+i.s.id+'/sessions">'+esc(i.s.name)+'</a>'+(x.slotId?' <span class="muted small">↻ weekly</span>':'')+'</div><div class="small muted">'+esc(x.time||"No time set")+(x.duration?" · "+x.duration+" min":"")+" · "+esc(x.format||"")+(x.topics?" · "+esc(x.topics):"")+'</div>'+(i.clash.length?'<div class="small" style="color:var(--flag)">⚠ '+esc(i.clash.map(c=>c.text).join("; "))+'</div>':'')+'</div>'+
         '<div class="row-actions">'+(x.status==="done"?'<span class="tag ok">Done</span>':'<button class="btn small" data-a="move" data-id="'+i.s.id+'|'+x.id+'">Move</button><button class="btn small ghost" data-a="open" data-id="'+i.s.id+'|'+x.id+'">More</button>')+'</div></li>';
     }).join("")+'</ul></section></div>').join("");
@@ -5090,6 +5138,11 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Answer needed":"נדרשת תשובה", "Answer":"מענה", "Cancel the lesson":"ביטול השיעור", "Keep it as planned":"להשאיר כמתוכנן", "Try another time":"לנסות זמן אחר", "Continue":"המשך",
+  "Your coach can't meet at the time you asked. What would you like to do?":"המאמן לא יכול להיפגש בזמן שביקשת. מה תרצה/י לעשות?",
+  "Lesson cancelled — your coach will see it":"השיעור בוטל — המאמן יראה זאת", "Lesson kept as planned":"השיעור נשאר כמתוכנן",
+  "Lesson · answer needed":"שיעור · נדרשת תשובה", "Decline the move":"דחיית ההזזה", "e.g. How about Sunday at 17:00?":"למשל: מה דעתך על יום ראשון ב־17:00?",
+  "Answers to declined moves":"תשובות להזזות שנדחו", "Waiting":"ממתין", "Kept":"נשאר", "Cancelled":"בוטל", "New request":"בקשה חדשה",
   "Cancel lesson":"ביטול שיעור", "Move lesson":"הזזת שיעור", "New lesson":"שיעור חדש", "Cancel the lesson?":"לבטל את השיעור?", "That lesson no longer exists":"השיעור כבר לא קיים",
   "Withdraw your request?":"לבטל את הבקשה?", "Withdraw":"ביטול הבקשה", "Withdraw request":"ביטול הבקשה", "This lesson is done":"השיעור הזה כבר התקיים", "This lesson can't be changed any more":"כבר אי אפשר לשנות את השיעור הזה",
   "Send to your coach":"שליחה למאמן", "What do you need?":"מה צריך?", "I can't make it — cancel the lesson":"לא אוכל להגיע — ביטול השיעור", "Move it to another time":"הזזה לזמן אחר",
@@ -5331,6 +5384,16 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Can't meet then — (.+)$/, "לא מתאים לי — $1"], [/^Message to (.+) \(optional\)$/, "הודעה ל־$1 (לא חובה)"],
+  [/^(.+) will be asked to cancel, keep the lesson or try another time$/, "$1 יתבקש/תתבקש לבטל, להשאיר או לנסות זמן אחר"],
+  [/^Your lesson on (?!.* (?:was|will be) )(.+)$/, "השיעור שלך ב־$1"], [/^Your lesson on (.+?)(?: at (\d\d:\d\d))? will be cancelled\.$/, (m,d,t)=>"השיעור שלך ב־"+d+(t?" בשעה "+t:"")+" יבוטל."],
+  [/^Your coach can't meet on (.+) at (\d\d:\d\d)\. What would you like to do with your lesson on (.+?)(?: at (\d\d:\d\d))?\?$/, (m,d,t,d2,t2)=>"המאמן לא יכול להיפגש ב־"+d+" בשעה "+t+". מה תרצה/י לעשות עם השיעור ב־"+d2+(t2?" בשעה "+t2:"")+"?"],
+  [/^You declined the move of the (.+) lesson · waiting for their answer$/, "דחית את הזזת השיעור של $1 · ממתין לתשובה"],
+  [/^Cancelled the (.+) lesson after you declined the move$/, "ביטל/ה את השיעור של $1 אחרי שדחית את ההזזה"],
+  [/^Will come to the (.+) lesson as planned$/, "יגיע/תגיע לשיעור של $1 כמתוכנן"], [/^Asked for another time for the (.+) lesson$/, "ביקש/ה זמן אחר לשיעור של $1"],
+  [/^Your coach can't meet at the new time — choose what to do with your lesson on (.+)$/, "המאמן לא יכול בזמן החדש — יש לבחור מה לעשות עם השיעור ב־$1"],
+  [/^You cancelled your lesson on (.+)$/, "ביטלת את השיעור ב־$1"], [/^You kept your lesson on (.+) as planned$/, "השארת את השיעור ב־$1 כמתוכנן"],
+  [/^Your coach couldn't meet at the new time for your lesson on (.+)$/, "המאמן לא יכול היה בזמן החדש לשיעור ב־$1"],
   [/^Lesson on (.+)$/, "השיעור ב־$1"], [/^Move lesson — (.+)$/, "הזזת שיעור — $1"],
   [/^You asked to (cancel|move) the lesson on (.+)\. Withdraw that request\?$/, (m,k,d)=>"ביקשת "+(k==="cancel"?"לבטל":"להזיז")+" את השיעור ב־"+d+". לבטל את הבקשה?"],
   [/^(.+)’s lesson on (.+?)(?: at (\d\d:\d\d))? will be marked cancelled\. Nothing is charged for it\.$/, (m,n,d,t)=>"השיעור של "+n+" ב־"+d+(t?" בשעה "+t:"")+" יסומן כמבוטל. לא יחויב עליו תשלום."],
