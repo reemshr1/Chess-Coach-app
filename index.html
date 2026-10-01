@@ -71,6 +71,9 @@ kbd{font-family:var(--body);font-size:.75rem;border:1px solid var(--line);border
 .btn.lang-btn{display:none}
 .student-mode .btn.lang-btn{display:inline-flex}
 .student-mode .side-search,.student-mode .topbar a[href="#/search"]{display:none}
+/* a parent's board is view-only apart from lesson requests and changes */
+.parent-mode #view button[data-a]:not([data-a="req"]):not([data-a="reqat"]):not([data-a="les"]):not([data-a="open"]):not([data-a="ans"]):not([data-a="unreq"]):not([data-a="reqx"]):not([data-a="view"]):not([data-a="wk"]):not([data-a="more"]):not([data-a="all"]):not([data-a="src"]):not([data-a="gf"]):not([data-a="f"]):not([data-a="sf"]):not([data-a="rf"]):not([data-a="period"]):not([data-a="board"]):not([data-a="games"]):not([data-a="clearT"]):not([data-a="clearRep"]):not([data-a="dl"]){display:none}
+.parent-mode #view label:has(input[type=file]),.parent-mode #view .dropzone{display:none}
 .code-box{font-family:var(--display);font-size:1.6rem;font-weight:700;letter-spacing:.18em;background:var(--paper);border:1px dashed var(--line);border-radius:var(--r-sm);padding:6px 14px;display:inline-block;direction:ltr}
 .steps{margin:8px 0 12px;padding-inline-start:20px;font-size:.92rem}
 .steps li{margin-bottom:4px}
@@ -393,6 +396,7 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
     <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>Coach's Board</b></div>
     <a class="side-search" href="#/search"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Search</span><kbd>/</kbd></a>
     <nav class="nav" id="nav"></nav>
+    <select id="childPick" class="search" aria-label="Whose board" hidden style="margin:0 8px 8px;width:calc(100% - 16px);min-width:0;box-sizing:border-box"></select>
     <button type="button" class="btn small lang-btn" data-lang style="margin:0 8px 10px;align-self:flex-start">עברית</button>
     <div class="side-foot" id="syncState"><span class="dot local"></span>Loading…</div>
   </aside>
@@ -2497,10 +2501,38 @@ function makeDbStore(db, userId){
 // The storage rules declared at publish let a student read and write only their own portal/<id>/ and let only
 // the owner (the coach) read all of them; the coach's own records stay in data/users/<coach id>/.
 let ROLE = "coach", portal = null;
-const STUDENT = ()=>ROLE==="student";
+// A student and a parent both use the app from outside; a parent sees one child at a time and can only
+// request, cancel or move lessons.
+const STUDENT = ()=>ROLE!=="coach";
+const PARENT = ()=>ROLE==="parent";
 const coachOnly = html=>STUDENT() ? "" : html;
 const isShared = v=>v===true || v==="1"; // older saves stored the form's "0"/"1"
 const PORTAL_KEYS = ["worklog","tournaments","books","training"]; // lists a student may add to and change
+/* families: a parent account follows one or more students */
+const families = ()=>state.settings.families||(state.settings.families=[]);
+const familyOf = x=>{ const sid = typeof x==="string" ? x : x && x.id; return families().find(f=>(f.studentIds||[]).includes(sid)); };
+// What a parent sees of the money: the balance and a statement, never other students or private notes.
+function payView(s){
+  const l = ledger(s), from = addDays(today(), -730);
+  const rows = l.charges.filter(c=>c.date>=from).map(c=>({date:c.date, label:c.label, charge:c.amount}))
+    .concat(s.payments.filter(p=>p.date>=from).map(p=>({date:p.date, label:"Payment"+(p.method?" · "+p.method:""), paid:+p.amount||0})))
+    .sort((a,b)=>a.date<b.date?1:-1);
+  return {currency:state.settings.currency||"", balance:l.balance, charged:l.charged, paid:l.paid, overdue:l.overdue, age:l.age,
+    rate:+s.rate||0, lastPay:l.lastPay?{date:l.lastPay.date, amount:+l.lastPay.amount||0}:null, rows};
+}
+// Every document a parent's app reads: the family, and for each child the same records a student sees plus money.
+function familyDocs(f){
+  const out = {}, kids = (f.studentIds||[]).map(byId).filter(Boolean);
+  out.family = stampView({name:f.name, children:kids.map(k=>({id:k.id, name:k.name})), coachName:state.settings.coachName||"", weekStart:state.settings.weekStart||0});
+  kids.forEach(k=>{
+    const parts = splitStudent(studentView(k));
+    out["ch-"+k.id] = Object.assign(parts.main, {pay:payView(k)});
+    Object.keys(parts.logs).forEach(id=>{ out[id] = parts.logs[id]; });
+    state.assignments.filter(a=>a.studentId===k.id).forEach(a=>{ out[a.id] = a; });
+    state.games.filter(g=>g.studentId===k.id).forEach(g=>{ out[g.id] = g; });
+  });
+  return out;
+}
 function studentView(s){
   return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
@@ -2567,7 +2599,7 @@ function applyOp(s, op, coachSide){
     if (kind!=="new" && (!les || les.status!=="planned" || les.date<today() || list("requests").some(r=>r.status==="pending" && r.sessionId===les.id && r.id!==it.id))) return false;
     // a new change for a lesson answers an earlier declined move ("try another time")
     if (les) list("requests").forEach(r=>{ if (r.needsAnswer && r.sessionId===les.id){ r.needsAnswer = false; r.answer = "retry"; r.answered = (op.at||"").slice(0,10)||today(); } });
-    const L = list("requests"); if (!L.some(r=>r.id===it.id)) L.push(Object.assign({id:it.id, kind, date:it.date, time:it.time||"", duration:+it.duration||60, format:it.format||"In person", note:it.note||"", status:"pending", asked:(op.at||"").slice(0,10)||today()},
+    const L = list("requests"); if (!L.some(r=>r.id===it.id)) L.push(Object.assign({id:it.id, kind, by:it.by==="parent"?"parent":"student", date:it.date, time:it.time||"", duration:+it.duration||60, format:it.format||"In person", note:it.note||"", status:"pending", asked:(op.at||"").slice(0,10)||today()},
       les ? {sessionId:les.id, was:{date:les.date, time:les.time||"", duration:+les.duration||60}} : {}));
     return true;
   }
@@ -2586,33 +2618,49 @@ function applyOp(s, op, coachSide){
 // and take in what they send.
 function makePortal(db){
   const cache = {}, timers = {}, subs = {}, taken = new Set();
-  async function sync(s){
-    if (!s || !s.portal || !s.portal.uid) return;
-    const uid = s.portal.uid, col = db.collection("portal/"+uid+"/view");
+  // Write what changed in one account's view (a student's or a family's).
+  async function push(uid, want){
+    const col = db.collection("portal/"+uid+"/view");
     if (!cache[uid]){ const c = {}; (await col.get()).docs.forEach(d=>{ c[d.id] = JSON.stringify(d.data()); }); cache[uid] = c; }
-    const want = portalDocs(s), have = cache[uid], writes = [];
+    const have = cache[uid], writes = [];
     const bare = j=>j && j.replace(/"syncedAt":"[^"]*"/, "");
     const stale = j=>{ const m = /"syncedAt":"([^"]*)"/.exec(j||""); return !m || Date.now()-Date.parse(m[1]) > 30*60000; };
-    Object.keys(want).forEach(id=>{ const j = JSON.stringify(want[id]);
-      if ((bare(have[id])!==bare(j) || (id==="student" && stale(have[id]))) && j.length<=DOC_LIMIT) writes.push(col.doc(id).set(want[id]).then(()=>{ have[id] = j; })); });
+    Object.keys(want).forEach(id=>{ const j = JSON.stringify(want[id]), stamped = /"syncedAt"/.test(j);
+      if ((bare(have[id])!==bare(j) || (stamped && stale(have[id]))) && j.length<=DOC_LIMIT) writes.push(col.doc(id).set(want[id]).then(()=>{ have[id] = j; })); });
     Object.keys(have).forEach(id=>{ if (!want[id]) writes.push(col.doc(id).delete().then(()=>{ delete have[id]; })); });
     await Promise.all(writes);
   }
+  const sync = s=>s && s.portal && s.portal.uid ? push(s.portal.uid, portalDocs(s)) : Promise.resolve();
+  const syncFamily = f=>f && f.portal && f.portal.uid ? push(f.portal.uid, familyDocs(f)) : Promise.resolve();
+  function scheduleFamily(fid){
+    const f = families().find(x=>x.id===fid); if (!f || !f.portal) return;
+    clearTimeout(timers["f:"+fid]); timers["f:"+fid] = setTimeout(()=>{ syncFamily(families().find(x=>x.id===fid)).catch(()=>{}); }, 900);
+  }
   function schedule(sid){
+    families().forEach(f=>{ if ((f.studentIds||[]).includes(sid)) scheduleFamily(f.id); });
     const s = byId(sid); if (!s || !s.portal || !s.portal.uid) return;
     clearTimeout(timers[sid]); timers[sid] = setTimeout(()=>{ sync(byId(sid)).catch(()=>{}); }, 900);
   }
-  function watchInbox(s){
-    const uid = s.portal.uid; if (subs[uid]) return;
+  // owner(): the student or family this account belongs to now; childOf(o, op): which student an op is about.
+  const PARENT_OPS = ["request","request.cancel","move.answer"];
+  function watchInbox(uid){
+    if (subs[uid]) return;
     subs[uid] = db.collection("portal/"+uid+"/inbox").onSnapshot(snap=>{
-      const st = state.students.find(x=>x.portal && x.portal.uid===uid); if (!st) return;
+      const st = state.students.find(x=>x.portal && x.portal.uid===uid), fam = !st && families().find(f=>f.portal && f.portal.uid===uid);
+      if (!st && !fam) return;
       const ops = snap.docs.map(d=>Object.assign({_id:d.id}, d.data())).filter(o=>o.type).sort((a,b)=>(a.at||"")<(b.at||"")?-1:1);
       const fresh = ops.filter(o=>!taken.has(o._id)); if (!fresh.length) return;
-      fresh.forEach(o=>{ taken.add(o._id); applyOp(st, o, true); });
-      saveStudent(st);
-      // The student's copy is updated before their changes leave the inbox, so nothing they added flickers away.
-      clearTimeout(timers[st.id]);
-      sync(st).then(()=>fresh.forEach(o=>db.doc("portal/"+uid+"/inbox/"+o._id).delete().catch(()=>{}))).catch(()=>{});
+      const touched = new Set();
+      fresh.forEach(o=>{ taken.add(o._id);
+        // a parent may only ask about lessons, and only for a child in their family
+        const who = st || ((fam.studentIds||[]).includes(o.sid) && PARENT_OPS.includes(o.type) && byId(o.sid));
+        if (!who) return;
+        if (fam && o.item) o.item.by = "parent";
+        if (applyOp(who, o, true)) touched.add(who); });
+      touched.forEach(x=>saveStudent(x));
+      // The account's copy is updated before its changes leave the inbox, so nothing flickers away.
+      Object.keys(timers).forEach(k=>clearTimeout(timers[k]));
+      (st ? sync(st) : syncFamily(fam)).then(()=>{ fresh.forEach(o=>db.doc("portal/"+uid+"/inbox/"+o._id).delete().catch(()=>{})); state.students.forEach(x=>schedule(x.id)); }).catch(()=>{});
       if (!$("#modal").open && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render();
     }, ()=>{});
   }
@@ -2622,20 +2670,33 @@ function makePortal(db){
         const v = d.data()||{}, uid = d.id, code = String(v.code||"").trim().toUpperCase();
         if (!code || v.linked) return;
         const ref = db.doc("portal/"+uid);
-        const s = state.students.find(x=>x.invite && x.invite.code===code);
-        if (!s){ if (v.error!==code) ref.set(Object.assign({}, v, {error:code})).catch(()=>{}); return; }
-        state.students.forEach(o=>{ if (o!==s && o.portal && o.portal.uid===uid){ delete o.portal; saveStudent(o); } }); // one account, one student
-        s.portal = {uid, linkedAt:today()}; delete s.invite; saveStudent(s);
-        ref.set({code, lang:v.lang||"", linked:true, error:""}).catch(()=>{});
-        watchInbox(s); schedule(s.id);
-        toast(s.name+" is now connected to the app"); render();
+        const s = state.students.find(x=>x.invite && x.invite.code===code), f = !s && families().find(x=>x.invite && x.invite.code===code);
+        if (!s && !f){ if (v.error!==code) ref.set(Object.assign({}, v, {error:code})).catch(()=>{}); return; }
+        // one account, one place: a student or a family, never both
+        state.students.forEach(o=>{ if (o!==s && o.portal && o.portal.uid===uid){ delete o.portal; saveStudent(o); } });
+        families().forEach(o=>{ if (o!==f && o.portal && o.portal.uid===uid) delete o.portal; });
+        if (s){ s.portal = {uid, linkedAt:today()}; delete s.invite; saveStudent(s); }
+        else { f.portal = {uid, linkedAt:today()}; delete f.invite; saveSettings(); }
+        ref.set({code, lang:v.lang||"", linked:true, error:"", role:f?"parent":"student"}).catch(()=>{});
+        watchInbox(uid); if (s) schedule(s.id); else scheduleFamily(f.id);
+        toast((s ? s.name : f.name)+" is now connected to the app"); render();
       });
     }, ()=>{});
   }
   return {
-    start(){ watchLinks(); state.students.forEach(s=>{ if (s.portal && s.portal.uid){ watchInbox(s); schedule(s.id); } });
-      setInterval(()=>state.students.forEach(s=>schedule(s.id)), 30*60000); },
-    schedule, scheduleAll(){ state.students.forEach(s=>schedule(s.id)); },
+    start(){ watchLinks(); state.students.forEach(s=>{ if (s.portal && s.portal.uid){ watchInbox(s.portal.uid); schedule(s.id); } });
+      families().forEach(f=>{ if (f.portal && f.portal.uid){ watchInbox(f.portal.uid); scheduleFamily(f.id); } });
+      setInterval(()=>{ state.students.forEach(s=>schedule(s.id)); families().forEach(f=>scheduleFamily(f.id)); }, 30*60000); },
+    schedule, scheduleFamily, scheduleAll(){ state.students.forEach(s=>schedule(s.id)); families().forEach(f=>scheduleFamily(f.id)); },
+    unlinkFamily(f){
+      const uid = f.portal && f.portal.uid; if (!uid) return;
+      clearTimeout(timers["f:"+f.id]);
+      db.doc("portal/"+uid).set({linked:false, unlinked:true}).catch(()=>{});
+      const view = db.collection("portal/"+uid+"/view");
+      view.get().then(snap=>snap.docs.forEach(d=>view.doc(d.id).delete().catch(()=>{}))).catch(()=>{});
+      delete cache[uid]; if (subs[uid]){ try { subs[uid](); } catch(e){} delete subs[uid]; }
+      delete f.portal; saveSettings();
+    },
     unlink(s){
       const uid = s.portal && s.portal.uid; if (!uid) return;
       clearTimeout(timers[s.id]);
@@ -2650,18 +2711,28 @@ function makePortal(db){
 // The student's side: their copy of the records (view), plus their own changes (inbox) on top.
 function makeStudentStore(db, account){
   const root = db.doc("portal/"+account), view = {}, inbox = {};
-  let me = {}, base = null, rebuildLater = false;
+  let me = {}, base = null, rebuildLater = false, childId = "";
+  try { childId = localStorage.getItem("cb-child")||""; } catch(e){}
+  // The coach's app says whether this account is a student's or a parent's.
+  const setRole = ()=>{ ROLE = me.role==="parent" ? "parent" : "student"; document.body.classList.toggle("parent-mode", PARENT()); };
   const clone = v=>JSON.parse(JSON.stringify(v));
   function rebuild(){
-    const main = view.student;
+    setRole();
+    // A parent sees one child at a time (state holds only that child); a student sees themselves.
+    const fam = PARENT() && view.family, kids = fam ? (fam.children||[]) : [];
+    if (fam){ if (!kids.some(k=>k.id===childId)) childId = kids[0] ? kids[0].id : ""; state.family = {name:fam.name, children:kids, current:childId}; }
+    const main = fam ? view["ch-"+childId] : view.student, sid = main && main.id;
     if (!main){ state.students = []; state.assignments = []; state.games = []; base = null; return; }
-    const s = joinStudent(main, Object.keys(view).filter(k=>k.startsWith("lg-")).map(k=>view[k]));
-    state.assignments = Object.keys(view).filter(k=>k.startsWith("as-")).map(k=>clone(view[k]));
-    state.games = Object.keys(view).filter(k=>k.startsWith("gm-")).map(k=>clone(view[k]));
+    const s = joinStudent(main, Object.keys(view).filter(k=>k.startsWith(fam ? "lg-"+sid+"-" : "lg-")).map(k=>view[k]));
+    state.assignments = Object.keys(view).filter(k=>k.startsWith("as-")).map(k=>clone(view[k])).filter(a=>!fam || a.studentId===sid);
+    state.games = Object.keys(view).filter(k=>k.startsWith("gm-")).map(k=>clone(view[k])).filter(g=>!fam || g.studentId===sid);
     state.students = [s];
-    Object.values(inbox).sort((a,b)=>(a.at||"")<(b.at||"")?-1:1).forEach(op=>applyOp(s, op, false));
-    Object.assign(state.settings, {coachName:main.coachName||"", weekStart:main.weekStart||0, currency:""});
-    s.syncedAt = main.syncedAt||""; s.waiting = Object.keys(inbox).length;
+    const mine = Object.values(inbox).filter(op=>!fam || op.sid===sid);
+    mine.sort((a,b)=>(a.at||"")<(b.at||"")?-1:1).forEach(op=>applyOp(s, op, false));
+    const head = fam || main;
+    Object.assign(state.settings, {coachName:head.coachName||"", weekStart:head.weekStart||0, currency:(main.pay && main.pay.currency)||""});
+    s.syncedAt = (fam && fam.syncedAt > (main.syncedAt||"") ? fam.syncedAt : main.syncedAt)||""; s.waiting = mine.length;
+    s.pay = main.pay || null;
     // Drop windows that have passed since the coach's app last wrote them.
     const now = new Date(), t = today(), nm = Math.ceil((now.getHours()*60+now.getMinutes())/30)*30;
     const fresh = (L, min)=>(L||[]).filter(f=>f.date>t || (f.date===t && toMin(f.to)-nm>=min)).map(f=>f.date===t && toMin(f.from)<nm ? Object.assign({}, f, {from:fmtMin(nm)}) : f);
@@ -2673,7 +2744,7 @@ function makeStudentStore(db, account){
   const refresh = ()=>{ if ($("#modal").open){ rebuildLater = true; return; } rebuild(); render(); };
   $("#modal").addEventListener("close", ()=>{ if (rebuildLater){ rebuildLater = false; setTimeout(()=>{ rebuild(); render(); }, 0); } });
   function send(op){
-    op.at = new Date().toISOString();
+    op.at = new Date().toISOString(); if (PARENT()) op.sid = childId;
     const id = "op-"+uid(); inbox[id] = op; setSync("busy");
     return root.collection("inbox").doc(id).set(op).then(()=>setSync("ok"), ()=>setSync("err"));
   }
@@ -2689,16 +2760,17 @@ function makeStudentStore(db, account){
       rebuild();
     },
     subscribe(){
-      root.onSnapshot(d=>{ me = d.exists ? clone(d.data()) : {}; if (!$("#modal").open) render(); }, ()=>{});
+      root.onSnapshot(d=>{ const was = me.role; me = d.exists ? clone(d.data()) : {}; if (me.role!==was) rebuild(); else setRole(); if (!$("#modal").open) render(); }, ()=>{});
       root.collection("view").onSnapshot(snap=>{ track(view, snap); refresh(); }, ()=>{});
       root.collection("inbox").onSnapshot(snap=>{ if (snap.metadata && snap.metadata.hasPendingWrites) return; track(inbox, snap); refresh(); }, ()=>{});
     },
     link(code){ me = Object.assign({}, me, {code:String(code).trim().toUpperCase(), lang:state.settings.lang||"en", linked:false, error:"", unlinked:false}); return root.set(me); },
     saveLang(){ me = Object.assign({}, me, {lang:state.settings.lang}); root.set(me).catch(()=>{}); },
     send,
+    pickChild(id){ childId = id; try { localStorage.setItem("cb-child", id); } catch(e){} rebuild(); render(); },
     // What the student changed in the lists they may edit becomes inbox changes.
     saveStudent(){
-      const s = state.students[0]; if (!s || !base) return;
+      const s = state.students[0]; if (!s || !base || PARENT()) return;
       PORTAL_KEYS.forEach(k=>{
         const before = new Map((base[k]||[]).map(x=>[x.id, JSON.stringify(x)])), now = s[k]||[];
         now.forEach(x=>{ if (before.get(x.id)!==JSON.stringify(x)) send({type:k+".upsert", item:clone(x)}); });
@@ -2706,9 +2778,9 @@ function makeStudentStore(db, account){
       });
       base = clone(s);
     },
-    saveGame(id){ const g = state.games.find(x=>x.id===id); if (g) send({type:"game.upsert", item:clone(g)}); },
-    deleteGame(id){ send({type:"game.delete", id}); },
-    saveAssignment(id){ const a = state.assignments.find(x=>x.id===id); if (a) send({type:"assignment.status", id, status:a.status, date:today()}); },
+    saveGame(id){ const g = !PARENT() && state.games.find(x=>x.id===id); if (g) send({type:"game.upsert", item:clone(g)}); },
+    deleteGame(id){ if (!PARENT()) send({type:"game.delete", id}); },
+    saveAssignment(id){ const a = !PARENT() && state.assignments.find(x=>x.id===id); if (a) send({type:"assignment.status", id, status:a.status, date:today()}); },
     deleteAssignment(){}, deleteStudent(){}, saveSettings(){ this.saveLang(); }
   };
 }
@@ -2777,7 +2849,9 @@ async function downloadBackup(){
 // CSV that Excel opens with Hebrew names intact (BOM) and values containing commas or quotes kept whole.
 const toCsv = rows => "﻿"+rows.map(r=>r.map(v=>{ const x = v==null ? "" : String(v); return /[",\n\r]/.test(x) ? '"'+x.replace(/"/g,'""')+'"' : x; }).join(",")).join("\r\n")+"\r\n";
 
-function openForm({title, fields, submit="Save", onSubmit, danger}){
+function openForm({title, fields, submit="Save", onSubmit, danger, parentOk}){
+  // Parents view their child's records; only lesson requests and changes are open to them.
+  if (PARENT() && !parentOk){ toast("View only — "+(state.students[0]?state.students[0].name.split(" ")[0]:"your child")+" or the coach can change this"); return; }
   const m = $("#modal");
   m.innerHTML = '<form class="modal-form" method="dialog"><header><h2>'+esc(title)+'</h2></header><div class="modal-body">'+
     fields.map(f=>{
@@ -2844,7 +2918,10 @@ function renderNav(){
   const r = route();
   document.querySelectorAll("[data-lang]").forEach(b=>{ b.textContent = lang()==="he" ? "English" : "עברית"; });
   if (STUDENT()){
-    const s = state.students[0], cur = r.page==="student" ? ({games:"tournaments", studied:"work"}[r.tab]||r.tab) : r.page==="assignment" ? "assignments" : r.page==="schedule" ? "schedule" : "home";
+    const s = state.students[0], cur = r.page==="student" ? ({games:"tournaments", studied:"work"}[r.tab]||r.tab) : r.page==="assignment" ? "assignments" : r.page==="schedule" ? "schedule" : r.page==="payments" && PARENT() ? "payments" : "home";
+    // a family with more than one child picks whose board to show
+    const fam = PARENT() && state.family, pick = $("#childPick");
+    if (pick){ pick.hidden = !(fam && fam.children.length>1); if (fam) pick.innerHTML = fam.children.map(k=>'<option value="'+esc(k.id)+'"'+(k.id===fam.current?" selected":"")+'>'+esc(k.name)+'</option>').join(""); }
     const html = s ? studentNav(s).map(([k,href,l,ic])=>'<a href="'+href+'"'+(cur===k?' aria-current="page"':"")+'>'+ic+'<span>'+l+'</span></a>').join("") : "";
     $("#nav").innerHTML = html; $("#bnav").innerHTML = html; return;
   }
@@ -2855,7 +2932,8 @@ function renderNav(){
   const html = NAV.map(([k,l,ic])=>'<a href="#/'+k+'"'+(cur===k?' aria-current="page"':"")+'>'+ic+'<span>'+l+'</span>'+badge(k)+'</a>').join("");
   $("#nav").innerHTML = html; $("#bnav").innerHTML = html;
 }
-const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash],["work",b+"work","Practice",ICONS.practice],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Assignments",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
+const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[]),["work",b+"work","Practice",ICONS.practice],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Assignments",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
+document.addEventListener("change", e=>{ if (e.target.id==="childPick" && store && store.pickChild) store.pickChild(e.target.value); });
 // The language button students have (the coach changes language in Settings).
 document.addEventListener("click", e=>{ const b = e.target.closest("[data-lang]"); if (!b) return;
   state.settings.lang = lang()==="he" ? "en" : "he"; if (store && store.saveLang) store.saveLang(); render(); });
@@ -2884,6 +2962,7 @@ function renderStudent(v, r){
   }
   if (r.page==="assignment") return pAssignment(v, r);
   if (r.page==="schedule") return pSchedule(v);
+  if (r.page==="payments" && PARENT()) return pFamilyPay(v, s);
   return pHome(v, s);
 }
 function linkPage(me){
@@ -2911,6 +2990,18 @@ function freshness(s){
   return '<p class="small '+(old?"":"muted")+'" style="margin:4px 0 0'+(old?';color:var(--warn)':'')+'">'+(when?"Updated by your coach’s app "+when:"Not updated by your coach’s app yet")+
     (s.waiting?' · '+(s.waiting===1?"1 change":s.waiting+" changes")+' waiting for your coach’s app':'')+'</p>';
 }
+// The parent's money page: balance and statement for the child shown.
+function pFamilyPay(v, s){
+  const p = s.pay; const m = n=>(p && p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
+  if (!p){ v.innerHTML = '<div class="page-head"><div><h1>Payments</h1></div></div><p class="empty">Nothing here yet.</p>'; return; }
+  v.innerHTML = '<div class="page-head"><div><h1>Payments</h1><p class="sub">'+esc(s.name)+(p.rate?' · '+m(p.rate)+' per lesson':'')+'</p>'+freshness(s)+'</div></div>'+
+    '<div class="stats"><div class="stat"><div class="v num'+(p.balance>0.009?" money-owed":"")+'">'+(p.balance>0.009?m(p.balance):p.balance<-0.009?m(-p.balance):"✓")+'</div><div class="l">'+(p.balance>0.009?(p.overdue?p.age+" days overdue":"To pay"):p.balance<-0.009?"In credit":"Paid up")+'</div></div>'+
+      '<div class="stat"><div class="v num">'+m(p.charged)+'</div><div class="l">Charged in total</div></div><div class="stat"><div class="v num">'+m(p.paid)+'</div><div class="l">Paid in total</div></div>'+
+      '<div class="stat"><div class="v num">'+(p.lastPay?esc(fmtShort(p.lastPay.date)):"—")+'</div><div class="l">'+(p.lastPay?"Last payment · "+m(p.lastPay.amount):"No payments yet")+'</div></div></div>'+
+    panel("Statement", p.rows.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Charge</th><th class="r">Paid</th></tr></thead><tbody>'+
+      p.rows.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+'</td><td>'+esc(r.label)+'</td><td class="r num">'+(r.charge?m(r.charge):"")+'</td><td class="r num">'+(r.paid?m(r.paid):"")+'</td></tr>').join("")+'</tbody></table></div>'+
+      '<p class="small muted" style="margin:8px 0 0">The last two years. Lessons are charged once they have taken place; cancelled lessons aren\'t charged.</p>' : '<p class="empty">No charges or payments yet.</p>');
+}
 function pHome(v, s){
   const t = today(), first = s.name.split(" ")[0];
   const lessons = sortBy(s.sessions.filter(x=>x.status==="planned" && x.date>=t),"date").slice(0,4);
@@ -2922,13 +3013,17 @@ function pHome(v, s){
   const recent = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,3);
   const rt = sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===mainSource(s)),"date").pop();
   const hr = new Date().getHours(), greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
-  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+greet+', '+esc(first)+'</h1>'+freshness(s)+'</div><div class="row-actions"><button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
+  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+(PARENT() ? esc(first)+'’s board' : greet+', '+esc(first))+'</h1>'+freshness(s)+'</div><div class="row-actions"><button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
     '<div class="stats"><div class="stat"><div class="v num">'+(lessons[0]?esc(fmtDate(lessons[0].date,{weekday:"short",day:"numeric",month:"short"})):"—")+'</div><div class="l">'+(lessons[0]?"Next lesson"+(lessons[0].time?" · "+esc(lessons[0].time):""):"No lesson planned")+'</div></div>'+
       '<div class="stat"><div class="v num'+(todo.some(a=>a.due&&a.due<t)?" money-owed":"")+'">'+todo.length+'</div><div class="l">Assignments to do</div></div>'+
       '<div class="stat"><div class="v num">'+week+'</div><div class="l">Practice minutes this week</div></div>'+
       '<div class="stat"><div class="v num">'+(rt?esc(rt.value):"—")+'</div><div class="l">'+(rt?esc(rt.source||mainSource(s))+" rating":"Rating")+'</div></div></div>'+
     answerBox(s)+
     '<div class="grid g2">'+
+    (PARENT() && s.pay ? panel("Balance", (()=>{ const p = s.pay, m = n=>(p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
+      return '<p style="margin:0;font-size:1.3rem;font-weight:700" class="num'+(p.balance>0.009?" money-owed":"")+'">'+(p.balance>0.009?m(p.balance)+' to pay':p.balance<-0.009?m(-p.balance)+' in credit':'Paid up')+'</p>'+
+        (p.overdue?'<p class="small" style="color:var(--flag);margin:4px 0 0">'+p.age+' days overdue</p>':'')+
+        '<p class="small muted" style="margin:6px 0 0">'+(p.lastPay?'Last payment '+esc(fmtShort(p.lastPay.date))+' · '+m(p.lastPay.amount):'No payments yet')+'</p>'; })(), '<a class="btn small" href="#/payments">Statement</a>') : '')+
     updatesPanel(s)+
     panel("Coming up", (lessons.length||tours.length||pend.length) ? '<ul class="list">'+
         lessons.map(x=>{ const pc = pendingChange(s, x); return '<li><div class="main"><div class="title">Lesson'+(needsAnswer(s, x)?' <span class="tag warn">Answer needed</span>':'')+(pc?' <span class="tag warn">'+(pc.kind==="cancel"?"Cancel requested":"Move requested")+'</span>':'')+'</div><div class="small muted">'+[x.format, x.duration?x.duration+" min":"", x.topics].filter(Boolean).map(esc).join(" · ")+'</div>'+
@@ -2959,12 +3054,12 @@ function studentUpdates(s){
   (s.requests||[]).forEach(r=>{ if (!r.decided || r.decided<from) return;
     const x = s.sessions.find(y=>y.id===r.sessionId) || r;
     if (r.status==="approved"){
-      if (r.kind==="cancel") out.push({date:r.decided, kind:"ok", text:"Your lesson on "+day(r.was.date)+" was cancelled, as you asked", href:"#/schedule"});
-      else if (r.kind==="move") out.push({date:r.decided, kind:"ok", text:"Your lesson moved to "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"});
-      else out.push({date:r.decided, kind:"ok", text:"Your coach approved your lesson on "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); }
-    else if (r.status==="declined") out.push({date:r.decided, kind:"flag", text:r.kind==="cancel" ? "Your request to cancel the lesson on "+day(r.was.date)+" was declined — the lesson stays"
-      : r.kind==="move" ? (r.needsAnswer ? "Your coach can't meet at the new time — choose what to do with your lesson on "+day(r.was.date)
-          : r.answer==="cancel" ? "You cancelled your lesson on "+day(r.was.date) : r.answer==="keep" ? "You kept your lesson on "+day(r.was.date)+" as planned" : "Your coach couldn't meet at the new time for your lesson on "+day(r.was.date)) : "Your request for "+day(r.date)+" "+r.time+" was declined — try another time", href:"#/schedule"}); });
+      if (r.kind==="cancel") out.push({date:r.decided, kind:"ok", text:"The lesson on "+day(r.was.date)+" was cancelled, as asked", href:"#/schedule"});
+      else if (r.kind==="move") out.push({date:r.decided, kind:"ok", text:"The lesson moved to "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"});
+      else out.push({date:r.decided, kind:"ok", text:"Your coach approved the lesson on "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); }
+    else if (r.status==="declined") out.push({date:r.decided, kind:"flag", text:r.kind==="cancel" ? "The request to cancel the lesson on "+day(r.was.date)+" was declined — the lesson stays"
+      : r.kind==="move" ? (r.needsAnswer ? "Your coach can't meet at the new time — choose what to do with the lesson on "+day(r.was.date)
+          : r.answer==="cancel" ? "The lesson on "+day(r.was.date)+" was cancelled" : r.answer==="keep" ? "The lesson on "+day(r.was.date)+" stays as planned" : "Your coach couldn't meet at the new time for the lesson on "+day(r.was.date)) : "The request for "+day(r.date)+" "+r.time+" was declined — try another time", href:"#/schedule"}); });
   state.assignments.forEach(a=>{
     if (a.assigned && a.assigned>=from && a.status==="Assigned") out.push({date:a.assigned, kind:"board", text:"New assignment: "+a.title+(a.due?" (due "+fmtShort(a.due)+")":""), href:"#/assignment/"+a.id});
     if (a.status==="Reviewed" && a.reviewedOn && a.reviewedOn>=from) out.push({date:a.reviewedOn, kind:"ok", text:(a.feedback?"New feedback on ":"Reviewed: ")+a.title, href:"#/assignment/"+a.id}); });
@@ -3004,15 +3099,15 @@ const changeable = x=>x.status==="planned" && (x.date>today() || (x.date===today
 function lessonActions(s, x, retry){
   const day = fmtDate(x.date,{weekday:"long",day:"numeric",month:"short"})+(x.time?" · "+x.time:"");
   const pc = pendingChange(s, x), na = !retry && needsAnswer(s, x);
-  if (na) return openForm({title:"Lesson on "+day, submit:"Continue", fields:[
+  if (na) return openForm({title:"Lesson on "+day, submit:"Continue", parentOk:true, fields:[
       {name:"c",label:"Your coach can't meet at the time you asked. What would you like to do?",type:"select",options:[["keep","Keep it as planned"],["cancel","Cancel the lesson"],["retry","Try another time"]],value:"keep",full:true}],
     onSubmit:d=>{ setTimeout(()=>answerMove(s, na, d.c), 0); }});
   if (pc) return confirmBox("Withdraw your request?", "You asked to "+(pc.kind==="cancel"?"cancel":"move")+" the lesson on "+day+". Withdraw that request?", "Withdraw", ()=>cancelRequest(s, pc.id));
   if (!changeable(x)){ toast(x.status==="done" ? "This lesson is done" : "This lesson can't be changed any more"); return; }
   const picks = !!s.freeSet, free = s.free||[], dates = [...new Set(free.map(f=>f.date))].sort();
-  openForm({title:"Lesson on "+day, submit:"Send to your coach", fields:[
+  openForm({title:"Lesson on "+day, submit:"Send to your coach", parentOk:true, fields:[
       {name:"what",label:"What do you need?",type:"select",options:[["cancel","I can't make it — cancel the lesson"],["move","Move it to another time"]],value:retry?"move":"cancel",full:true},
-      picks ? {name:"date",label:"New date",type:"select",options:dates.length?dates.map(d=>[d, fmtDate(d,{weekday:"long",day:"numeric",month:"short"})]):[["","No free time in the coming weeks"]],value:dates[0]||"",show:v=>v.what==="move"}
+      picks ? {name:"date",label:"New date",type:"select",value:"",show:v=>v.what==="move",options:()=>{ const ds = dates.filter(d=>startTimes(free, d, +x.duration||60).length); return ds.length ? ds.map(d=>[d, fmtDate(d,{weekday:"long",day:"numeric",month:"short"})]) : [["","No free time in the coming weeks"]]; }}
             : {name:"date",label:"New date",type:"date",value:x.date,show:v=>v.what==="move"},
       picks ? {name:"time",label:"New start time",type:"select",value:"",show:v=>v.what==="move",options:v=>{ const ts = startTimes(free, v.date, +x.duration||60); return ts.length ? ts : [["","No free time that day for this length"]]; }}
             : {name:"time",label:"New start time",type:"time",value:x.time||"",show:v=>v.what==="move"},
@@ -3036,13 +3131,15 @@ function requestLesson(s, pre){
   const dates = [...new Set(free.map(f=>f.date))].sort();
   const durs = [["45","45"],["60","60"],["90","90"],["120","120"]];
   // With free time set, the student picks a day that has open time, then one of the start times that fit.
+  // only days where a lesson of the chosen length still fits
+  const fitDates = dur=>dates.filter(d=>startTimes(free, d, dur).length);
   const dateField = picks
-    ? {name:"date",label:"Date",type:"select",options:dates.length ? dates.map(d=>[d, fmtDate(d,{weekday:"long",day:"numeric",month:"short"})]) : [["","No free time in the coming weeks"]],value:dates.includes(p.date)?p.date:(dates[0]||"")}
+    ? {name:"date",label:"Date",type:"select",value:p.date||"",options:v=>{ const ds = fitDates(+v.duration||60); return ds.length ? ds.map(d=>[d, fmtDate(d,{weekday:"long",day:"numeric",month:"short"})]) : [["","No free time in the coming weeks for this length"]]; }}
     : {name:"date",label:"Date",type:"date",value:p.date||addDays(today(),1)};
   const timeField = picks
     ? {name:"time",label:"Start time",type:"select",value:p.time||"",options:v=>{ const ts = startTimes(free, v.date, +v.duration||60); return ts.length ? ts : [["","No free time that day for this length"]]; }}
     : {name:"time",label:"Start time",type:"time",value:p.time||""};
-  openForm({title:"Request a lesson", submit:"Send request", fields:[
+  openForm({title:"Request a lesson", submit:"Send request", parentOk:true, fields:[
       {name:"duration",label:"Duration (minutes)",type:"select",options:durs,value:"60"},
       dateField, timeField,
       {name:"format",label:"Format",type:"select",options:["In person","Online"],value:"In person"},
@@ -3199,7 +3296,7 @@ function requestsPanel(){
       const what = r.kind==="cancel" ? '<span class="tag flag">Cancel lesson</span> '+esc(day(r.was.date))+(r.was.time?' · '+esc(r.was.time):'')
         : r.kind==="move" ? '<span class="tag warn">Move lesson</span> '+esc(day(r.was.date))+(r.was.time?' '+esc(r.was.time):'')+' → '+esc(day(r.date))+' · '+esc(r.time)+' · '+r.duration+' min'
         : '<span class="tag board">New lesson</span> '+esc(day(r.date))+' · '+esc(r.time)+' · '+r.duration+' min · '+esc(r.format);
-      return '<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+what+(r.note?' · '+esc(r.note):'')+'</div>'+
+      return '<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a>'+(r.by==="parent"?' <span class="tag">from the parent</span>':'')+'</div><div class="small muted">'+what+(r.note?' · '+esc(r.note):'')+'</div>'+
       (r.date<today()?'<div class="small" style="color:var(--flag)">This date has passed</div>':'')+'</div><div class="row-actions"><button class="btn small ghost" data-a="decline" data-id="'+s.id+'|'+r.id+'">Decline</button><button class="btn small primary" data-a="approve" data-id="'+s.id+'|'+r.id+'">Approve</button></div></li>'; }).join("")+answers.map(ansLine).join("")+'</ul></section>';
 }
 function approveRequest(s, r){
@@ -3393,7 +3490,8 @@ function editStudent(s){
       {name:"notesShared",label:"Coach notes in the student app",type:"select",options:[["0","Private — only you see them"],["1","Visible to the student"]],value:x.notesShared?"1":"0",full:true}
     ],
     danger: isNew?null:{label:"Delete student", onClick:()=>confirmBox("Delete "+x.name+"?","This removes all of their sessions, assignments, repertoire, tournaments and payment history. To keep the history, archive them instead.","Delete permanently",()=>{
-      state.students = state.students.filter(y=>y.id!==x.id); store.deleteStudent(x.id); state.assignments.filter(a=>a.studentId===x.id).forEach(a=>store.deleteAssignment(a.id)); state.assignments = state.assignments.filter(a=>a.studentId!==x.id); state.games.filter(g=>g.studentId===x.id).forEach(g=>store.deleteGame(g.id)); state.games = state.games.filter(g=>g.studentId!==x.id); location.hash="#/students"; toast("Student deleted"); })},
+      state.students = state.students.filter(y=>y.id!==x.id); store.deleteStudent(x.id);
+      families().forEach(f=>{ if ((f.studentIds||[]).includes(x.id)){ f.studentIds = f.studentIds.filter(y=>y!==x.id); saveSettings(); } }); state.assignments.filter(a=>a.studentId===x.id).forEach(a=>store.deleteAssignment(a.id)); state.assignments = state.assignments.filter(a=>a.studentId!==x.id); state.games.filter(g=>g.studentId===x.id).forEach(g=>store.deleteGame(g.id)); state.games = state.games.filter(g=>g.studentId!==x.id); location.hash="#/students"; toast("Student deleted"); })},
     onSubmit:d=>{
       if (!d.name) return "Enter the student's name.";
       const fid = d.fideId.replace(/\s/g,""), iid = d.icfId.replace(/\s/g,"");
@@ -3502,6 +3600,7 @@ function tOverview(el, s){
       (s.notes?'<button class="btn small ghost" data-a="shareNotes" style="margin-top:8px">'+(s.notesShared?"Make private":"Show to student")+'</button>':''),'<button class="btn small" data-a="edit">Edit</button>')+
     '</div>'+
     appPanel(s)+
+    parentPanel(s)+
     '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Details</h2></div><dl class="kv">'+
       '<dt>Sessions done</dt><dd class="num">'+done.length+' ('+hours.toFixed(1)+' h)</dd><dt>Last session</dt><dd>'+(last?esc(fmtDate(last.date))+' — '+esc(last.topics||""):"—")+'</dd>'+
       '<dt>Next tournament</dt><dd>'+(nextT?esc(nextT.name)+", "+esc(fmtShort(nextT.start)):"—")+'</dd>'+
@@ -3526,14 +3625,37 @@ function tOverview(el, s){
     shareNotes:()=>{ s.notesShared = !s.notesShared; saveStudent(s); render(); toast(s.notesShared?"Notes are now visible to "+s.name.split(" ")[0]:"Notes are private again"); },
     invite:()=>{ s.invite = {code:inviteCode(), created:today()}; saveStudent(s); render(); },
     uninvite:()=>{ delete s.invite; saveStudent(s); render(); toast("Invite cancelled"); },
+    famNew:()=>{ const f = {id:"fam-"+uid(), name:(s.guardian ? s.guardian.split(/[,·]/)[0].trim() : s.name.split(" ").slice(-1)[0]+" family"), studentIds:[s.id], invite:{code:inviteCode(), created:today()}}; families().push(f); saveSettings(); render(); },
+    famAdd:()=>{ const f = families().find(x=>x.id===$("#famPick").value); if (!f) return; f.studentIds = [...new Set([...(f.studentIds||[]), s.id])]; saveSettings(); portal && portal.scheduleFamily(f.id); render(); toast(s.name.split(" ")[0]+" added to "+f.name); },
+    famInvite:()=>{ const f = familyOf(s); f.invite = {code:inviteCode(), created:today()}; saveSettings(); render(); },
+    famUninvite:()=>{ const f = familyOf(s); delete f.invite; if (!f.portal && (f.studentIds||[]).length<=1) state.settings.families = families().filter(x=>x!==f); saveSettings(); render(); toast("Invite cancelled"); },
+    famRename:()=>{ const f = familyOf(s); openForm({title:"Rename family", submit:"Save", fields:[{name:"name",label:"Family name",value:f.name,full:true}], onSubmit:d=>{ if (!d.name) return "Enter a name."; f.name = d.name; saveSettings(); render(); }}); },
+    famLeave:()=>{ const f = familyOf(s); confirmBox("Remove "+s.name+" from "+f.name+"?", "The parent will no longer see "+s.name.split(" ")[0]+"’s board.", "Remove", ()=>{ f.studentIds = f.studentIds.filter(x=>x!==s.id); saveSettings(); portal && portal.scheduleFamily(f.id); render(); }); },
+    famUnlink:()=>{ const f = familyOf(s); confirmBox("Disconnect "+f.name+"?", "The parent will no longer see the board in the app. Your records stay here, and you can invite them again later.", "Disconnect", ()=>{ portal.unlinkFamily(f); render(); toast(f.name+" disconnected"); }); },
     unlink:()=>confirmBox("Disconnect "+s.name+"?", "They will no longer see their board in the app. Their records stay here, and you can invite them again later.","Disconnect",()=>{ portal.unlink(s); render(); toast(s.name+" disconnected"); })
   });
 }
 // Codes avoid letters and digits that are easy to mix up (O/0, I/1).
 function inviteCode(){
   const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c;
-  do { c = ""; const r = crypto.getRandomValues(new Uint32Array(6)); r.forEach(n=>{ c += A[n % A.length]; }); } while (state.students.some(x=>x.invite && x.invite.code===c));
+  do { c = ""; const r = crypto.getRandomValues(new Uint32Array(6)); r.forEach(n=>{ c += A[n % A.length]; }); } while (state.students.some(x=>x.invite && x.invite.code===c) || families().some(x=>x.invite && x.invite.code===c));
   return c;
+}
+function parentPanel(s){
+  const f = familyOf(s), others = families().filter(x=>x!==f);
+  let body;
+  if (store.kind!=="db") return "";
+  if (!f) body = '<p class="small muted" style="margin:0 0 10px">A parent sees '+esc(s.name.split(" ")[0])+'’s lessons, assignments, progress, balance and payments, and can request, cancel or move lessons. One parent account can follow several of your students (siblings).</p>'+
+    '<div class="row-actions"><button class="btn small primary" data-a="famNew">Invite a parent</button>'+(others.length?'<select id="famPick" class="search" style="width:auto" aria-label="Family">'+others.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select><button class="btn small" data-a="famAdd">Add to this family</button>':'')+'</div>';
+  else {
+    const kids = (f.studentIds||[]).map(byId).filter(Boolean);
+    body = '<p style="margin:0">'+esc(f.name)+' · '+kids.map(k=>esc(k.name)).join(", ")+'</p>'+
+      (f.portal ? '<p class="small muted">Connected since '+esc(fmtDate(f.portal.linkedAt))+'. They see the balance and payments too, but never other families or notes you keep private.</p><div class="row-actions"><button class="btn small ghost danger" data-a="famUnlink">Disconnect</button>'
+       : f.invite ? '<ol class="steps"><li>Share Coach\'s Board with the parent by email and give them Editor access. Don\'t turn on a public link.</li><li>Give them this code: <span class="code-box">'+esc(f.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Coach\'s Board.</li></ol><div class="row-actions"><button class="btn small ghost" data-a="famUninvite">Cancel invite</button>'
+       : '<div class="row-actions" style="margin-top:8px"><button class="btn small primary" data-a="famInvite">Invite a parent</button>')+
+      '<button class="btn small ghost" data-a="famRename">Rename family</button>'+(kids.length>1?'<button class="btn small ghost" data-a="famLeave">Remove '+esc(s.name.split(" ")[0])+' from the family</button>':'')+'</div>';
+  }
+  return '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Parent app</h2>'+(f&&f.portal?'<span class="tag ok">Connected</span>':f&&f.invite?'<span class="tag warn">Waiting for the parent</span>':'')+'</div>'+body+'</section>';
 }
 function appPanel(s){
   const first = esc(s.name.split(" ")[0]);
@@ -5138,6 +5260,12 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Parent app":"אפליקציית ההורים", "Invite a parent":"הזמנת הורה", "Add to this family":"הוספה למשפחה הזו", "Rename family":"שינוי שם המשפחה", "Family name":"שם המשפחה", "Enter a name.":"יש להזין שם.",
+  "Waiting for the parent":"ממתין להורה", "from the parent":"מההורה", "Statement":"פירוט", "Balance":"יתרה", "To pay":"לתשלום", "Charged in total":"סה״כ חויב", "Paid in total":"סה״כ שולם",
+  "No payments yet":"עדיין אין תשלומים", "No charges or payments yet.":"עדיין אין חיובים או תשלומים.", "Nothing here yet.":"עדיין אין כאן כלום.", "Charge":"חיוב", "Paid":"שולם", "Item":"פריט", "Payment":"תשלום",
+  "The last two years. Lessons are charged once they have taken place; cancelled lessons aren't charged.":"השנתיים האחרונות. שיעור מחויב אחרי שהתקיים; שיעור שבוטל אינו מחויב.",
+  "Share Coach's Board with the parent by email and give them Editor access. Don't turn on a public link.":"יש לשתף את הלוח של המאמן עם ההורה במייל, עם הרשאת Editor. לא להפעיל קישור ציבורי.",
+  "Whose board":"הלוח של מי",
   "Answer needed":"נדרשת תשובה", "Answer":"מענה", "Cancel the lesson":"ביטול השיעור", "Keep it as planned":"להשאיר כמתוכנן", "Try another time":"לנסות זמן אחר", "Continue":"המשך",
   "Your coach can't meet at the time you asked. What would you like to do?":"המאמן לא יכול להיפגש בזמן שביקשת. מה תרצה/י לעשות?",
   "Lesson cancelled — your coach will see it":"השיעור בוטל — המאמן יראה זאת", "Lesson kept as planned":"השיעור נשאר כמתוכנן",
@@ -5151,7 +5279,7 @@ const HE = {
   "Cancellation request sent to your coach":"בקשת הביטול נשלחה למאמן", "Move request sent to your coach":"בקשת ההזזה נשלחה למאמן",
   "Requested move":"הזזה מבוקשת", "Lesson · cancel requested":"שיעור · התבקש ביטול", "Lesson · move requested":"שיעור · התבקשה הזזה", "Move request":"בקשת הזזה",
   "Cancel requested":"התבקש ביטול", "Move requested":"התבקשה הזזה", "Can't make it?":"לא מסתדר?",
-  "Updates":"עדכונים", "New":"חדש", "No free time in the coming weeks":"אין זמן פנוי בשבועות הקרובים", "No free time that day for this length":"אין זמן פנוי ביום הזה לשיעור באורך הזה",
+  "Updates":"עדכונים", "New":"חדש", "No free time in the coming weeks":"אין זמן פנוי בשבועות הקרובים", "No free time in the coming weeks for this length":"אין זמן פנוי בשבועות הקרובים לשיעור באורך הזה", "No free time that day for this length":"אין זמן פנוי ביום הזה לשיעור באורך הזה",
   "Your coach isn't free then. Choose another start time or a shorter lesson.":"המאמן לא פנוי בזמן הזה. כדאי לבחור שעה אחרת או שיעור קצר יותר.",
   "Not updated by your coach’s app yet":"עדיין לא עודכן מהאפליקציה של המאמן",
   "Another lesson":"שיעור אחר", "Booked":"תפוס",
@@ -5384,6 +5512,14 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^(.+)’s board$/, "הלוח של $1"], [/^(.+) to pay$/, "$1 לתשלום"], [/^(.+) in credit$/, "$1 בזכות"], [/^(.+) per lesson$/, "$1 לשיעור"],
+  [/^Last payment (.+) · (.+)$/, "תשלום אחרון $1 · $2"], [/^Last payment · (.+)$/, "תשלום אחרון · $1"],
+  [/^View only — (.+) or the coach can change this$/, "צפייה בלבד — $1 או המאמן יכולים לשנות את זה"],
+  [/^A parent sees (.+)’s lessons, assignments, progress, balance and payments, and can request, cancel or move lessons\. One parent account can follow several of your students \(siblings\)\.$/, "ההורה רואה את השיעורים, המשימות, ההתקדמות, היתרה והתשלומים של $1, ויכול לבקש, לבטל או להזיז שיעורים. חשבון הורה אחד יכול לעקוב אחרי כמה תלמידים (אחים)."],
+  [/^Connected since (.+)\. They see the balance and payments too, but never other families or notes you keep private\.$/, "מחובר מאז $1. ההורה רואה גם את היתרה והתשלומים, אבל אף פעם לא משפחות אחרות או הערות פרטיות."],
+  [/^Remove (.+) from the family$/, "הסרת $1 מהמשפחה"], [/^Remove (.+) from (.+)\?$/, "להסיר את $1 מ־$2?"], [/^The parent will no longer see (.+)’s board\.$/, "ההורה לא יראה יותר את הלוח של $1."],
+  [/^(\S+) added to (?!.*’s balance$)(.+)$/, "$1 נוסף/ה ל־$2"], [/^Session: (.+)$/, "שיעור: $1"], [/^Payment · (.+)$/, "תשלום · $1"],
+  [/^The parent will no longer see the board in the app\. .*$/, "ההורה לא יראה יותר את הלוח באפליקציה. הנתונים נשארים כאן, ואפשר להזמין שוב בהמשך."],
   [/^Can't meet then — (.+)$/, "לא מתאים לי — $1"], [/^Message to (.+) \(optional\)$/, "הודעה ל־$1 (לא חובה)"],
   [/^(.+) will be asked to cancel, keep the lesson or try another time$/, "$1 יתבקש/תתבקש לבטל, להשאיר או לנסות זמן אחר"],
   [/^Your lesson on (?!.* (?:was|will be) )(.+)$/, "השיעור שלך ב־$1"], [/^Your lesson on (.+?)(?: at (\d\d:\d\d))? will be cancelled\.$/, (m,d,t)=>"השיעור שלך ב־"+d+(t?" בשעה "+t:"")+" יבוטל."],
@@ -5391,20 +5527,20 @@ const HE_RX = [
   [/^You declined the move of the (.+) lesson · waiting for their answer$/, "דחית את הזזת השיעור של $1 · ממתין לתשובה"],
   [/^Cancelled the (.+) lesson after you declined the move$/, "ביטל/ה את השיעור של $1 אחרי שדחית את ההזזה"],
   [/^Will come to the (.+) lesson as planned$/, "יגיע/תגיע לשיעור של $1 כמתוכנן"], [/^Asked for another time for the (.+) lesson$/, "ביקש/ה זמן אחר לשיעור של $1"],
-  [/^Your coach can't meet at the new time — choose what to do with your lesson on (.+)$/, "המאמן לא יכול בזמן החדש — יש לבחור מה לעשות עם השיעור ב־$1"],
+  [/^Your coach can't meet at the new time — choose what to do with the lesson on (.+)$/, "המאמן לא יכול בזמן החדש — יש לבחור מה לעשות עם השיעור ב־$1"],
   [/^You cancelled your lesson on (.+)$/, "ביטלת את השיעור ב־$1"], [/^You kept your lesson on (.+) as planned$/, "השארת את השיעור ב־$1 כמתוכנן"],
-  [/^Your coach couldn't meet at the new time for your lesson on (.+)$/, "המאמן לא יכול היה בזמן החדש לשיעור ב־$1"],
+  [/^Your coach couldn't meet at the new time for the lesson on (.+)$/, "המאמן לא יכול היה בזמן החדש לשיעור ב־$1"],
   [/^Lesson on (.+)$/, "השיעור ב־$1"], [/^Move lesson — (.+)$/, "הזזת שיעור — $1"],
   [/^You asked to (cancel|move) the lesson on (.+)\. Withdraw that request\?$/, (m,k,d)=>"ביקשת "+(k==="cancel"?"לבטל":"להזיז")+" את השיעור ב־"+d+". לבטל את הבקשה?"],
   [/^(.+)’s lesson on (.+?)(?: at (\d\d:\d\d))? will be marked cancelled\. Nothing is charged for it\.$/, (m,n,d,t)=>"השיעור של "+n+" ב־"+d+(t?" בשעה "+t:"")+" יסומן כמבוטל. לא יחויב עליו תשלום."],
   [/^(.+) asked to cancel the lesson on (.+)\. The lesson stays as planned and they'll see the request as declined\.$/, "$1 ביקש/ה לבטל את השיעור ב־$2. השיעור נשאר כמתוכנן והבקשה תופיע כנדחתה."],
   [/^Lesson (cancelled|moved) — (.+) will see it in their app$/, (m,k,n)=>(k==="cancelled"?"השיעור בוטל":"השיעור הוזז")+" — "+n+" יראה זאת באפליקציה"],
-  [/^Your lesson on (.+) was cancelled, as you asked$/, "השיעור ב־$1 בוטל, כפי שביקשת"],
-  [/^Your lesson moved to (.+?)(?: at (\d\d:\d\d))?$/, (m,d,t)=>"השיעור הוזז ל־"+d+(t?" בשעה "+t:"")],
-  [/^Your request to cancel the lesson on (.+) was declined — the lesson stays$/, "הבקשה לבטל את השיעור ב־$1 נדחתה — השיעור נשאר"],
+  [/^The lesson on (.+) was cancelled, as asked$/, "השיעור ב־$1 בוטל, כפי שהתבקש"], [/^The lesson on (.+) was cancelled$/, "השיעור ב־$1 בוטל"], [/^The lesson on (.+) stays as planned$/, "השיעור ב־$1 נשאר כמתוכנן"],
+  [/^The lesson moved to (.+?)(?: at (\d\d:\d\d))?$/, (m,d,t)=>"השיעור הוזז ל־"+d+(t?" בשעה "+t:"")],
+  [/^The request to cancel the lesson on (.+) was declined — the lesson stays$/, "הבקשה לבטל את השיעור ב־$1 נדחתה — השיעור נשאר"],
   [/^Your request to move the lesson on (.+) was declined — it stays as planned$/, "הבקשה להזיז את השיעור ב־$1 נדחתה — השיעור נשאר כמתוכנן"],
-  [/^Your coach approved your lesson on (.+?)(?: at (\d\d:\d\d))?$/, (m,d,t)=>"המאמן אישר את השיעור ב־"+d+(t?" בשעה "+t:"")],
-  [/^Your request for (.+) (\d\d:\d\d) was declined — try another time$/, "הבקשה ל־$1 $2 נדחתה — אפשר לנסות זמן אחר"],
+  [/^Your coach approved the lesson on (.+?)(?: at (\d\d:\d\d))?$/, (m,d,t)=>"המאמן אישר את השיעור ב־"+d+(t?" בשעה "+t:"")],
+  [/^The request for (.+) (\d\d:\d\d) was declined — try another time$/, "הבקשה ל־$1 $2 נדחתה — אפשר לנסות זמן אחר"],
   [/^New assignment: (.+?)(?: \(due (.+)\))?$/, (m,x,d)=>"משימה חדשה: "+x+(d?" (להגשה "+d+")":"")],
   [/^New feedback on (.+)$/, "משוב חדש על $1"], [/^Reviewed: (.+)$/, "נבדק: $1"],
   [/^Lesson planned for (.+?)(?: at (\d\d:\d\d))?$/, (m,d,t)=>"שיעור תוכנן ל־"+d+(t?" בשעה "+t:"")],

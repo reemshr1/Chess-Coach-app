@@ -3,11 +3,15 @@
 Ideas agreed on but deliberately left for later. When picking up work on the
 app, check here first.
 
+## Done
+
+- **Student app** and **parents' view (families)**: students and parents link
+  their own claude.ai accounts with invite codes; parents see balance and
+  payments and can request, cancel or move lessons.
+
 ## Next phase
 
-- **Parents' view.** The student app is built (each student links their own
-  claude.ai account with an invite code). Parents come next, separately:
-  the same linking, plus payments and the balance, which students never see.
+- **Design pass** over the coach, student and parent screens together.
 
 ## Later
 
