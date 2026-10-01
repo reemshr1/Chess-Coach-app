@@ -2648,7 +2648,8 @@ function makePortal(db){
     subs[uid] = db.collection("portal/"+uid+"/inbox").onSnapshot(snap=>{
       const st = state.students.find(x=>x.portal && x.portal.uid===uid), fam = !st && families().find(f=>f.portal && f.portal.uid===uid);
       if (!st && !fam) return;
-      const ops = snap.docs.map(d=>Object.assign({_id:d.id}, d.data())).filter(o=>o.type).sort((a,b)=>(a.at||"")<(b.at||"")?-1:1);
+      // snapshot data is frozen, so each op is copied before it is touched
+      const ops = snap.docs.map(d=>Object.assign({_id:d.id}, JSON.parse(JSON.stringify(d.data()||{})))).filter(o=>o.type).sort((a,b)=>(a.at||"")<(b.at||"")?-1:1);
       const fresh = ops.filter(o=>!taken.has(o._id)); if (!fresh.length) return;
       const touched = new Set();
       fresh.forEach(o=>{ taken.add(o._id);
