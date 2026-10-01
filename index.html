@@ -2501,15 +2501,18 @@ const PORTAL_KEYS = ["worklog","tournaments","books","training"]; // lists a stu
 function studentView(s){
   return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
-    sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
+    sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
     worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments, books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[],
     coachName:state.settings.coachName||"", weekStart:state.settings.weekStart||0,
     freeSet:freeRules().some(r=>r.kind!=="off"), ...openSlots(today(), addDays(today(),56), s.id)}));
 }
+// The student's copy carries when the coach's app last wrote it.
+function stampView(v){ v.syncedAt = new Date().toISOString(); return v;
+}
 // Every document the student's app reads, by id.
 function portalDocs(s){
   const out = {}, parts = splitStudent(studentView(s));
-  out.student = parts.main; Object.keys(parts.logs).forEach(k=>{ out[k] = parts.logs[k]; });
+  out.student = stampView(parts.main); Object.keys(parts.logs).forEach(k=>{ out[k] = parts.logs[k]; });
   state.assignments.filter(a=>a.studentId===s.id).forEach(a=>{ out[a.id] = a; });
   state.games.filter(g=>g.studentId===s.id).forEach(g=>{ out[g.id] = g; });
   return out;
@@ -2570,7 +2573,10 @@ function makePortal(db){
     const uid = s.portal.uid, col = db.collection("portal/"+uid+"/view");
     if (!cache[uid]){ const c = {}; (await col.get()).docs.forEach(d=>{ c[d.id] = JSON.stringify(d.data()); }); cache[uid] = c; }
     const want = portalDocs(s), have = cache[uid], writes = [];
-    Object.keys(want).forEach(id=>{ const j = JSON.stringify(want[id]); if (have[id]!==j && j.length<=DOC_LIMIT) writes.push(col.doc(id).set(want[id]).then(()=>{ have[id] = j; })); });
+    const bare = j=>j && j.replace(/"syncedAt":"[^"]*"/, "");
+    const stale = j=>{ const m = /"syncedAt":"([^"]*)"/.exec(j||""); return !m || Date.now()-Date.parse(m[1]) > 30*60000; };
+    Object.keys(want).forEach(id=>{ const j = JSON.stringify(want[id]);
+      if ((bare(have[id])!==bare(j) || (id==="student" && stale(have[id]))) && j.length<=DOC_LIMIT) writes.push(col.doc(id).set(want[id]).then(()=>{ have[id] = j; })); });
     Object.keys(have).forEach(id=>{ if (!want[id]) writes.push(col.doc(id).delete().then(()=>{ delete have[id]; })); });
     await Promise.all(writes);
   }
@@ -2609,7 +2615,8 @@ function makePortal(db){
     }, ()=>{});
   }
   return {
-    start(){ watchLinks(); state.students.forEach(s=>{ if (s.portal && s.portal.uid){ watchInbox(s); schedule(s.id); } }); },
+    start(){ watchLinks(); state.students.forEach(s=>{ if (s.portal && s.portal.uid){ watchInbox(s); schedule(s.id); } });
+      setInterval(()=>state.students.forEach(s=>schedule(s.id)), 30*60000); },
     schedule, scheduleAll(){ state.students.forEach(s=>schedule(s.id)); },
     unlink(s){
       const uid = s.portal && s.portal.uid; if (!uid) return;
@@ -2636,6 +2643,7 @@ function makeStudentStore(db, account){
     state.students = [s];
     Object.values(inbox).sort((a,b)=>(a.at||"")<(b.at||"")?-1:1).forEach(op=>applyOp(s, op, false));
     Object.assign(state.settings, {coachName:main.coachName||"", weekStart:main.weekStart||0, currency:""});
+    s.syncedAt = main.syncedAt||""; s.waiting = Object.keys(inbox).length;
     // Drop windows that have passed since the coach's app last wrote them.
     const now = new Date(), t = today(), nm = Math.ceil((now.getHours()*60+now.getMinutes())/30)*30;
     const fresh = (L, min)=>(L||[]).filter(f=>f.date>t || (f.date===t && toMin(f.to)-nm>=min)).map(f=>f.date===t && toMin(f.from)<nm ? Object.assign({}, f, {from:fmtMin(nm)}) : f);
@@ -2874,6 +2882,14 @@ function bindLink(){
     if (c.length<4) return toast("Enter the code from your coach.");
     store.link(c).then(()=>{ toast("Code sent"); render(); }, ()=>toast("Couldn't send the code. Check your connection.")); };
 }
+// "Updated by your coach 2 hours ago", and changes still waiting for the coach's app.
+function freshness(s){
+  const ago = s.syncedAt ? Math.max(0, Date.now()-Date.parse(s.syncedAt)) : null;
+  const when = ago===null ? "" : ago<5*60000 ? "just now" : ago<3600000 ? Math.round(ago/60000)+" minutes ago" : ago<86400000 ? Math.round(ago/3600000)+" hours ago" : Math.round(ago/86400000)+" days ago";
+  const old = ago!==null && ago>2*86400000;
+  return '<p class="small '+(old?"":"muted")+'" style="margin:4px 0 0'+(old?';color:var(--warn)':'')+'">'+(when?"Updated by your coach’s app "+when:"Not updated by your coach’s app yet")+
+    (s.waiting?' · '+(s.waiting===1?"1 change":s.waiting+" changes")+' waiting for your coach’s app':'')+'</p>';
+}
 function pHome(v, s){
   const t = today(), first = s.name.split(" ")[0];
   const lessons = sortBy(s.sessions.filter(x=>x.status==="planned" && x.date>=t),"date").slice(0,4);
@@ -2885,12 +2901,13 @@ function pHome(v, s){
   const recent = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,3);
   const rt = sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===mainSource(s)),"date").pop();
   const hr = new Date().getHours(), greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
-  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+greet+', '+esc(first)+'</h1></div><div class="row-actions"><button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
+  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+greet+', '+esc(first)+'</h1>'+freshness(s)+'</div><div class="row-actions"><button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
     '<div class="stats"><div class="stat"><div class="v num">'+(lessons[0]?esc(fmtDate(lessons[0].date,{weekday:"short",day:"numeric",month:"short"})):"—")+'</div><div class="l">'+(lessons[0]?"Next lesson"+(lessons[0].time?" · "+esc(lessons[0].time):""):"No lesson planned")+'</div></div>'+
       '<div class="stat"><div class="v num'+(todo.some(a=>a.due&&a.due<t)?" money-owed":"")+'">'+todo.length+'</div><div class="l">Assignments to do</div></div>'+
       '<div class="stat"><div class="v num">'+week+'</div><div class="l">Practice minutes this week</div></div>'+
       '<div class="stat"><div class="v num">'+(rt?esc(rt.value):"—")+'</div><div class="l">'+(rt?esc(rt.source||mainSource(s))+" rating":"Rating")+'</div></div></div>'+
     '<div class="grid g2">'+
+    updatesPanel(s)+
     panel("Coming up", (lessons.length||tours.length||pend.length) ? '<ul class="list">'+
         lessons.map(x=>'<li><div class="main"><div class="title">Lesson</div><div class="small muted">'+[x.format, x.duration?x.duration+" min":"", x.topics].filter(Boolean).map(esc).join(" · ")+'</div></div><div style="text-align:end" class="small">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+(x.time?'<div class="muted">'+esc(x.time)+'</div>':'')+'</div></li>').join("")+
         tours.map(x=>'<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+[x.location, x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">'+esc(fmtShort(x.start))+'</span></li>').join("")+
@@ -2905,18 +2922,54 @@ function pHome(v, s){
   bindActions(v,{ req:()=>requestLesson(s), log:()=>openPractice(s, null), reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
     hwdone:id=>{ const a = state.assignments.find(x=>x.id===id); if (!a) return; a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — your coach will review it"); } });
 }
+// Start times (every 30 minutes) at which a lesson of `dur` minutes fits in the coach's open windows that day.
+function startTimes(free, date, dur){
+  const out = [];
+  free.filter(f=>f.date===date).forEach(f=>{ const a = toMin(f.from), b = toMin(f.to); for (let m=Math.ceil(a/30)*30; m+dur<=b; m+=30) out.push(fmtMin(m)); });
+  return [...new Set(out)].sort();
+}
+// What changed for the student lately: decisions on their requests, new assignments, feedback, lessons added.
+const UPDATE_DAYS = 14;
+function studentUpdates(s){
+  const t = today(), from = addDays(t, -UPDATE_DAYS), out = [], day = d=>fmtDate(d,{weekday:"short",day:"numeric",month:"short"});
+  (s.requests||[]).forEach(r=>{ if (!r.decided || r.decided<from) return;
+    if (r.status==="approved"){ const x = s.sessions.find(y=>y.id===r.sessionId) || r;
+      out.push({date:r.decided, kind:"ok", text:"Your coach approved your lesson on "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); }
+    else if (r.status==="declined") out.push({date:r.decided, kind:"flag", text:"Your request for "+day(r.date)+" "+r.time+" was declined — try another time", href:"#/schedule"}); });
+  state.assignments.forEach(a=>{
+    if (a.assigned && a.assigned>=from && a.status==="Assigned") out.push({date:a.assigned, kind:"board", text:"New assignment: "+a.title+(a.due?" (due "+fmtShort(a.due)+")":""), href:"#/assignment/"+a.id});
+    if (a.status==="Reviewed" && a.reviewedOn && a.reviewedOn>=from) out.push({date:a.reviewedOn, kind:"ok", text:(a.feedback?"New feedback on ":"Reviewed: ")+a.title, href:"#/assignment/"+a.id}); });
+  const fromReq = new Set((s.requests||[]).map(r=>r.sessionId).filter(Boolean));
+  s.sessions.forEach(x=>{ if (x.added && x.added>=from && x.status==="planned" && x.date>=t && !fromReq.has(x.id)) out.push({date:x.added, kind:"board", text:"Lesson planned for "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); });
+  return out.sort((a,b)=>a.date<b.date?1:-1).slice(0,8);
+}
+let lastSeenUpdates = null; // read once per visit, so this visit's new items stay marked
+function updatesPanel(s){
+  const ups = studentUpdates(s); if (!ups.length) return "";
+  const key = "cb-seen-"+s.id;
+  if (lastSeenUpdates===null){ try { lastSeenUpdates = localStorage.getItem(key)||""; localStorage.setItem(key, today()); } catch(e){ lastSeenUpdates = ""; } }
+  return panel("Updates", '<ul class="list">'+ups.map(u=>'<li><div class="main"><div class="title"><a href="'+u.href+'">'+esc(u.text)+'</a></div><div class="small muted">'+esc(fmtDate(u.date,{weekday:"short",day:"numeric",month:"short"}))+'</div></div>'+(u.date>=lastSeenUpdates && lastSeenUpdates?'<span class="tag '+u.kind+'">New</span>':'')+'</li>').join("")+'</ul>');
+}
 function requestLesson(s, pre){
-  const p = pre||{};
+  const p = pre||{}, picks = !!s.freeSet, free = s.free||[];
+  const dates = [...new Set(free.map(f=>f.date))].sort();
+  const durs = [["45","45"],["60","60"],["90","90"],["120","120"]];
+  // With free time set, the student picks a day that has open time, then one of the start times that fit.
+  const dateField = picks
+    ? {name:"date",label:"Date",type:"select",options:dates.length ? dates.map(d=>[d, fmtDate(d,{weekday:"long",day:"numeric",month:"short"})]) : [["","No free time in the coming weeks"]],value:dates.includes(p.date)?p.date:(dates[0]||"")}
+    : {name:"date",label:"Date",type:"date",value:p.date||addDays(today(),1)};
+  const timeField = picks
+    ? {name:"time",label:"Start time",type:"select",value:p.time||"",options:v=>{ const ts = startTimes(free, v.date, +v.duration||60); return ts.length ? ts : [["","No free time that day for this length"]]; }}
+    : {name:"time",label:"Start time",type:"time",value:p.time||""};
   openForm({title:"Request a lesson", submit:"Send request", fields:[
-      {name:"date",label:"Date",type:"date",value:p.date||addDays(today(),1)},
-      {name:"time",label:"Start time",type:"time",value:p.time||""},
-      {name:"duration",label:"Duration (minutes)",type:"select",options:[["45","45"],["60","60"],["90","90"],["120","120"]],value:"60"},
+      {name:"duration",label:"Duration (minutes)",type:"select",options:durs,value:"60"},
+      dateField, timeField,
       {name:"format",label:"Format",type:"select",options:["In person","Online"],value:"In person"},
       {name:"note",label:"Note for your coach",type:"textarea",value:"",placeholder:"e.g. I'd like to prepare for the City Open"}],
     onSubmit:d=>{
       if (!d.date || d.date<today()) return "Choose a date from today on.";
       if (!d.time) return "Choose a start time.";
-      if (s.freeSet && !fitsFree(s.free||[], d.date, d.time, +d.duration)) return "Your coach isn't free then. Choose a time inside a green free slot on the Schedule.";
+      if (s.freeSet && !fitsFree(s.free||[], d.date, d.time, +d.duration)) return "Your coach isn't free then. Choose another start time or a shorter lesson.";
       const op = {type:"request", item:{id:uid(), date:d.date, time:d.time, duration:+d.duration, format:d.format, note:d.note}};
       store.send(op); applyOp(s, op, false); render(); toast("Request sent to your coach");
     }});
@@ -3039,7 +3092,7 @@ function pDashboard(v){
   bindActions(v,{ done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}), backup:()=>downloadBackup(),
     approve:id=>{ const [s,r] = req(id); if (r) approveRequest(s,r); },
     decline:id=>{ const [s,r] = req(id); if (!r) return;
-      confirmBox("Decline this request?", s.name+" asked for "+fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"})+" "+r.time+". They'll see it as declined.","Decline",()=>{ r.status = "declined"; saveStudent(s); render(); toast("Request declined"); }); } });
+      confirmBox("Decline this request?", s.name+" asked for "+fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"})+" "+r.time+". They'll see it as declined.","Decline",()=>{ r.status = "declined"; r.decided = today(); saveStudent(s); render(); toast("Request declined"); }); } });
 }
 // Lessons students asked for in their app, waiting for the coach.
 function requestsPanel(){
@@ -3064,7 +3117,7 @@ function approveRequest(s, r){
       if (!d.date) return "Choose a date.";
       const x = {id:uid(), date:d.date, time:d.time, duration:d.duration===""?60:+d.duration, format:d.format, status:"planned", topics:d.topics, notes:"", fee:d.fee===""?s.rate:+d.fee};
       const err = clashCheck(s.id, x, ack); if (err) return err;
-      s.sessions.push(x); r.status = "approved"; r.sessionId = x.id; saveStudent(s); render(); toast("Lesson added — "+s.name.split(" ")[0]+" will see it in their app");
+      s.sessions.push(x); r.status = "approved"; r.sessionId = x.id; r.decided = today(); saveStudent(s); render(); toast("Lesson added — "+s.name.split(" ")[0]+" will see it in their app");
     }});
 }
 // A reminder on Today when the last backup file is over a month old (or never, once the board has been in use for two weeks).
@@ -3392,7 +3445,7 @@ function editSession(s, x){
   ],"session","Session",
   d=>d.status==="cancelled" ? null : clashCheck(s.id, {id:x?x.id:"-", date:d.date, time:d.time, duration:d.duration, format:d.format}, ack),
   null,
-  (y)=>{ y.shareNotes = isShared(y.shareNotes); if (y.slotId && before && (y.date!==before.date || y.time!==before.time)) y.custom = true; },
+  (y, isNew)=>{ if (isNew) y.added = today(); y.shareNotes = isShared(y.shareNotes); if (y.slotId && before && (y.date!==before.date || y.time!==before.time)) y.custom = true; },
   // A deleted weekly-slot session is remembered on its slot, so it isn't planned again on the next load.
   (y)=>{ const sl = y.slotId && (s.slots||[]).find(z=>z.id===y.slotId); if (sl){ sl.skip = sl.skip||[]; sl.skip.push(y.slotDate||y.date); } });
 }
@@ -4400,7 +4453,7 @@ function pAssignment(v, r){
   const saveFb = ()=>{ a.feedback = $("#fb").value.trim(); };
   bindActions(v,{
     edit:()=>editAssignment(a),
-    status:id=>{ if (STUDENT() && id==="Reviewed") return; a.status = id; if (id==="Submitted" && !a.submitted) a.submitted = today(); saveAssignment(a); render(); if (STUDENT() && id==="Submitted") toast("Marked done — your coach will review it"); },
+    status:id=>{ if (STUDENT() && id==="Reviewed") return; a.status = id; if (id==="Reviewed") a.reviewedOn = today(); if (id==="Submitted" && !a.submitted) a.submitted = today(); saveAssignment(a); render(); if (STUDENT() && id==="Submitted") toast("Marked done — your coach will review it"); },
     paste:()=>openForm({title:"Paste PGN", submit:"Add games", fields:[{name:"pgn",label:"PGN text",type:"textarea",value:"",placeholder:'[Event "City Open"]\n[White "..."]\n[Black "..."]\n\n1. e4 c5 2. Nf3 ...'}],
       onSubmit:d=>{ if (!d.pgn) return "Paste the PGN of one or more games."; const res = addPgnText(a, d.pgn); if (!res.added) return res.full ? "This assignment is full. Create another assignment for these games." : "No games found in that text."; saveAssignment(a); setTimeout(()=>{ render(); reportAdd(res); },0); }}),
     view:id=>openViewer(a, a.games.find(g=>g.id===id), s),
@@ -4414,7 +4467,7 @@ function pAssignment(v, r){
       try { await dl.save({filename:name, data}); } catch(e){ if (e && e.code!=="cancelled") toast("The file wasn't saved."); }
     },
     fb:()=>{ saveFb(); saveAssignment(a); toast("Feedback saved"); },
-    fbdone:()=>{ saveFb(); a.status = "Reviewed"; saveAssignment(a); render(); toast("Feedback saved and marked reviewed"); }
+    fbdone:()=>{ saveFb(); a.status = "Reviewed"; a.reviewedOn = today(); saveAssignment(a); render(); toast("Feedback saved and marked reviewed"); }
   });
 }
 
@@ -4667,7 +4720,7 @@ function planSession(preset){
         const err = clashCheck(s.id, {id:"-", date:sl.start, time:sl.time, duration:dur, format:d.format}, ack); if (err) return err;
         s.slots = s.slots||[]; s.slots.push(sl); ensureRecurring(s); saveStudent(s); render(); toast("Weekly slot added for "+s.name); return;
       }
-      const x = {id:uid(), date:d.date||today(), time:d.time, duration:dur, format:d.format, status:"planned", topics:d.topics, notes:"", fee};
+      const x = {id:uid(), date:d.date||today(), time:d.time, duration:dur, format:d.format, status:"planned", topics:d.topics, notes:"", fee, added:today()};
       const err = clashCheck(s.id, x, ack); if (err) return err;
       s.sessions.push(x); saveStudent(s); render(); toast("Session planned");
     }});
@@ -4758,7 +4811,7 @@ function pSchedule(v){
   const clashes = items.filter(i=>i.kind==="session" && i.x.status!=="cancelled" && i.clash.length);
   const title = schedView==="week" ? fmtDate(first,{day:"numeric",month:"short"})+" – "+fmtDate(weekEnd,{day:"numeric",month:"short",year:"numeric"}) : "Next 4 weeks";
   const slotsN = state.students.filter(s=>s.active).reduce((a,s)=>a+(s.slots||[]).length,0);
-  v.innerHTML = (st ? '<div class="page-head"><div><h1>Schedule</h1><p class="sub">Your lessons, tournaments, assignments and own training</p></div><div class="row-actions"><button class="btn" data-a="plan">Plan training</button><button class="btn primary" data-a="req">Request a lesson</button></div></div>'
+  v.innerHTML = (st ? '<div class="page-head"><div><h1>Schedule</h1><p class="sub">Your lessons, tournaments, assignments and own training</p>'+freshness(me)+'</div><div class="row-actions"><button class="btn" data-a="plan">Plan training</button><button class="btn primary" data-a="req">Request a lesson</button></div></div>'
       : '<div class="page-head"><div><h1>Schedule</h1><p class="sub">'+slotsN+' weekly slot'+(slotsN===1?"":"s")+' · sessions are planned 8 weeks ahead automatically</p></div><div class="row-actions"><button class="btn" id="scSlot">Add weekly slot</button><button class="btn primary" id="scAdd">Plan session</button></div></div>')+
     (st ? "" : freePanel())+
     (unmarked.length?'<section class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="panel-head"><h2>Past sessions still marked as planned</h2><span class="small muted">Marking them done adds the fee to the balance</span></div><ul class="list">'+sortBy(unmarked.map(u=>Object.assign({d:u.x.date},u)),"d",-1).map(({s,x})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(x.date))+(x.time?" "+esc(x.time):"")+(x.topics?" · "+esc(x.topics):"")+'</div></div><div class="row-actions"><button class="btn small primary" data-a="done" data-id="'+s.id+'|'+x.id+'">Mark done</button><button class="btn small" data-a="cancel" data-id="'+s.id+'|'+x.id+'">Cancelled</button></div></li>').join("")+'</ul></section>':'')+
@@ -4961,6 +5014,9 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Updates":"עדכונים", "New":"חדש", "No free time in the coming weeks":"אין זמן פנוי בשבועות הקרובים", "No free time that day for this length":"אין זמן פנוי ביום הזה לשיעור באורך הזה",
+  "Your coach isn't free then. Choose another start time or a shorter lesson.":"המאמן לא פנוי בזמן הזה. כדאי לבחור שעה אחרת או שיעור קצר יותר.",
+  "Not updated by your coach’s app yet":"עדיין לא עודכן מהאפליקציה של המאמן",
   "Another lesson":"שיעור אחר", "Booked":"תפוס",
   "From":"משעה",
   "Day off":"יום חופש", "Add free time":"הוספת זמן פנוי", "Edit free time":"עריכת זמן פנוי", "Type":"סוג", "Every week":"כל שבוע", "One date only":"תאריך אחד בלבד", "Day off (not available)":"יום חופש (לא זמין)",
@@ -5191,6 +5247,12 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Your coach approved your lesson on (.+?)(?: at (\d\d:\d\d))?$/, (m,d,t)=>"המאמן אישר את השיעור ב־"+d+(t?" בשעה "+t:"")],
+  [/^Your request for (.+) (\d\d:\d\d) was declined — try another time$/, "הבקשה ל־$1 $2 נדחתה — אפשר לנסות זמן אחר"],
+  [/^New assignment: (.+?)(?: \(due (.+)\))?$/, (m,x,d)=>"משימה חדשה: "+x+(d?" (להגשה "+d+")":"")],
+  [/^New feedback on (.+)$/, "משוב חדש על $1"], [/^Reviewed: (.+)$/, "נבדק: $1"],
+  [/^Lesson planned for (.+?)(?: at (\d\d:\d\d))?$/, (m,d,t)=>"שיעור תוכנן ל־"+d+(t?" בשעה "+t:"")],
+  [/^Updated by your coach’s app (just now|(\d+) (minutes|hours|days) ago)(?: · (\d+) changes? waiting for your coach’s app)?$/, (m,w,n,u,c)=>"עודכן מהאפליקציה של המאמן "+(w==="just now"?"עכשיו":"לפני "+n+" "+({minutes:"דקות",hours:"שעות",days:"ימים"})[u])+(c?" · "+c+" שינויים ממתינים לאפליקציה של המאמן":"")],
   [/^Taken (\d\d:\d\d)–(\d\d:\d\d)$/, "תפוס $1–$2"],
   [/^Free (\d\d:\d\d)–(\d\d:\d\d)$/, "פנוי $1–$2"], [/^Coach free (\d\d:\d\d)–(\d\d:\d\d)$/, "המאמן פנוי $1–$2"],
   [/^Free time for lessons \((\d+)\)$/, "זמן פנוי לשיעורים ($1)"],
