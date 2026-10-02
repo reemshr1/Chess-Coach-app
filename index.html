@@ -3975,14 +3975,14 @@ function confirmText(kind, s, o, lng){
   const L = he ? {
       added:()=>"שלום! השיעור של "+first+" נקבע ל"+day(o.date,o.time)+". נתראה!",
       moved:()=>"שלום! השיעור של "+first+" הוזז מ"+day(o.was.date,o.was.time)+" ל"+day(o.date,o.time)+".",
-      cancelled:()=>"שלום, השיעור של "+first+" ב"+day(o.date,o.time)+" בוטל כפי שביקשתם. לא יחויב עליו תשלום.",
+      cancelled:()=>"שלום, השיעור של "+first+" ב"+day(o.date,o.time)+" בוטל כפי שביקשתם.",
       declined:()=>"שלום, לצערי אני לא פנוי/ה ב"+day(o.date,o.time)+". אפשר לבחור זמן אחר באפליקציה.",
       declinedCancel:()=>"שלום, לגבי הבקשה לבטל את השיעור ב"+day(o.date,o.time)+": השיעור נשאר כמתוכנן.",
       declinedMove:()=>"שלום, לצערי אני לא יכול/ה ב"+day(o.date,o.time)+". השיעור ב"+day(o.was.date,o.was.time)+" עדיין קבוע — באפליקציה אפשר לבחור לבטל אותו, להשאיר אותו או לנסות זמן אחר."
     } : {
       added:()=>"Hello! "+first+"'s lesson is booked for "+day(o.date,o.time)+". See you then!",
       moved:()=>"Hello! "+first+"'s lesson has moved from "+day(o.was.date,o.was.time)+" to "+day(o.date,o.time)+".",
-      cancelled:()=>"Hello, "+first+"'s lesson on "+day(o.date,o.time)+" is cancelled, as you asked. There is no charge for it.",
+      cancelled:()=>"Hello, "+first+"'s lesson on "+day(o.date,o.time)+" is cancelled, as you asked.",
       declined:()=>"Hello, unfortunately I'm not available on "+day(o.date,o.time)+". Please choose another time in the app.",
       declinedCancel:()=>"Hello, about the request to cancel the lesson on "+day(o.date,o.time)+": the lesson stays as planned.",
       declinedMove:()=>"Hello, unfortunately I can't do "+day(o.date,o.time)+". The lesson on "+day(o.was.date,o.was.time)+" is still booked — in the app you can choose to cancel it, keep it or try another time."
