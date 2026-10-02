@@ -295,6 +295,7 @@ dialog::backdrop{background:rgba(15,20,17,.45)}
 .as-row:hover{background:var(--paper)}
 .as-row .main{min-width:0;flex:1}
 .as-row .title{font-weight:600}
+@media (max-width:600px){.as-row{flex-wrap:wrap;row-gap:8px}.as-row .main{flex-basis:100%}}
 .drop{margin-top:12px;border:1.5px dashed var(--line);border-radius:var(--r-md);padding:18px;text-align:center;color:var(--muted);font-size:.9rem}
 .drop.over{border-color:var(--sq-dark);background:var(--sq-light);color:var(--ink)}
 .fb{width:100%;min-height:120px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--paper);resize:vertical}
@@ -410,6 +411,8 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .panel > .panel-head .tag{background:var(--yellow);border-color:transparent;color:#16243F}
 .panel > .panel-head a{color:#fff}
 .panel[style*="--flag"] > .panel-head{background:var(--flag)}
+/* boxes whose rows run edge to edge (no inner spacing) keep the title bar inside */
+.panel[style*="padding:0"] > .panel-head{margin:0}
 .stats{border:0;background:transparent;gap:12px;overflow:visible}
 .stats .stat,.stats .stat-link{border:0!important;border-radius:14px;padding:18px 20px}
 .stats > :nth-child(4n+1){background:var(--tint-blue)}.stats > :nth-child(4n+2){background:var(--tint-green)}
@@ -4954,7 +4957,7 @@ function pAssignments(v){
 }
 function tAssignments(el, s){
   const list = asSort(state.assignments.filter(a=>a.studentId===s.id));
-  el.innerHTML = '<section class="panel" style="padding:0"><div class="panel-head" style="padding:16px 18px 4px"><h2>Assignments</h2>'+coachOnly('<button class="btn small primary" data-a="new">New assignment</button>')+'</div>'+
+  el.innerHTML = '<section class="panel" style="padding:0"><div class="panel-head"><h2>Assignments</h2>'+coachOnly('<button class="btn small primary" data-a="new">New assignment</button>')+'</div>'+
     (list.length ? list.map(a=>'<div class="as-item">'+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">No assignments yet. Add a task like “30 puzzles on pins”, or upload games in PGN for '+esc(s.name)+' to analyse.</p>')+'</section>';
   bindActions(el,{ new:()=>editAssignment(null, s.id),
     done:id=>{ const a = state.assignments.find(x=>x.id===id); a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — waiting for your review"); } });
