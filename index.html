@@ -3243,7 +3243,7 @@ function pHome(v, s){
   const hw = asSort(state.assignments.filter(a=>a.status!=="Reviewed"));
   const todo = hw.filter(a=>a.status==="Assigned");
   const week = s.worklog.filter(w=>w.date>=addDays(t,-6)).reduce((a,w)=>a+(+w.minutes||0),0);
-  const tours = sortBy(s.tournaments.filter(x=>(x.end||x.start)>=t),"start").slice(0,3);
+  const tours = sortBy(s.tournaments.filter(x=>tourAhead(x,t)),"start").slice(0,3);
   const pend = (s.requests||[]).filter(r=>r.status==="pending");
   const recent = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,3);
   const rt = sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===mainSource(s)),"date").pop();
@@ -3481,7 +3481,7 @@ function pDashboard(v){
   const sessions = [], tours = [], tasks = [];
   active.forEach(s=>{
     s.sessions.forEach(x=>{ if (x.status==="planned" && x.date>=t && x.date<=wkEnd) sessions.push({s,x}); });
-    s.tournaments.forEach(x=>{ if ((x.end||x.start)>=t && x.start<=addDays(t,60)) tours.push({s,x}); });
+    s.tournaments.forEach(x=>{ if (tourAhead(x,t) && x.start<=addDays(t,60)) tours.push({s,x}); });
   });
   state.assignments.forEach(a=>{ const s = byId(a.studentId); if (!s || !s.active) return;
     if (a.status==="Submitted") tasks.push({s,x:{title:a.title,category:a.type,due:a.submitted||t,href:"#/assignment/"+a.id,review:true}});
@@ -3842,7 +3842,7 @@ function tOverview(el, s){
   const pts = sortBy(s.ratings.filter(r=>srcOf(r)===src),"date");
   const done = s.sessions.filter(x=>x.status==="done"); const hours = done.reduce((a,x)=>a+(+x.duration||0),0)/60;
   const last = sortBy(done,"date",-1)[0]; const next = sortBy(s.sessions.filter(x=>x.status==="planned"&&x.date>=t),"date")[0];
-  const nextT = sortBy(s.tournaments.filter(x=>(x.end||x.start)>=t),"start")[0];
+  const nextT = sortBy(s.tournaments.filter(x=>tourAhead(x,t)),"start")[0];
   const openTasks = state.assignments.filter(a=>a.studentId===s.id && a.status==="Assigned").length; const l = ledger(s);
   const hw = state.assignments.filter(a=>a.studentId===s.id && a.status==="Assigned"), hwLate = hw.filter(a=>a.due && a.due<t).length;
   const toReview = s.repertoire.filter(x=>x.v===2 && repStatus(x).status==="Needs review").length;
@@ -4823,9 +4823,11 @@ const resultOf = (s, x)=>{ if (x.result) return x.result; const g = gamesScore(s
 const TC_SOURCE = {Rapid:"FIDE Rapid", Blitz:"FIDE Blitz", Online:"Online"};
 const tourSource = (s, format)=>TC_SOURCE[format] || mainSource(s);
 const ratingBefore = (s, src, date)=>sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===src && r.date<=date),"date").pop();
+// A tournament is still ahead until it ends, unless its actual result is already in.
+const tourAhead = (x, t)=>(x.end||x.start)>=t && !String(x.result||"").trim();
 function tTournaments(el, s){
   const t = today();
-  const up = sortBy(s.tournaments.filter(x=>(x.end||x.start)>=t),"start"); const past = sortBy(s.tournaments.filter(x=>(x.end||x.start)<t),"start",-1);
+  const up = sortBy(s.tournaments.filter(x=>tourAhead(x,t)),"start"); const past = sortBy(s.tournaments.filter(x=>!tourAhead(x,t)),"start",-1);
   const row = (x,isUp)=>{ const d = daysBetween(t,x.start);
     return '<li style="align-items:flex-start"><div class="main"><div class="title">'+esc(x.name)+(x.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+'</div><div class="small muted">'+esc(fmtDate(x.start))+(x.end&&x.end!==x.start?" – "+esc(fmtDate(x.end)):"")+[x.location,x.format,x.rounds?x.rounds+" rounds":""].filter(Boolean).map(v=>" · "+esc(v)).join("")+'</div>'+(x.notes?'<div class="small pre" style="margin-top:4px">'+esc(x.notes)+'</div>':"")+
     (()=>{ const ex = parseScore(x.expected, x.rounds), ac = parseScore(resultOf(s,x), x.rounds);
