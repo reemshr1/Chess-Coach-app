@@ -403,7 +403,8 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .panel:has(> .panel-head){padding:0 20px 16px;overflow:hidden;border:2px solid var(--side);border-radius:12px}
 .panel:has(> .panel-head)[style*="border-color"]:not([style*="--flag"]){border-color:var(--side)!important}
 .panel > .panel-head{background:var(--side);margin:0 -20px 12px;padding:12px 20px;flex-wrap:wrap}
-.panel > .panel-head h2{color:#fff}
+.panel > .panel-head :is(h2,h3){color:#fff}
+.panel > .panel-head .piece{box-shadow:0 0 0 1.5px #fff}
 .panel > .panel-head :is(span,p,div).small,.panel > .panel-head .muted:not(.btn){color:var(--side-ink)!important}
 .panel > .panel-head .btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);color:#fff}
 .panel > .panel-head .btn:hover{background:rgba(255,255,255,.2)}
