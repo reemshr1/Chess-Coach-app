@@ -3452,9 +3452,11 @@ function pDashboard(v){
     decline:id=>{ const [s,r] = req(id); if (!r) return;
       if (r.kind==="move") return openForm({title:"Can't meet then — "+s.name, submit:"Decline the move", fields:[
           {name:"note",label:"Message to "+s.name.split(" ")[0]+" (optional)",type:"textarea",value:"",placeholder:"e.g. How about Sunday at 17:00?"}],
-        onSubmit:d=>{ r.status = "declined"; r.decided = today(); r.reply = d.note; r.needsAnswer = true; saveStudent(s); render(); toast(s.name.split(" ")[0]+" will be asked to cancel, keep the lesson or try another time"); }});
+        onSubmit:d=>{ r.status = "declined"; r.decided = today(); r.reply = d.note; r.needsAnswer = true; saveStudent(s); render(); toast(s.name.split(" ")[0]+" will be asked to cancel, keep the lesson or try another time");
+          sendConfirm("declinedMove", s, {date:r.date, time:r.time, was:r.was, note:d.note}); }});
       confirmBox("Decline this request?", r.kind==="cancel" ? s.name+" asked to cancel the lesson on "+fmtDate(r.was.date,{weekday:"short",day:"numeric",month:"short"})+". The lesson stays as planned and they'll see the request as declined."
-        : s.name+" asked for "+fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"})+" "+r.time+". They'll see it as declined.","Decline",()=>{ r.status = "declined"; r.decided = today(); saveStudent(s); render(); toast("Request declined"); }); } });
+        : s.name+" asked for "+fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"})+" "+r.time+". They'll see it as declined.","Decline",()=>{ r.status = "declined"; r.decided = today(); saveStudent(s); render(); toast("Request declined");
+          sendConfirm(r.kind==="cancel" ? "declinedCancel" : "declined", s, r.kind==="cancel" ? {date:r.was.date, time:r.was.time} : {date:r.date, time:r.time}); }); } });
 }
 const OP_LABEL = {"request":"a lesson request", "request.cancel":"a withdrawn request", "move.answer":"an answer about a lesson", "assignment.status":"an assignment marked done",
   "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game"};
@@ -3492,7 +3494,8 @@ function approveRequest(s, r){
   if (r.kind==="cancel"){
     if (!les){ r.status = "declined"; r.decided = today(); saveStudent(s); render(); toast("That lesson no longer exists"); return; }
     return confirmBox("Cancel the lesson?", s.name+"’s lesson on "+fmtDate(les.date,{weekday:"short",day:"numeric",month:"short"})+(les.time?" at "+les.time:"")+" will be marked cancelled. Nothing is charged for it.", "Cancel lesson", ()=>{
-      les.status = "cancelled"; r.status = "approved"; r.decided = today(); saveStudent(s); render(); toast("Lesson cancelled — "+s.name.split(" ")[0]+" will see it in their app"); });
+      les.status = "cancelled"; r.status = "approved"; r.decided = today(); saveStudent(s); render(); toast("Lesson cancelled — "+s.name.split(" ")[0]+" will see it in their app");
+      sendConfirm("cancelled", s, {date:les.date, time:les.time}); });
   }
   if (r.kind==="move"){
     if (!les){ r.status = "declined"; r.decided = today(); saveStudent(s); render(); toast("That lesson no longer exists"); return; }
@@ -3502,8 +3505,10 @@ function approveRequest(s, r){
       onSubmit:d=>{
         const c = {id:les.id, date:d.date||r.date, time:d.time, duration:d.duration===""?60:+d.duration, format:les.format};
         const err = clashCheck(s.id, c, ack); if (err) return err;
+        const was = {date:les.date, time:les.time||""};
         Object.assign(les, {date:c.date, time:c.time, duration:c.duration}); if (les.slotId) les.custom = true;
         r.status = "approved"; r.decided = today(); saveStudent(s); render(); toast("Lesson moved — "+s.name.split(" ")[0]+" will see it in their app");
+        sendConfirm("moved", s, {date:c.date, time:c.time, was});
       }});
   }
   openForm({title:"Approve lesson — "+s.name, submit:"Approve", fields:[
@@ -3518,6 +3523,7 @@ function approveRequest(s, r){
       const x = {id:uid(), date:d.date, time:d.time, duration:d.duration===""?60:+d.duration, format:d.format, status:"planned", topics:d.topics, notes:"", fee:d.fee===""?s.rate:+d.fee};
       const err = clashCheck(s.id, x, ack); if (err) return err;
       s.sessions.push(x); r.status = "approved"; r.sessionId = x.id; r.decided = today(); saveStudent(s); render(); toast("Lesson added — "+s.name.split(" ")[0]+" will see it in their app");
+      sendConfirm("added", s, {date:x.date, time:x.time});
     }});
 }
 // A reminder on Today when the last backup file is over a month old (or never, once the board has been in use for two weeks).
@@ -3961,6 +3967,32 @@ function reminderText(s, lng){
 function sendReminder(s){
   shareMessage({title:"Payment reminder — "+s.name, sub:"A polite reminder with the balance"+(state.settings.payInfo?" and how to pay":"")+". Edit it before sending.", contact:s.contact,
     text:lng=>reminderText(s, lng), subject:lng=>lng==="he"?"תזכורת תשלום — שיעורי שחמט":"Payment reminder — chess lessons", copied:"Reminder copied"});
+}
+// A ready message after deciding on a lesson, so the student or parent hears about it right away.
+function confirmText(kind, s, o, lng){
+  const he = lng==="he", first = s.name.split(" ")[0], coach = state.settings.coachName||"";
+  const day = (d,t)=>new Date(d+"T00:00").toLocaleDateString(he?"he-IL":undefined,{weekday:"long",day:"numeric",month:"long"})+(t?(he?" בשעה ":" at ")+t:"");
+  const L = he ? {
+      added:()=>"שלום! השיעור של "+first+" נקבע ל"+day(o.date,o.time)+". נתראה!",
+      moved:()=>"שלום! השיעור של "+first+" הוזז מ"+day(o.was.date,o.was.time)+" ל"+day(o.date,o.time)+".",
+      cancelled:()=>"שלום, השיעור של "+first+" ב"+day(o.date,o.time)+" בוטל כפי שביקשתם. לא יחויב עליו תשלום.",
+      declined:()=>"שלום, לצערי אני לא פנוי/ה ב"+day(o.date,o.time)+". אפשר לבחור זמן אחר באפליקציה.",
+      declinedCancel:()=>"שלום, לגבי הבקשה לבטל את השיעור ב"+day(o.date,o.time)+": השיעור נשאר כמתוכנן.",
+      declinedMove:()=>"שלום, לצערי אני לא יכול/ה ב"+day(o.date,o.time)+". השיעור ב"+day(o.was.date,o.was.time)+" עדיין קבוע — באפליקציה אפשר לבחור לבטל אותו, להשאיר אותו או לנסות זמן אחר."
+    } : {
+      added:()=>"Hello! "+first+"'s lesson is booked for "+day(o.date,o.time)+". See you then!",
+      moved:()=>"Hello! "+first+"'s lesson has moved from "+day(o.was.date,o.was.time)+" to "+day(o.date,o.time)+".",
+      cancelled:()=>"Hello, "+first+"'s lesson on "+day(o.date,o.time)+" is cancelled, as you asked. There is no charge for it.",
+      declined:()=>"Hello, unfortunately I'm not available on "+day(o.date,o.time)+". Please choose another time in the app.",
+      declinedCancel:()=>"Hello, about the request to cancel the lesson on "+day(o.date,o.time)+": the lesson stays as planned.",
+      declinedMove:()=>"Hello, unfortunately I can't do "+day(o.date,o.time)+". The lesson on "+day(o.was.date,o.was.time)+" is still booked — in the app you can choose to cancel it, keep it or try another time."
+    };
+  return [L[kind](), ...(o.note?["", o.note]:[]), ...(coach?["", coach]:[])].join("\n");
+}
+const CONFIRM_TITLE = {added:"Lesson confirmed", moved:"Lesson moved", cancelled:"Lesson cancelled", declined:"Request declined", declinedCancel:"Lesson stays", declinedMove:"Move declined"};
+function sendConfirm(kind, s, o){
+  setTimeout(()=>shareMessage({title:CONFIRM_TITLE[kind]+" — "+s.name, sub:"Let them know now — they see it in the app too.", contact:s.contact,
+    text:lng=>confirmText(kind, s, o, lng), subject:lng=>lng==="he"?"שיעור שחמט — עדכון":"Chess lesson — update", copied:"Message copied"}), 0);
 }
 function sendInvite(kind, s, code){
   shareMessage({title:kind==="parent"?"Invite message — parent":"Invite message — "+s.name, sub:"Share the app with them by email first (Editor access), then send this.", contact:s.contact,
@@ -5210,7 +5242,9 @@ function moveSession(s, x){
     onSubmit:d=>{
       const c = {id:x.id, date:d.date||x.date, time:d.time, duration:d.duration===""?90:+d.duration, format:x.format};
       const err = clashCheck(s.id, c, ack); if (err) return err;
+      const was = {date:x.date, time:x.time||""};
       Object.assign(x, {date:c.date, time:c.time, duration:c.duration}); if (x.slotId) x.custom = true;
+      if (was.date!==c.date || was.time!==c.time) sendConfirm("moved", s, {date:c.date, time:c.time, was});
       saveStudent(s); render(); toast("Session moved to "+fmtDate(c.date,{weekday:"short",day:"numeric",month:"short"})+(c.time?" "+c.time:""));
     }});
 }
@@ -5505,6 +5539,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Let them know now — they see it in the app too.":"כדאי לעדכן עכשיו — הם יראו את זה גם באפליקציה.",
   "Progress":"התקדמות", "Your progress":"ההתקדמות שלך", "Year":"שנה", "Practice":"תרגול", "Assignments done":"משימות שבוצעו", "Score in games":"ניקוד במשחקים",
   "Rating":"דירוג", "No ratings yet.":"עדיין אין דירוגים.", "Practice per week":"תרגול בשבוע", "What the practice went on":"על מה התאמנו", "No practice logged in this period.":"לא נרשם תרגול בתקופה הזו.",
   "Puzzle personal bests":"שיאים אישיים בפאזלים", "Assignments and reading":"משימות וקריאה", "Done in this period":"בוצעו בתקופה", "Still open":"עדיין פתוחות", "Books finished":"ספרים שהסתיימו", "Reading now":"בקריאה עכשיו", "Tactics & puzzles":"טקטיקה ופאזלים",
@@ -5771,6 +5806,7 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^(Lesson confirmed|Lesson moved|Lesson cancelled|Request declined|Lesson stays|Move declined) — (.+)$/, (m,k,n)=>({"Lesson confirmed":"השיעור אושר","Lesson moved":"השיעור הוזז","Lesson cancelled":"השיעור בוטל","Request declined":"הבקשה נדחתה","Lesson stays":"השיעור נשאר","Move declined":"ההזזה נדחתה"})[k]+" — "+n],
   [/^Lessons \(([\d.]+) h\)$/, "שיעורים ($1 שע׳)"], [/^([\d.]+) h$/, "$1 שע׳"], [/^(.+)’s progress$/, "ההתקדמות של $1"],
   [/^Now (\d+)(?: · ([+-]?\d+) since (.+))?$/, (m,n,d,w)=>"עכשיו "+n+(d?" · "+d+" מאז "+w:"")],
   [/^About (\d+) min a week(?: · (\d+)-day streak)?$/, (m,a,st)=>"בערך "+a+" דק׳ בשבוע"+(st?" · רצף של "+st+" ימים":"")],
