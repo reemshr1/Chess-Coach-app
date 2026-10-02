@@ -2264,6 +2264,7 @@ const ICONS = {
   games:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16"/><path d="M4 8h4v4H4zM12 12h4v4h-4zM8 4h4v4H8zM16 8h4v4h-4zM8 16h4v4H8zM16 16h4v4h-4z" fill="currentColor" stroke="none" opacity=".35"/></svg>',
   book:'<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5"/></svg>',
   tree:'<svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10M6 12c0-4 4-5 10-0"/></svg>',
+  progress:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   pay:'<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20M6 15h4"/></svg>',
   settings:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>'
 };
@@ -3031,7 +3032,7 @@ function renderNav(){
   const r = route();
   document.querySelectorAll("[data-lang]").forEach(b=>{ b.textContent = lang()==="he" ? "English" : "עברית"; });
   if (STUDENT()){
-    const s = state.students[0], cur = r.page==="student" ? ({games:"tournaments", studied:"work"}[r.tab]||r.tab) : r.page==="assignment" ? "assignments" : r.page==="schedule" ? "schedule" : r.page==="payments" && PARENT() ? "payments" : "home";
+    const s = state.students[0], cur = r.page==="student" ? ({games:"tournaments", studied:"work"}[r.tab]||r.tab) : r.page==="assignment" ? "assignments" : r.page==="schedule" ? "schedule" : r.page==="payments" && PARENT() ? "payments" : r.page==="progress" ? "progress" : "home";
     // a family with more than one child picks whose board to show
     const fam = PARENT() && state.family, pick = $("#childPick");
     if (pick){ pick.hidden = !(fam && fam.children.length>1); if (fam) pick.innerHTML = fam.children.map(k=>'<option value="'+esc(k.id)+'"'+(k.id===fam.current?" selected":"")+'>'+esc(k.name)+'</option>').join(""); }
@@ -3045,7 +3046,7 @@ function renderNav(){
   const html = NAV.map(([k,l,ic])=>'<a href="#/'+k+'"'+(cur===k?' aria-current="page"':"")+'>'+ic+'<span>'+l+'</span>'+badge(k)+'</a>').join("");
   $("#nav").innerHTML = html; $("#bnav").innerHTML = html;
 }
-const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[]),["work",b+"work","Practice",ICONS.practice],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Assignments",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
+const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["progress","#/progress","Progress",ICONS.progress], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[]),["work",b+"work","Practice",ICONS.practice],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Assignments",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
 document.addEventListener("change", e=>{ if (e.target.id==="childPick" && store && store.pickChild) store.pickChild(e.target.value); });
 // The language button students have (the coach changes language in Settings).
 document.addEventListener("click", e=>{ const b = e.target.closest("[data-lang]"); if (!b) return;
@@ -3076,6 +3077,7 @@ function renderStudent(v, r){
   if (r.page==="assignment") return pAssignment(v, r);
   if (r.page==="schedule") return pSchedule(v);
   if (r.page==="payments" && PARENT()) return pFamilyPay(v, s);
+  if (r.page==="progress") return pProgress(v, s);
   return pHome(v, s);
 }
 function linkPage(me){
@@ -3103,6 +3105,55 @@ function freshness(s){
   return '<p class="small '+(old?"":"muted")+'" style="margin:4px 0 0'+(old?';color:var(--warn)':'')+'">'+(when?"Updated by your coach’s app "+when:"Not updated by your coach’s app yet")+
     (s.waiting?' · '+(s.waiting===1?"1 change":s.waiting+" changes")+' waiting for your coach’s app':'')+'</p>'+
     (s.waiting && s.waitingSince && Date.now()-Date.parse(s.waitingSince) > 3*3600000 ? '<p class="small" style="margin:4px 0 0;color:var(--warn)">Sent '+Math.round((Date.now()-Date.parse(s.waitingSince))/3600000)+' hours ago and not taken in yet. It will be when your coach opens Coach’s Board — if this lasts, tell your coach.</p>' : '');
+}
+// Progress for a student or parent: rating, practice over time, lessons, assignments and puzzle bests.
+let progSource = "", progPeriod = 30;
+function pProgress(v, s){
+  const t = today(), first = s.name.split(" ")[0];
+  // rating
+  const srcOf = r=>r.source||mainSource(s), sources = RATING_SOURCES.filter(x=>s.ratings.some(r=>srcOf(r)===x));
+  const src = sources.includes(progSource) ? progSource : sources.includes(mainSource(s)) ? mainSource(s) : sources[0];
+  const pts = sortBy(s.ratings.filter(r=>srcOf(r)===src),"date");
+  const y1 = pts.filter(p=>p.date<=addDays(t,-365)).pop() || pts[0], now = pts[pts.length-1];
+  const diff = now && y1 && now!==y1 ? now.value-y1.value : null;
+  // practice minutes per week, last 12 weeks
+  const ws = weekStartOf(t), weeks = [];
+  for (let i=11;i>=0;i--){ const a = addDays(ws,-7*i), b = addDays(a,6); weeks.push({a, m:s.worklog.filter(w=>w.date>=a && w.date<=b).reduce((x,w)=>x+(+w.minutes||0),0)}); }
+  const maxM = Math.max(60, ...weeks.map(w=>w.m));
+  // average over the weeks since practice was first logged (within these 12)
+  const firstLog = s.worklog.reduce((m,w)=>!m || w.date<m ? w.date : m, ""), counted = weeks.filter(w=>firstLog && addDays(w.a,6)>=firstLog);
+  const avg = counted.length ? Math.round(counted.reduce((x,w)=>x+w.m,0)/counted.length) : 0;
+  let streak = 0; for (let i=0;i<=366;i++){ const d = addDays(t,-i); if (s.worklog.some(w=>w.date===d && +w.minutes>0)) streak++; else if (i===0) continue; else break; }
+  // what was done in the period
+  const from = progPeriod ? addDays(t,-progPeriod+1) : "0000";
+  const lessons = s.sessions.filter(x=>x.status==="done" && x.date>=from);
+  const lessonH = lessons.reduce((x,l)=>x+(+l.duration||0),0)/60;
+  const mins = s.worklog.filter(w=>w.date>=from).reduce((x,w)=>x+(+w.minutes||0),0);
+  const asDone = state.assignments.filter(a=>a.status!=="Assigned" && (a.submitted||a.reviewedOn||a.assigned||"")>=from).length;
+  const asOpen = state.assignments.filter(a=>a.status==="Assigned").length;
+  const games = state.games.filter(g=>g.kind!=="study" && (g.date||"")>=from);
+  const score = games.reduce((x,g)=>{ const r = g.result||"", me = g.color==="White" ? r.split("-")[0] : r.split("-")[1]; return x + (me==="1"?1:me==="½"||me==="1/2"?.5:0); }, 0);
+  const booksDone = s.books.filter(b=>b.status==="Finished" && (b.finished||"")>=from).length;
+  const byWhat = {}; s.worklog.filter(w=>w.date>=from).forEach(w=>{ byWhat[w.what||"Other"] = (byWhat[w.what||"Other"]||0)+(+w.minutes||0); });
+  const whatList = Object.entries(byWhat).sort((a,b)=>b[1]-a[1]), whatTot = whatList.reduce((x,e)=>x+e[1],0)||1;
+  const COL = ["var(--sq-dark)","var(--green)","var(--yellow)","#7FA9F0","#B5DDA8","#E0B94A"];
+  const periods = [[30,"30 days"],[90,"90 days"],[365,"Year"],[0,"All time"]];
+  const tile = (val, lab)=>'<div class="stat"><div class="v num">'+val+'</div><div class="l">'+lab+'</div></div>';
+  v.innerHTML = '<div class="page-head"><div><h1>'+(PARENT() ? esc(first)+'’s progress' : 'Your progress')+'</h1>'+freshness(s)+'</div>'+
+      '<div class="seg" role="group" aria-label="Period" style="margin:0">'+periods.map(([n,l])=>'<button type="button" class="'+(progPeriod===n?"on":"")+'" data-a="pp" data-id="'+n+'">'+l+'</button>').join("")+'</div></div>'+
+    '<div class="stats">'+tile(lessons.length, "Lessons ("+lessonH.toFixed(1)+" h)")+tile(Math.round(mins/60*10)/10+" h", "Practice")+tile(asDone, "Assignments done")+tile(games.length ? score+"/"+games.length : "—", "Score in games")+'</div>'+
+    '<div class="grid g2">'+
+    panel("Rating", (sources.length>1?'<div class="seg" role="group" aria-label="Rating list">'+sources.map(x=>'<button type="button" class="'+(x===src?"on":"")+'" data-a="ps" data-id="'+esc(x)+'">'+esc(x)+'</button>').join("")+'</div>':"")+
+      (pts.length ? ratingChart(pts)+'<p class="small muted" style="margin:8px 0 0">Now <b class="num">'+esc(now.value)+'</b>'+(diff!==null?' · '+(diff>=0?"+":"")+diff+' since '+esc(fmtShort(y1.date)):'')+'</p>' : '<p class="empty">No ratings yet.</p>'))+
+    panel("Practice per week", '<div class="wbars" style="grid-template-columns:repeat(12,1fr)" role="img" aria-label="Practice minutes per week, last 12 weeks">'+weeks.map((w,i)=>'<div title="'+esc(fmtShort(w.a))+': '+w.m+' min">'+(w.m?'<span class="pct">'+w.m+'</span>':'')+'<span class="bar" style="height:'+Math.round(w.m/maxM*100)+'px;'+(i===11?'background:var(--green)':'')+'"></span><span class="wl">'+esc(new Date(w.a+"T00:00").toLocaleDateString(LOCALE(),{day:"numeric",month:"numeric"}))+'</span></div>').join("")+'</div>'+
+      '<p class="small muted" style="margin:10px 0 0">About <b class="num">'+avg+'</b> min a week'+(streak>1?' · <b class="num">'+streak+'</b>-day streak':'')+'</p>')+
+    panel("What the practice went on", whatList.length ? '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin:4px 0 12px">'+whatList.map(([k,m],i)=>'<span title="'+esc(k)+'" style="width:'+(m/whatTot*100)+'%;background:'+COL[i%COL.length]+'"></span>').join("")+'</div><ul class="list">'+
+      whatList.map(([k,m],i)=>'<li><span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+COL[i%COL.length]+';margin-inline-end:8px"></i>'+esc(k)+'</span><span class="num">'+Math.round(m/whatTot*100)+'% · '+m+' min</span></li>').join("")+'</ul>' : '<p class="empty">No practice logged in this period.</p>')+
+    panel("Assignments and reading", '<dl class="kv"><dt>Done in this period</dt><dd class="num">'+asDone+'</dd><dt>Still open</dt><dd class="num">'+asOpen+'</dd><dt>Books finished</dt><dd class="num">'+booksDone+'</dd>'+
+      (s.books.some(b=>b.status==="Reading")?'<dt>Reading now</dt><dd>'+s.books.filter(b=>b.status==="Reading").map(b=>esc(b.title)+(b.pages?' · '+Math.round((+b.page||0)/b.pages*100)+'%':'')).join('<br>')+'</dd>':'')+'</dl>')+
+    panel("Tactics & puzzles", tacticsStats(s, progPeriod))+
+    '</div>';
+  bindActions(v,{ pp:id=>{ progPeriod = +id; render(); }, ps:id=>{ progSource = id; render(); } });
 }
 // The parent's money page: balance and statement for the child shown.
 function pFamilyPay(v, s){
@@ -5454,6 +5505,9 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Progress":"התקדמות", "Your progress":"ההתקדמות שלך", "Year":"שנה", "Practice":"תרגול", "Assignments done":"משימות שבוצעו", "Score in games":"ניקוד במשחקים",
+  "Rating":"דירוג", "No ratings yet.":"עדיין אין דירוגים.", "Practice per week":"תרגול בשבוע", "What the practice went on":"על מה התאמנו", "No practice logged in this period.":"לא נרשם תרגול בתקופה הזו.",
+  "Puzzle personal bests":"שיאים אישיים בפאזלים", "Assignments and reading":"משימות וקריאה", "Done in this period":"בוצעו בתקופה", "Still open":"עדיין פתוחות", "Books finished":"ספרים שהסתיימו", "Reading now":"בקריאה עכשיו", "Tactics & puzzles":"טקטיקה ופאזלים",
   "Merged with changes from another device":"שולב עם שינויים ממכשיר אחר",
   "Problems with the student and parent app":"בעיות באפליקציית התלמידים וההורים", "Try again":"לנסות שוב", "Discard":"מחיקה", "Discard this change?":"למחוק את השינוי?",
   "What they sent will be deleted. They can send it again from their app.":"מה שנשלח יימחק. אפשר לשלוח שוב מהאפליקציה.",
@@ -5717,6 +5771,9 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Lessons \(([\d.]+) h\)$/, "שיעורים ($1 שע׳)"], [/^([\d.]+) h$/, "$1 שע׳"], [/^(.+)’s progress$/, "ההתקדמות של $1"],
+  [/^Now (\d+)(?: · ([+-]?\d+) since (.+))?$/, (m,n,d,w)=>"עכשיו "+n+(d?" · "+d+" מאז "+w:"")],
+  [/^About (\d+) min a week(?: · (\d+)-day streak)?$/, (m,a,st)=>"בערך "+a+" דק׳ בשבוע"+(st?" · רצף של "+st+" ימים":"")],
   [/^Couldn't take in (.+?)(?: — (.+))?$/, (m,w,n)=>"לא ניתן לקלוט "+({"a lesson request":"בקשת שיעור","a withdrawn request":"ביטול בקשה","an answer about a lesson":"תשובה על שיעור","an assignment marked done":"משימה שסומנה כבוצעה","a practice entry":"רישום תרגול","a deleted practice entry":"מחיקת תרגול","a tournament":"טורניר","a book":"ספר","a training plan":"תוכנית אימון","a game":"משחק","a change":"שינוי"}[w]||w)+(n?" — "+n:"")],
   [/^Sent (\d+) hours ago and not taken in yet\. .*$/, "נשלח לפני $1 שעות ועדיין לא נקלט. זה יקרה כשהמאמן יפתח את הלוח של המאמן — אם זה נמשך, כדאי לספר למאמן."],
   [/^Invite message — (.+)$/, "הודעת הזמנה — $1"], [/^Payment reminder — (.+)$/, "תזכורת תשלום — $1"],
