@@ -5332,6 +5332,19 @@ function freePanel(){
     (rules.length?'<ul class="list">'+rules.map(r=>'<li><div class="main"><div class="title">'+esc(freeLabel(r))+'</div>'+(r.kind==="weekly"?'<div class="small muted">From '+esc(fmtDate(r.start))+(r.end?' until '+esc(fmtDate(r.end)):'')+'</div>':'')+'</div><button class="btn small ghost" data-a="editFree" data-id="'+r.id+'">Edit</button></li>').join("")+'</ul>':'<p class="empty" style="padding:4px 0">No free time set yet.</p>')+
     '<button class="btn small primary" data-a="addFree" style="margin-top:8px">Add free time</button></details>';
 }
+// Assignments due in the week shown, in date order: all students for the coach, only their own for a student or parent.
+function weekAssignments(first){
+  const a0 = weekStartOf(first), a1 = addDays(a0, 6), t = today();
+  const list = state.assignments.filter(a=>a.due && a.due>=a0 && a.due<=a1 && (STUDENT() || (byId(a.studentId)||{}).active))
+    .sort((x,y)=>(x.due+(x.title||""))<(y.due+(y.title||""))?-1:1);
+  const range = fmtDate(a0,{day:"numeric",month:"short"})+" – "+fmtDate(a1,{day:"numeric",month:"short"});
+  const day = d=>d===t ? "Today" : d===addDays(t,1) ? "Tomorrow" : fmtDate(d,{weekday:"short",day:"numeric",month:"short"});
+  return '<section class="panel" style="margin-bottom:12px"><div class="panel-head"><h2>Assignments due this week</h2><span class="small muted">'+esc(range)+'</span></div>'+
+    (list.length ? '<ul class="list">'+list.map(a=>{ const st = byId(a.studentId);
+      return '<li><div class="main"><div class="title"><a href="#/assignment/'+a.id+'">'+esc(a.title)+'</a></div><div class="small muted">'+[STUDENT()||!st ? "" : esc(st.name), esc(a.type||"")].filter(Boolean).join(" · ")+'</div></div>'+
+        '<div class="row-actions" style="flex-wrap:nowrap"><span class="small'+(a.status==="Assigned" && a.due<t ? '" style="color:var(--flag);font-weight:600' : '')+'">'+esc(day(a.due))+'</span>'+asTag(a)+'</div></li>'; }).join("")+'</ul>'
+      : '<p class="empty" style="padding:4px 0">Nothing due this week.</p>')+'</section>';
+}
 function pSchedule(v){
   const t = today();
   if (!schedWeek) schedWeek = weekStartOf(t);
@@ -5350,6 +5363,7 @@ function pSchedule(v){
       : '<div class="page-head"><div><h1>Schedule</h1><p class="sub">'+slotsN+' weekly slot'+(slotsN===1?"":"s")+' · sessions are planned 8 weeks ahead automatically</p></div><div class="row-actions"><button class="btn" id="scSlot">Add weekly slot</button><button class="btn primary" id="scAdd">Plan session</button></div></div>')+
     (st ? "" : freePanel())+
     (unmarked.length?'<section class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="panel-head"><h2>Past sessions still marked as planned</h2><span class="small muted">Marking them done adds the fee to the balance</span></div><ul class="list">'+sortBy(unmarked.map(u=>Object.assign({d:u.x.date},u)),"d",-1).map(({s,x})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(x.date))+(x.time?" "+esc(x.time):"")+(x.topics?" · "+esc(x.topics):"")+'</div></div><div class="row-actions"><button class="btn small primary" data-a="done" data-id="'+s.id+'|'+x.id+'">Mark done</button><button class="btn small" data-a="cancel" data-id="'+s.id+'|'+x.id+'">Cancelled</button></div></li>').join("")+'</ul></section>':'')+
+    weekAssignments(schedView==="week" ? first : t)+
     '<div class="sched-bar"><div class="seg" role="group" aria-label="View" style="margin:0"><button type="button" class="'+(schedView==="week"?"on":"")+'" data-a="view" data-id="week">'+(phone?"Days":"Week")+'</button><button type="button" class="'+(schedView==="list"?"on":"")+'" data-a="view" data-id="list">List</button></div>'+
       (schedView==="week"?'<div class="row-actions"><button class="btn small" data-a="wk" data-id="-1" aria-label="'+(phone?"Earlier days":"Previous week")+'"><span dir="ltr">'+(lang()==="he"?"›":"‹")+'</span></button><button class="btn small" data-a="wk" data-id="0">Today</button><button class="btn small" data-a="wk" data-id="1" aria-label="'+(phone?"Later days":"Next week")+'"><span dir="ltr">'+(lang()==="he"?"‹":"›")+'</span></button></div>':'')+
       '<b class="sched-title">'+esc(title)+'</b></div>'+
@@ -5563,6 +5577,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Assignments due this week":"משימות להגשה השבוע", "Nothing due this week.":"אין הגשות השבוע.",
   "Let them know now — they see it in the app too.":"כדאי לעדכן עכשיו — הם יראו את זה גם באפליקציה.",
   "Progress":"התקדמות", "Your progress":"ההתקדמות שלך", "Year":"שנה", "Practice":"תרגול", "Assignments done":"משימות שבוצעו", "Score in games":"ניקוד במשחקים",
   "Rating":"דירוג", "No ratings yet.":"עדיין אין דירוגים.", "Practice per week":"תרגול בשבוע", "What the practice went on":"על מה התאמנו", "No practice logged in this period.":"לא נרשם תרגול בתקופה הזו.",
