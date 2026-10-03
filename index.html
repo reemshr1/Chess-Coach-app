@@ -5243,7 +5243,7 @@ function pAssignments(v){
 function tAssignments(el, s){
   const list = asSort(state.assignments.filter(a=>a.studentId===s.id));
   el.innerHTML = '<section class="panel" style="padding:0"><div class="panel-head"><h2>Assignments</h2>'+coachOnly('<button class="btn small primary" data-a="new">New assignment</button>')+'</div>'+
-    (list.length ? list.map(a=>'<div class="as-item">'+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">No assignments yet. Add a task like “30 puzzles on pins”, or upload games in PGN for '+esc(s.name)+' to analyse.</p>')+'</section>';
+    (list.length ? list.map(a=>'<div class="as-item">'+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">'+(PARENT() ? 'All assignments are done.' : STUDENT() ? 'All tasks are done, nice job!' : 'No assignments yet. Add a task like “30 puzzles on pins”, or upload games in PGN for '+esc(s.name)+' to analyse.')+'</p>')+'</section>';
   bindActions(el,{ new:()=>editAssignment(null, s.id),
     done:id=>{ const a = state.assignments.find(x=>x.id===id); a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — waiting for your review"); } });
 }
@@ -5911,6 +5911,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "All tasks are done, nice job!":"כל המשימות הושלמו, כל הכבוד!", "All assignments are done.":"כל המשימות הושלמו.",
   "Sign out":"התנתקות", "Sign out?":"להתנתק?", "You'll need your email and password to sign in again on this device.":"כדי להתחבר שוב במכשיר הזה יהיה צורך במייל ובסיסמה.",
   "Create your account":"יצירת חשבון", "Reset your password":"איפוס סיסמה", "Choose a new password":"בחירת סיסמה חדשה", "Sign in":"התחברות",
   "Use your email and a password of at least 8 characters.":"יש להשתמש בכתובת מייל ובסיסמה של 8 תווים לפחות.",
