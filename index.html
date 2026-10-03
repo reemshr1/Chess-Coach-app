@@ -3948,7 +3948,9 @@ async function syncRatings(manual){
   if (!list.length){ if (manual) toast("No active students with a FIDE or ICF ID yet."); return; }
   ratingsBusy = true; if (manual){ toast("Checking ratings…"); render(); }
   try {
-    const { data, error } = await sb.functions.invoke("ratings", {body:{fide:list.map(s=>s.fideId).filter(Boolean), icf:list.map(s=>s.icfId).filter(Boolean)}});
+    const ask = sb.functions.invoke("ratings", {body:{fide:list.map(s=>s.fideId).filter(Boolean), icf:list.map(s=>s.icfId).filter(Boolean)}});
+    const late = new Promise((_, no)=>setTimeout(()=>no(new Error("timeout")), 90000));
+    const { data, error } = await Promise.race([ask, late]);
     if (error) throw error;
     if (!data || !data.fide) throw new Error("bad answer");
     const t = today(), failed = []; let changed = 0;

@@ -56,7 +56,9 @@ export function parseIcf(html) {
 }
 
 async function getPage(url) {
-  const r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "en,he;q=0.8" } });
+  let r;
+  try { r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "en,he;q=0.8" }, signal: AbortSignal.timeout(15000) }); }
+  catch (e) { throw new Error(e && e.name === "TimeoutError" ? "The page didn't answer within 15 seconds" : "Couldn't reach the page: " + (e && e.message || e)); }
   if (!r.ok) throw new Error("The page answered " + r.status);
   const buf = new Uint8Array(await r.arrayBuffer());
   const ct = r.headers.get("content-type") || "";
