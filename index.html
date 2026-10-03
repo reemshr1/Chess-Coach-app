@@ -3233,6 +3233,7 @@ async function initStore(){
   if (db && userId){
     store = makeDbStore(db, userId);
     try { applyLoaded(await store.loadAll()); setSync("ok"); store.tidy(); store.subscribe(); portal = makePortal(db); portal.start();
+      if (WEB) setTimeout(()=>{ const t = today(); if ((state.settings.ratingsSyncedAt||"").slice(0,7)!==t.slice(0,7) && +t.slice(8)>=2) syncRatings(false); }, 4000);
       // Deleting a game or assignment also takes it off that student's page.
       const dg = store.deleteGame, da = store.deleteAssignment;
       store.deleteGame = id=>{ dg(id); portal.scheduleAll(); }; store.deleteAssignment = id=>{ da(id); portal.scheduleAll(); }; }
@@ -3937,12 +3938,59 @@ document.addEventListener("keydown", e=>{
   if (route().page==="search"){ const i = $("#gq"); if (i) i.focus(); } else location.hash = "#/search";
 });
 
+/* ---------- official ratings, read by the "ratings" function on Supabase ---------- */
+// FIDE publishes new lists on the 1st of each month, so the app checks once a month (from the 2nd), and on "Check now".
+let ratingsBusy = false;
+const hasVal = v=>v!=="" && v!=null;
+async function syncRatings(manual){
+  if (!WEB || !sb || STUDENT() || ratingsBusy) return;
+  const list = state.students.filter(s=>s.active && (s.fideId || s.icfId));
+  if (!list.length){ if (manual) toast("No active students with a FIDE or ICF ID yet."); return; }
+  ratingsBusy = true; if (manual){ toast("Checking ratings…"); render(); }
+  try {
+    const { data, error } = await sb.functions.invoke("ratings", {body:{fide:list.map(s=>s.fideId).filter(Boolean), icf:list.map(s=>s.icfId).filter(Boolean)}});
+    if (error) throw error;
+    if (!data || !data.fide) throw new Error("bad answer");
+    const t = today(), failed = []; let changed = 0;
+    list.forEach(s=>{
+      let touched = false;
+      if (s.fideId){ const r = data.fide[s.fideId];
+        if (r && !r.error){ s.fide = Object.assign({}, s.fide, {std:r.std??"", rapid:r.rapid??"", blitz:r.blitz??"", title:r.title||"", updated:t});
+          if (hasVal(r.std)) addRating(s,"FIDE",r.std,t); if (hasVal(r.rapid)) addRating(s,"FIDE Rapid",r.rapid,t); if (hasVal(r.blitz)) addRating(s,"FIDE Blitz",r.blitz,t); touched = true; }
+        else failed.push({name:s.name, list:"FIDE", id:s.fideId, why:(r&&r.error)||"No answer for this ID", sample:(r&&r.sample)||""}); }
+      if (s.icfId){ const r = (data.icf||{})[s.icfId];
+        if (r && !r.error){ s.icf = Object.assign({}, s.icf, {rating:r.rating??"", updated:t}); if (hasVal(r.rating)) addRating(s,"ICF",r.rating,t); touched = true; }
+        else failed.push({name:s.name, list:"ICF", id:s.icfId, why:(r&&r.error)||"No answer for this ID", sample:(r&&r.sample)||""}); }
+      if (touched){ saveStudent(s); changed++; }
+    });
+    state.settings.ratingsSyncedAt = t; state.settings.ratingsFailed = failed.map(f=>f.name+" ("+f.list+")"); saveSettings();
+    if (failed.length && manual) ratingProblems(failed, changed);
+    else if (changed) toast("Ratings updated for "+changed+" student"+(changed===1?"":"s"));
+  } catch(e){
+    if (manual) ratingProblems(null);
+  } finally { ratingsBusy = false; render(); }
+}
+// What couldn't be read, with what the page showed, so it can be fixed.
+function ratingProblems(failed, changed){
+  const m = $("#modal");
+  const details = failed ? failed.map(f=>f.name+" — "+f.list+" "+f.id+": "+f.why+(f.sample?"\n  Page text: "+f.sample:"")).join("\n\n") : "";
+  m.innerHTML = '<div class="modal-form"><header><h2>'+(failed?"Some ratings couldn't be read":"Couldn't check the ratings")+'</h2></header><div style="padding:8px 20px;overflow:auto">'+
+    (failed ? (changed?'<p style="margin-top:0">Updated '+changed+' student'+(changed===1?'':'s')+'. These couldn\'t be read:</p>':'<p style="margin-top:0">These couldn\'t be read:</p>')+
+      '<ul>'+failed.map(f=>'<li>'+esc(f.name)+' · '+esc(f.list)+' <bdi dir="ltr">'+esc(f.id)+'</bdi></li>').join("")+'</ul>'+
+      '<p class="small muted">Check the ID in Edit profile. If it\'s right, send these details to whoever maintains the app:</p><textarea id="rpDet" class="fb no-tr" dir="ltr" readonly style="min-height:120px">'+esc(details)+'</textarea>'
+      : '<p style="margin-top:0">The ratings service didn\'t answer. If this is the first time, the “ratings” function may not be set up in Supabase yet. Otherwise, check your internet connection and try again.</p>')+
+    '</div><footer><button type="button" class="btn primary" id="rpClose">Close</button></footer></div>';
+  $("#rpClose").onclick = ()=>m.close(); m.showModal();
+}
+
 /* ---------- students list ---------- */
 let studentFilter = {q:"", show:"active"};
 function pStudents(v){
   v.innerHTML = '<div class="page-head"><div><h1>Students</h1><p class="sub">'+state.students.filter(s=>s.active).length+' active</p></div><div class="row-actions"><input class="search" id="sq" type="search" placeholder="Search by name" value="'+esc(studentFilter.q)+'" aria-label="Search students"><select class="search" id="sf" style="min-width:auto" aria-label="Filter"><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><button class="btn primary" id="sAdd">Add student</button></div></div><section class="panel" style="padding:0" id="slist"></section>'+
-    (WEB ? '' : '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are filled in by Claude'+(state.settings.ratingsSyncedAt?' — last updated '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. To refresh them, ask Claude in the chat: “Update my students’ ratings.”</p>');
+    (WEB ? '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are checked automatically once a month'+(state.settings.ratingsSyncedAt?' — last checked '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. <button type="button" class="btn small ghost" id="ratingsNow"'+(ratingsBusy?' disabled':'')+'>'+(ratingsBusy?'Checking…':'Check now')+'</button></p>'+
+      ((state.settings.ratingsFailed||[]).length ? '<p class="small" style="color:var(--warn);margin-top:0">Couldn\'t read last time: '+state.settings.ratingsFailed.map(esc).join(", ")+'</p>' : '') : '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are filled in by Claude'+(state.settings.ratingsSyncedAt?' — last updated '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. To refresh them, ask Claude in the chat: “Update my students’ ratings.”</p>');
   $("#sf").value = studentFilter.show;
+  if ($("#ratingsNow")) $("#ratingsNow").onclick = ()=>syncRatings(true);
   const draw = ()=>{
     const q = studentFilter.q.toLowerCase(), t = today();
     const list = sortBy(state.students,"name").filter(s=>(studentFilter.show==="all"||(studentFilter.show==="active")===s.active) && s.name.toLowerCase().includes(q));
@@ -5924,6 +5972,12 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "No active students with a FIDE or ICF ID yet.":"עדיין אין תלמידים פעילים עם מספר FIDE או מספר באיגוד.", "Checking ratings…":"בודק דירוגים…",
+  "Some ratings couldn't be read":"חלק מהדירוגים לא נקראו", "Couldn't check the ratings":"לא ניתן היה לבדוק את הדירוגים", "These couldn't be read:":"את אלה לא ניתן היה לקרוא:",
+  "Check the ID in Edit profile. If it's right, send these details to whoever maintains the app:":"כדאי לבדוק את המספר בעריכת הפרופיל. אם הוא נכון, אפשר לשלוח את הפרטים האלה למי שמתחזק את האפליקציה:",
+  "The ratings service didn't answer. If this is the first time, the “ratings” function may not be set up in Supabase yet. Otherwise, check your internet connection and try again.":"שירות הדירוגים לא ענה. אם זו הפעם הראשונה, ייתכן שהפונקציה “ratings” עדיין לא הוגדרה ב־Supabase. אחרת, כדאי לבדוק את החיבור לאינטרנט ולנסות שוב.",
+  "Check now":"בדיקה עכשיו", "Checking…":"בודק…",
+  "Official ratings from FIDE and the Israeli Chess Federation are checked automatically once a month":"הדירוגים הרשמיים מפיד״ה ומהאיגוד הישראלי לשחמט נבדקים אוטומטית פעם בחודש", "Official ratings from FIDE and the Israeli Chess Federation are checked automatically once a month.":"הדירוגים הרשמיים מפיד״ה ומהאיגוד הישראלי לשחמט נבדקים אוטומטית פעם בחודש.",
   "Rank Up has moved":"עולים בדרגה עברה לכתובת חדשה", "Open Rank Up":"פתיחת עולים בדרגה", "Open the old version anyway":"לפתוח בכל זאת את הגרסה הישנה",
   "The app now has its own address. Open it there and sign in with your email, or create an account if this is your first time.":"לאפליקציה יש עכשיו כתובת משלה. אפשר לפתוח אותה שם ולהתחבר עם המייל, או ליצור חשבון אם זו הפעם הראשונה.",
   "This old version is no longer updated, and changes made here don't reach the new app.":"הגרסה הישנה כבר לא מתעדכנת, ושינויים שנעשים בה לא מגיעים לאפליקציה החדשה.",
@@ -6246,6 +6300,8 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Ratings updated for (\d+) students?$/, "הדירוגים עודכנו ל־$1 תלמידים"], [/^Updated (\d+) students?\. These couldn't be read:$/, "עודכנו $1 תלמידים. את אלה לא ניתן היה לקרוא:"],
+  [/^last checked (.+)\.$/, "נבדק לאחרונה $1."], [/^Couldn't read last time: (.+)$/, "לא נקראו בפעם הקודמת: $1"],
   [/^Send (.+) the link to the app:$/, "לשלוח ל־$1 את הקישור לאפליקציה:"],
   [/^Add weekly slot — (.+)$/, "הוספת שיעור קבוע — $1"], [/^Edit weekly slot — (.+)$/, "עריכת שיעור קבוע — $1"],
   [/^Assistance price — (.+)$/, "מחיר ליווי — $1"],
