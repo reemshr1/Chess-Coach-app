@@ -537,6 +537,9 @@ body.gated .app,body.gated .topbar,body.gated .bottom-nav{display:none}
 .gate-links{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:14px}
 .gate-choices{display:flex;flex-direction:column;gap:10px;margin:6px 0 12px}
 .gate-choices .btn{justify-content:center}
+.date-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.date-row .muted{min-width:64px}
+.date-row input{flex:1;min-width:0}
 .linkish{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--accent,#1E4E9C);cursor:pointer}
 .linkish:hover{text-decoration:underline}
 </style>
@@ -3277,11 +3280,26 @@ function openForm({title, fields, submit="Save", onSubmit, danger, parentOk}){
       if (f.type==="select" && typeof f.options==="function") input = '<select id="'+id+'" name="'+f.name+'"></select>';
       else if (f.type==="select") input = '<select id="'+id+'" name="'+f.name+'">'+f.options.map(o=>{ const [val,lab] = Array.isArray(o)?o:[o,o]; return '<option value="'+esc(val)+'"'+(String(val)===String(v)?" selected":"")+'>'+esc(lab)+'</option>'; }).join("")+'</select>';
       else if (f.type==="textarea") input = '<textarea id="'+id+'" name="'+f.name+'" placeholder="'+esc(f.placeholder||"")+'">'+esc(v)+'</textarea>';
+      else if (f.type==="dates") input = '<input type="hidden" id="'+id+'" name="'+f.name+'" value="'+esc(v)+'"><div class="dates-list" data-dates="'+f.name+'"></div><button type="button" class="btn small" data-adddate="'+f.name+'">'+esc(f.addLabel||"Add a date")+'</button>';
       else input = '<input id="'+id+'" name="'+f.name+'" type="'+(f.type||"text")+'" value="'+esc(v)+'"'+(f.required?" required":"")+(f.step?' step="'+f.step+'"':"")+(f.min!==undefined?' min="'+f.min+'"':"")+' placeholder="'+esc(f.placeholder||"")+'"'+(f.suggest&&f.suggest.length?' list="dl_'+f.name+'" autocomplete="off"':'')+'>'+(f.suggest&&f.suggest.length?'<datalist id="dl_'+f.name+'">'+f.suggest.map(o=>'<option value="'+esc(o)+'"></option>').join("")+'</datalist>':'');
       return '<div class="field'+(f.full||f.type==="textarea"?" full":"")+'" data-field="'+f.name+'"><label for="'+id+'">'+esc(f.label)+'</label>'+input+(f.hint?'<span class="hint">'+esc(f.hint)+'</span>':"")+'</div>';
     }).join("")+
     '</div><p class="form-err" role="alert" hidden></p><footer>'+(danger?'<button type="button" class="btn danger" data-act="danger" style="margin-inline-end:auto">'+esc(danger.label)+'</button>':"")+'<button type="button" class="btn" data-act="cancel">Cancel</button><button type="submit" class="btn primary">'+esc(submit)+'</button></footer></form>';
   const form = m.querySelector("form");
+  // A list of dates (one per row), kept in a hidden field as "2026-10-05,2026-10-12".
+  fields.filter(f=>f.type==="dates").forEach(f=>{
+    const hid = form.elements[f.name], box = form.querySelector('[data-dates="'+f.name+'"]');
+    const vals = ()=>hid.value ? hid.value.split(",") : [];
+    const store = list=>{ hid.value = list.join(","); form.dispatchEvent(new Event("change")); };
+    const draw = ()=>{ const list = vals();
+      box.innerHTML = list.map((d,i)=>'<div class="date-row"><span class="muted small">'+esc((f.itemLabel||"Date")+" "+(i+1))+'</span><input type="date" value="'+esc(d)+'" data-i="'+i+'" aria-label="'+esc((f.itemLabel||"Date")+" "+(i+1))+'"><button type="button" class="btn small ghost" data-del="'+i+'" aria-label="Remove">✕</button></div>').join("");
+      box.querySelectorAll("input").forEach(inp=>inp.onchange = ()=>{ const l = vals(); l[+inp.dataset.i] = inp.value; store(l); });
+      box.querySelectorAll("[data-del]").forEach(b=>b.onclick = ()=>{ const l = vals(); l.splice(+b.dataset.del,1); store(l); draw(); }); };
+    form.querySelector('[data-adddate="'+f.name+'"]').onclick = ()=>{ const l = vals().filter(Boolean), last = l.slice().sort().pop();
+      l.push(last ? addDays(last, f.step||7) : (typeof f.first==="function" ? f.first(readVals()) : today())); store(l); draw();
+      const ins = box.querySelectorAll("input"); if (ins.length) ins[ins.length-1].focus(); };
+    draw();
+  });
   // Fields can depend on each other: `show(values)` hides a field, `options(values)` rebuilds a select's choices.
   let firstPass = true;
   const readVals = ()=>{ const o = {}; fields.forEach(f=>{ const el = form.elements[f.name]; o[f.name] = el ? el.value : ""; }); return o; };
@@ -3482,7 +3500,7 @@ function pHome(v, s){
   const hw = asSort(state.assignments.filter(a=>a.status!=="Reviewed"));
   const todo = hw.filter(a=>a.status==="Assigned");
   const week = s.worklog.filter(w=>w.date>=addDays(t,-6)).reduce((a,w)=>a+(+w.minutes||0),0);
-  const tours = sortBy(s.tournaments.filter(x=>tourAhead(x,t)),"start").slice(0,3);
+  const tours = s.tournaments.filter(x=>tourAhead(x,t)).sort((a,b)=>tourNext(a,t)<tourNext(b,t)?-1:1).slice(0,3);
   const pend = (s.requests||[]).filter(r=>r.status==="pending");
   const recent = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,3);
   const rt = sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===mainSource(s)),"date").pop();
@@ -3505,7 +3523,7 @@ function pHome(v, s){
     panel("Coming up", (lessons.length||tours.length||pend.length) ? '<ul class="list">'+
         lessons.map(x=>{ const pc = pendingChange(s, x); return '<li><div class="main"><div class="title">Lesson'+(needsAnswer(s, x)?' <span class="tag warn">Answer needed</span>':'')+(pc?' <span class="tag warn">'+(pc.kind==="cancel"?"Cancel requested":"Move requested")+'</span>':'')+'</div><div class="small muted">'+[x.format, x.duration?x.duration+" min":"", x.topics].filter(Boolean).map(esc).join(" · ")+'</div>'+
           (changeable(x)?'<button class="btn small ghost" data-a="les" data-id="'+x.id+'" style="margin-top:4px;padding:2px 8px">'+(needsAnswer(s, x)?"Answer":pc?"Withdraw request":"Can\'t make it?")+'</button>':'')+'</div><div style="text-align:end" class="small">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+(x.time?'<div class="muted">'+esc(x.time)+'</div>':'')+'</div></li>'; }).join("")+
-        tours.map(x=>'<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+[x.location, x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">'+esc(fmtShort(x.start))+'</span></li>').join("")+
+        tours.map(x=>'<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+[x.location, x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">'+esc(fmtShort(tourNext(x,t)))+'</span></li>').join("")+
         pend.filter(r=>r.kind!=="cancel").map(r=>'<li><div class="main"><div class="title">'+(r.kind==="move"?"Move request":"Lesson request")+'</div><div class="small muted">'+esc(fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"}))+' · '+esc(r.time)+'</div></div><span class="tag warn">Waiting for your coach</span></li>').join("")+'</ul>'
       : '<p class="empty">Nothing planned yet.</p>', '<a class="btn small" href="#/schedule">Schedule</a>')+
     panel("Assignments", hw.length ? '<ul class="list">'+hw.map(a=>'<li><div class="main"><div class="title"><a href="#/assignment/'+a.id+'">'+esc(a.title)+'</a></div><div class="small muted">'+esc(a.type)+(a.due?' · due '+esc(fmtShort(a.due)):'')+'</div></div>'+(a.status==="Assigned"?'<button class="btn small" data-a="hwdone" data-id="'+a.id+'">Mark done</button>':'<span class="tag warn">Done · to review</span>')+'</li>').join("")+'</ul>' : '<p class="empty">No assignments right now.</p>')+
@@ -3721,14 +3739,14 @@ function pDashboard(v){
   const sessions = [], tours = [], tasks = [];
   active.forEach(s=>{
     s.sessions.forEach(x=>{ if (x.status==="planned" && x.date>=t && x.date<=wkEnd) sessions.push({s,x}); });
-    s.tournaments.forEach(x=>{ if (tourAhead(x,t) && x.start<=addDays(t,60)) tours.push({s,x}); });
+    s.tournaments.forEach(x=>{ if (tourAhead(x,t) && tourNext(x,t)<=addDays(t,60)) tours.push({s,x}); });
   });
   state.assignments.forEach(a=>{ const s = byId(a.studentId); if (!s || !s.active) return;
     if (a.status==="Submitted") tasks.push({s,x:{title:a.title,category:a.type,due:a.submitted||t,href:"#/assignment/"+a.id,review:true}});
     else if (a.status==="Assigned" && a.due && a.due<=addDays(t,3)) tasks.push({s,x:{title:a.title,category:a.type,due:a.due,href:"#/assignment/"+a.id}});
   });
   sessions.sort((a,b)=>(a.x.date+(a.x.time||""))<(b.x.date+(b.x.time||""))?-1:1);
-  tours.sort((a,b)=>a.x.start<b.x.start?-1:1); tasks.sort((a,b)=>a.x.due<b.x.due?-1:1);
+  tours.sort((a,b)=>tourNext(a.x,t)<tourNext(b.x,t)?-1:1); tasks.sort((a,b)=>a.x.due<b.x.due?-1:1);
   const owing = state.students.map(s=>({s,l:ledger(s)})).filter(o=>o.l.balance>0.009).sort((a,b)=>(b.l.overdue-a.l.overdue)||(b.l.balance-a.l.balance));
   const outstanding = owing.reduce((t,o)=>t+o.l.balance,0);
   const month = t.slice(0,7);
@@ -3747,7 +3765,7 @@ function pDashboard(v){
   '<div class="grid g2">'+
   panel("Coming up this week", sessions.length ? '<ul class="list">'+sessions.map(({s,x})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(x.topics||"No topic yet")+'</div></div><div style="text-align:end"><div class="small">'+esc(x.date===t?"Today":fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(x.time||"")+(x.duration?" · "+x.duration+" min":"")+'</div></div></li>').join("")+'</ul>' : '<p class="empty">No sessions planned for the next 7 days.</p>')+
   panel("Who owes you", owing.length ? '<ul class="list">'+owing.slice(0,8).map(({s,l})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a></div><div class="small muted">'+(l.lastPay?"Last paid "+esc(fmtShort(l.lastPay.date)):"No payments yet")+'</div></div><div style="text-align:end"><div class="money-owed num">'+money(l.balance)+'</div>'+(l.overdue?'<span class="tag flag">'+l.age+' days overdue</span>':'')+'<button class="btn small ghost" data-a="remind" data-id="'+s.id+'" style="margin-top:4px">Remind</button>'+'</div></li>').join("")+'</ul>' : '<p class="empty">Everyone is paid up.</p>')+
-  panel("Tournaments ahead", tours.length ? '<ul class="list">'+tours.map(({s,x})=>{ const d = daysBetween(t,x.start); return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted"><a href="#/student/'+s.id+'/tournaments">'+esc(s.name)+'</a>'+(x.location?" · "+esc(x.location):"")+'</div></div><div style="text-align:end"><div class="small">'+esc(fmtShort(x.start))+'</div><span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span></div></li>'; }).join("")+'</ul>' : '<p class="empty">No tournaments in the next 60 days.</p>')+
+  panel("Tournaments ahead", tours.length ? '<ul class="list">'+tours.map(({s,x})=>{ const d = daysBetween(t,tourNext(x,t)); return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted"><a href="#/student/'+s.id+'/tournaments">'+esc(s.name)+'</a>'+(x.location?" · "+esc(x.location):"")+'</div></div><div style="text-align:end"><div class="small">'+esc(fmtShort(tourNext(x,t)))+'</div><span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span></div></li>'; }).join("")+'</ul>' : '<p class="empty">No tournaments in the next 60 days.</p>')+
   panel("Assignments due", tasks.length ? '<ul class="list">'+tasks.map(({s,x})=>'<li><div class="main"><div class="title">'+esc(x.title)+'</div><div class="small muted"><a href="'+(x.href||'#/student/'+s.id+'/work')+'">'+esc(s.name)+'</a> · '+esc(x.category)+'</div></div>'+(x.review?'<span class="tag warn">Done · to review</span>':'<span class="tag '+(x.due<t?"flag":x.due===t?"warn":"")+'">'+(x.due<t?"Overdue":x.due===t?"Today":esc(fmtShort(x.due)))+'</span>')+'</li>').join("")+'</ul>' : '<p class="empty">Nothing due in the next 3 days.</p>')+
   '</div>';
   $("#dSes").onclick = ()=>planSession();
@@ -4131,7 +4149,7 @@ function tOverview(el, s){
   const pts = sortBy(s.ratings.filter(r=>srcOf(r)===src),"date");
   const done = s.sessions.filter(x=>x.status==="done"); const hours = done.reduce((a,x)=>a+(+x.duration||0),0)/60;
   const last = sortBy(done,"date",-1)[0]; const next = sortBy(s.sessions.filter(x=>x.status==="planned"&&x.date>=t),"date")[0];
-  const nextT = sortBy(s.tournaments.filter(x=>tourAhead(x,t)),"start")[0];
+  const nextT = s.tournaments.filter(x=>tourAhead(x,t)).sort((a,b)=>tourNext(a,t)<tourNext(b,t)?-1:1)[0];
   const openTasks = state.assignments.filter(a=>a.studentId===s.id && a.status==="Assigned").length; const l = ledger(s);
   const hw = state.assignments.filter(a=>a.studentId===s.id && a.status==="Assigned"), hwLate = hw.filter(a=>a.due && a.due<t).length;
   const toReview = s.repertoire.filter(x=>x.v===2 && repStatus(x).status==="Needs review").length;
@@ -4155,7 +4173,7 @@ function tOverview(el, s){
     parentPanel(s)+
     '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Details</h2></div><dl class="kv">'+
       '<dt>Sessions done</dt><dd class="num">'+done.length+' ('+hours.toFixed(1)+' h)</dd><dt>Last session</dt><dd>'+(last?esc(fmtDate(last.date))+' — '+esc(last.topics||""):"—")+'</dd>'+
-      '<dt>Next tournament</dt><dd>'+(nextT?esc(nextT.name)+", "+esc(fmtShort(nextT.start)):"—")+'</dd>'+
+      '<dt>Next tournament</dt><dd>'+(nextT?esc(nextT.name)+", "+esc(fmtShort(tourNext(nextT,t))):"—")+'</dd>'+
       (s.books.some(b=>b.status==="Reading")?'<dt>Reading</dt><dd>'+s.books.filter(b=>b.status==="Reading").map(b=>'<i>'+esc(b.title)+'</i>'+(b.pages?' · p. '+(+b.page||0)+'/'+b.pages:'')).join('<br>')+'</dd>':'')+
       '<dt>Contact</dt><dd>'+esc(s.contact||"—")+(s.guardian?" · "+esc(s.guardian):"")+'</dd></dl></section>'+
   (pts.length? '<details class="panel fold" style="margin-top:16px"><summary><h2>'+esc(src)+' rating entries ('+pts.length+')</h2></summary><ul class="list" style="margin-top:8px">'+sortBy(pts,"date",-1).map(p=>'<li><span>'+esc(fmtDate(p.date))+' <span class="tag">'+esc(srcOf(p))+'</span></span><span class="row-actions"><b class="num">'+esc(p.value)+'</b><button class="btn ghost small danger" data-a="delRating" data-id="'+p.id+'" aria-label="Delete rating">Remove</button></span></li>').join("")+'</ul></details>':"");
@@ -5115,7 +5133,10 @@ const TC_SOURCE = {Rapid:"FIDE Rapid", Blitz:"FIDE Blitz", Online:"Online"};
 const tourSource = (s, format)=>TC_SOURCE[format] || mainSource(s);
 const ratingBefore = (s, src, date)=>sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===src && r.date<=date),"date").pop();
 // Tournament assistance: a fee per tournament day (by default half the usual lesson fee).
-const tourDays = x=>x.start ? Math.max(1, daysBetween(x.start, x.end&&x.end>=x.start ? x.end : x.start)+1) : 1;
+// A tournament plays either on consecutive days (start–end) or on separate dates, one round each (roundDates, e.g. weekly).
+const playDates = x=>Array.isArray(x.roundDates) && x.roundDates.length ? x.roundDates : null;
+const tourNext = (x, t)=>{ const pd = playDates(x); return pd ? (pd.find(d=>d>=t) || pd[pd.length-1]) : x.start; };
+const tourDays = x=>playDates(x) ? playDates(x).length : x.start ? Math.max(1, daysBetween(x.start, x.end&&x.end>=x.start ? x.end : x.start)+1) : 1;
 const halfFee = s=>Math.round((+s.rate||0)*0.5*100)/100;
 function assistCharge(x){
   if (!x || !x.assist) return null;
@@ -5127,8 +5148,8 @@ const tourAhead = (x, t)=>(x.end||x.start)>=t && !String(x.result||"").trim();
 function tTournaments(el, s){
   const t = today();
   const up = sortBy(s.tournaments.filter(x=>tourAhead(x,t)),"start"); const past = sortBy(s.tournaments.filter(x=>!tourAhead(x,t)),"start",-1);
-  const row = (x,isUp)=>{ const d = daysBetween(t,x.start);
-    return '<li style="align-items:flex-start"><div class="main"><div class="title">'+esc(x.name)+(x.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+(()=>{ const a = !STUDENT() && assistCharge(x); return a ? ' <span class="tag ok" title="'+(isUp?"Charged once the tournament is played":"Added to the balance")+'">Assistance · '+a.days+' day'+(a.days===1?'':'s')+' × '+esc(money(a.fee))+'</span>' : ''; })()+'</div>'+'<div class="small muted">'+esc(fmtDate(x.start))+(x.end&&x.end!==x.start?" – "+esc(fmtDate(x.end)):"")+[x.location,x.format,x.rounds?x.rounds+" rounds":""].filter(Boolean).map(v=>" · "+esc(v)).join("")+'</div>'+(x.notes?'<div class="small pre" style="margin-top:4px">'+esc(x.notes)+'</div>':"")+
+  const row = (x,isUp)=>{ const pd = playDates(x), nx = tourNext(x,t), d = daysBetween(t,nx), rn = pd ? pd.indexOf(nx)+1 : 0;
+    return '<li style="align-items:flex-start"><div class="main"><div class="title">'+esc(x.name)+(x.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+(()=>{ const a = !STUDENT() && assistCharge(x); return a ? ' <span class="tag ok" title="'+(isUp?"Charged once the tournament is played":"Added to the balance")+'">Assistance · '+a.days+' day'+(a.days===1?'':'s')+' × '+esc(money(a.fee))+'</span>' : ''; })()+'</div>'+'<div class="small muted">'+(pd ? esc(pd.length+" round date"+(pd.length===1?"":"s")+":")+" "+pd.map(q=>q===nx&&isUp?'<b>'+esc(fmtShort(q))+'</b>':esc(fmtShort(q))).join(", ") : esc(fmtDate(x.start))+(x.end&&x.end!==x.start?" – "+esc(fmtDate(x.end)):""))+[x.location,x.format,x.rounds?x.rounds+" rounds":""].filter(Boolean).map(v=>" · "+esc(v)).join("")+'</div>'+(x.notes?'<div class="small pre" style="margin-top:4px">'+esc(x.notes)+'</div>':"")+
       (!STUDENT() && x.assist ? '<div class="small" style="margin-top:2px">'+(x.assistReason?'<span class="muted">Price changed:</span> '+esc(x.assistReason)+' ':'<span class="muted">Half the usual fee</span> ')+'<button class="btn small ghost" data-a="aprice" data-id="'+x.id+'">Change price</button></div>' : '')+
     (()=>{ const ex = parseScore(x.expected, x.rounds), ac = parseScore(resultOf(s,x), x.rounds);
       if (isUp) return '<div class="expect small">'+(ex?'Expected score: <b class="num">'+esc(fmtScore(ex))+'</b>':'<span class="tag warn">No expected score yet</span> <button class="btn small ghost" data-a="expect" data-id="'+x.id+'">Set it</button>')+'</div>';
@@ -5136,7 +5157,7 @@ function tTournaments(el, s){
       const c = compareScores(ex, ac);
       return '<div class="expect small"><span class="muted">Expected</span> <b class="num">'+(ex?esc(fmtScore(ex)):"—")+'</b> <span class="muted">→ Actual</span> <b class="num">'+(ac?esc(fmtScore(ac)):"—")+'</b>'+
         (c?' <span class="tag '+(c.d>0?"ok":c.d<0?"flag":"board")+'">'+esc(diffLabel(c))+'</span>':(ex&&!ac?' <span class="muted">— add the actual result</span>':''))+'</div>'; })()+'</div>'+
-    '<div class="row-actions" style="flex-direction:column;align-items:flex-end">'+(isUp?'<span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span>':(x.result?'<b class="num">'+esc(x.result)+'</b>':resultOf(s,x)?'<b class="num" title="Worked out from the games in Game history">'+esc(resultOf(s,x))+'</b><span class="small muted">from games</span>':'<span class="tag warn">Add result</span>')+(x.ratingChange!==""&&x.ratingChange!=null?'<span class="small num" style="color:'+(+x.ratingChange>=0?"var(--ok)":"var(--flag)")+'">'+(+x.ratingChange>=0?"+":"")+esc(x.ratingChange)+'</span>':""))+
+    '<div class="row-actions" style="flex-direction:column;align-items:flex-end">'+(isUp?'<span class="tag '+(d<=7?"warn":"board")+'">'+(pd ? (rn>1?"Round "+rn+" ":"")+(d<=0?"today":d===1?"tomorrow":"in "+d+" days") : (d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days"))+'</span>':(x.result?'<b class="num">'+esc(x.result)+'</b>':resultOf(s,x)?'<b class="num" title="Worked out from the games in Game history">'+esc(resultOf(s,x))+'</b><span class="small muted">from games</span>':'<span class="tag warn">Add result</span>')+(x.ratingChange!==""&&x.ratingChange!=null?'<span class="small num" style="color:'+(+x.ratingChange>=0?"var(--ok)":"var(--flag)")+'">'+(+x.ratingChange>=0?"+":"")+esc(x.ratingChange)+'</span>':""))+
     (()=>{ const gs = studentGames(s.id).filter(g=>g.tournamentId===x.id); if (!gs.length) return isUp?"":'<button class="btn small" data-a="games" data-id="'+x.id+'">Add games</button>'; const sc = scoreLine(gs), pf = performance(gs); return '<button class="btn small" data-a="games" data-id="'+x.id+'">'+gs.length+' game'+(gs.length===1?"":"s")+(sc.n?' · '+sc.pts+'/'+sc.n:'')+'</button>'+
       (pf?'<span class="small" title="Average opponent '+pf.avg+' · '+pf.n+' rated game'+(pf.n===1?'':'s')+'">Performance <b class="num">'+pf.rp+'</b></span>':''); })()+
     '<button class="btn small ghost" data-a="edit" data-id="'+x.id+'">'+(isUp?"Edit":"Edit / result")+'</button></div></li>'; };
@@ -5146,16 +5167,21 @@ function tTournaments(el, s){
   const expLine = cmp.length ? '<p class="small muted" style="margin:0 0 6px">Met or beat the expected score in <b style="color:var(--ink)">'+met+' of '+cmp.length+'</b> event'+(cmp.length===1?"":"s")+(avgD!==null?' · on average <b style="color:'+(avgD>=0?"var(--ok)":"var(--flag)")+'">'+(avgD>=0?"+":"−")+(Math.round(Math.abs(avgD)*10)/10)+'</b> point'+(Math.abs(avgD)===1?"":"s")+' vs. expectation':'')+'</p>' : "";
   el.innerHTML = tabSwitch(s,"tournaments")+'<div class="grid g2">'+panel("Upcoming", up.length?'<ul class="list">'+up.map(x=>row(x,true)).join("")+'</ul>':'<p class="empty">No upcoming tournaments.</p>','<button class="btn small primary" data-a="add">Add tournament</button>')+
     panel("Played", expLine+(played.length?'<p class="small muted" style="margin:0 0 6px">Net rating change: <b style="color:'+(net>=0?"var(--ok)":"var(--flag)")+'">'+(net>=0?"+":"")+net+'</b> over '+played.length+' event'+(played.length===1?'':'s')+'</p>':"")+(past.length?'<ul class="list">'+past.map(x=>row(x,false)).join("")+'</ul>':'<p class="empty">Completed tournaments appear here.</p>'))+'</div>';
-  const fields = x=>[{name:"name",label:"Tournament",value:x?.name||"",required:true,full:true},{name:"start",label:"Start date",type:"date",value:x?.start||addDays(t,14)},{name:"end",label:"End date",type:"date",value:x?.end||""},
+  const begins = v=>v.sched==="dates" ? (v.roundDates||"").split(",").filter(Boolean).sort()[0]||"" : v.start;
+  const fields = x=>[{name:"name",label:"Tournament",value:x?.name||"",required:true,full:true},
+    {name:"sched",label:"Schedule",type:"select",options:[["","Rounds on consecutive days"],["dates","One round at a time, on separate dates (e.g. weekly)"]],value:x&&playDates(x)?"dates":"",full:true},
+    {name:"start",label:"Start date",type:"date",value:x?.start||addDays(t,14),show:v=>v.sched!=="dates"},{name:"end",label:"End date",type:"date",value:x?.end||"",show:v=>v.sched!=="dates"},
+    {name:"roundDates",label:"Round dates",type:"dates",value:(x&&playDates(x)||[]).join(","),show:v=>v.sched==="dates",full:true,addLabel:"Add a round",itemLabel:"Round",step:7,first:v=>v.start||addDays(t,7),
+      hint:"The date of each round. You can add the next rounds later, as they're published."},
     {name:"location",label:"Location",value:x?.location||""},{name:"format",label:"Time control",type:"select",options:["Classical","Rapid","Blitz","Online"],value:x?.format||"Classical"},
     {name:"rounds",label:"Rounds",type:"number",value:x?.rounds??"",min:0},
     {name:"expected",label:"Expected score",value:x?.expected||"",placeholder:"e.g. 5/9",hint:"The student's own prediction, written before the first round"},
-    {name:"result",label:"Actual score",value:x?.result||(x?resultOf(s,x):""),placeholder:"e.g. 5.5/9",show:v=>!!v.start&&v.start<=today(),hint:(()=>{ const g = x && gamesScore(s,x); return g ? "From the "+g.n+" game"+(g.n===1?"":"s")+" in Game history: "+g.text+(g.complete?"":" (not every round has a game yet)") : ""; })()},
-    {name:"ratingChange",label:"Rating change",type:"number",value:x?.ratingChange??"",show:v=>!!v.start&&v.start<=today(),
+    {name:"result",label:"Actual score",value:x?.result||(x?resultOf(s,x):""),placeholder:"e.g. 5.5/9",show:v=>!!begins(v)&&begins(v)<=today(),hint:(()=>{ const g = x && gamesScore(s,x); return g ? "From the "+g.n+" game"+(g.n===1?"":"s")+" in Game history: "+g.text+(g.complete?"":" (not every round has a game yet)") : ""; })()},
+    {name:"ratingChange",label:"Rating change",type:"number",value:x?.ratingChange??"",show:v=>!!begins(v)&&begins(v)<=today(),
       hint:x?.ratingAdded?"Added to the "+x.ratingAdded.source+" history as "+x.ratingAdded.value:"Leave empty until results are in"},
     {name:"addRating",label:"Add to rating history",type:"select",options:[["","No"],...RATING_SOURCES.map(r=>[r,"Yes — "+r+" list"])],
       value:(()=>{ const src = tourSource(s, x?.format||"Classical"); return x && ratingBefore(s, src, x.end||x.start) ? src : ""; })(),
-      show:v=>!STUDENT() && !!v.start && v.start<=today() && v.ratingChange!=="" && !x?.ratingAdded, hint:"Adds a new rating: the last one before the tournament plus the change, dated the last day"},
+      show:v=>!STUDENT() && !!begins(v) && begins(v)<=today() && v.ratingChange!=="" && !x?.ratingAdded, hint:"Adds a new rating: the last one before the tournament plus the change, dated the last day"},
     ...(STUDENT() ? [] : [
       {name:"assist",label:"Tournament assistance",type:"select",options:[["","No"],["1","Yes — charged per tournament day"]],value:x?.assist?"1":"",full:true,
         hint:x?.assistReason ? "Price changed to "+money(+x.assistFee||0)+" a day · use “Change price” on the tournament to update it" : "Half the usual fee: "+money(halfFee(s))+" a day, charged once the tournament is played · use “Change price” on the tournament to set another price"},
@@ -5163,12 +5189,17 @@ function tTournaments(el, s){
       ]),
     {name:"notes",label:"Preparation & reflection",type:"textarea",value:x?.notes||""}];
   const validate = d=>{
+    if (d.sched==="dates" && !d.roundDates.split(",").filter(Boolean).length) return "Add the date of at least one round.";
     if (d.expected && !parseScore(d.expected, d.rounds)) return "Write the expected score like 5/9 or 5.5/9 (and no more than the number of rounds).";
     if (d.result && !parseScore(d.result, d.rounds)) return "Write the actual score like 5/9 or 5.5/9 (and no more than the number of rounds).";
     if (d.addRating && d.ratingChange!=="" && !ratingBefore(s, d.addRating, d.end||d.start)) return "There’s no "+d.addRating+" rating from before this tournament to add the change to. Add it in Overview → Add rating first, or choose No.";
   };
   // Adds the post-tournament rating once; `ratingAdded` stops a later edit from counting the change twice.
   const after = y=>{
+    // separate round dates: kept sorted, and start/end follow the first and last round
+    if (y.sched==="dates"){ y.roundDates = [...new Set(String(y.roundDates||"").split(",").filter(Boolean))].sort(); y.start = y.roundDates[0]; y.end = y.roundDates[y.roundDates.length-1]; }
+    else if (y.sched!==undefined) delete y.roundDates;
+    delete y.sched;
     if (!STUDENT()){ y.assist = y.assist===true || y.assist==="1";
       if (!y.assist){ delete y.assistDays; delete y.assistFee; delete y.assistReason; }
       else if (!y.assistReason) y.assistFee = halfFee(s); } // the default price follows the lesson fee until it's changed by hand
@@ -5582,7 +5613,7 @@ function clashesFor(sid, c){
     });
   });
   const me = byId(sid);
-  if (me) me.tournaments.forEach(t=>{ if (t.start && c.date>=t.start && c.date<=(t.end||t.start)) out.push({kind:"tour", text:me.name.split(" ")[0]+" is playing "+t.name+" that day"}); });
+  if (me) me.tournaments.forEach(t=>{ if (playDates(t) ? playDates(t).includes(c.date) : t.start && c.date>=t.start && c.date<=(t.end||t.start)) out.push({kind:"tour", text:me.name.split(" ")[0]+" is playing "+t.name+" that day"}); });
   return out;
 }
 function clashCheck(sid, c, st){
@@ -5706,7 +5737,8 @@ function scheduleItems(from, to){
   const items = [];
   state.students.filter(s=>s.active).forEach(s=>{
     s.sessions.forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"session", date:x.date, s, x, clash:x.status!=="cancelled" && !STUDENT() ? clashesFor(s.id,x) : []}); });
-    s.tournaments.forEach(t=>{ if (!t.start) return; const e = t.end && t.end>=t.start ? t.end : t.start; const n = daysBetween(t.start,e)+1;
+    s.tournaments.forEach(t=>{ const pd = playDates(t); if (pd){ pd.forEach((d,k)=>{ if (d>=from && d<=to) items.push({kind:"tour", date:d, s, x:t, day:k+1, days:pd.length, round:true}); }); return; }
+      if (!t.start) return; const e = t.end && t.end>=t.start ? t.end : t.start; const n = daysBetween(t.start,e)+1;
       for (let d=t.start<from?from:t.start; d<=e && d<=to; d=addDays(d,1)) items.push({kind:"tour", date:d, s, x:t, day:daysBetween(t.start,d)+1, days:n}); });
   });
   state.assignments.forEach(a=>{ const s = byId(a.studentId); if (s && s.active && a.due && a.due>=from && a.due<=to && a.status==="Assigned") items.push({kind:"due", date:a.due, s, x:a}); });
@@ -5824,7 +5856,7 @@ function weekGrid(ws, items, n=7){
     const its = items.filter(i=>i.date===d && i.kind!=="free" && i.kind!=="taken" && (!TIMED[i.kind] || toMin(i.x.time)===null));
     const who = i=>STUDENT() ? "" : ' · '+esc(i.s.name.split(" ")[0]);
     return '<div class="wk-ad">'+its.map(i=>{
-      if (i.kind==="tour") return '<div class="chip-ev tour" title="'+esc(i.x.name)+'">♜ '+esc(i.x.name)+who(i)+(i.days>1?' <span class="muted">'+i.day+'/'+i.days+'</span>':'')+'</div>';
+      if (i.kind==="tour") return '<div class="chip-ev tour" title="'+esc(i.x.name)+'">♜ '+esc(i.x.name)+who(i)+(i.round?' <span class="muted">R'+i.day+'</span>':i.days>1?' <span class="muted">'+i.day+'/'+i.days+'</span>':'')+'</div>';
       if (i.kind==="due") return '<a class="chip-ev due" href="#/assignment/'+i.x.id+'">Due: '+esc(i.x.title)+who(i)+'</a>';
       if (i.kind!=="session") return '<button type="button" class="chip-ev '+evCls(i)+'" '+evAct(i)+'>'+esc(evLabel(i))+'</button>';
       return '<button type="button" class="chip-ev ses'+(i.x.status==="cancelled"?" cx":"")+(i.clash.length?" clash":"")+'" '+evAct(i)+'>'+(i.clash.length?"⚠ ":"")+esc(evLabel(i))+' · no time</button>';
@@ -5857,7 +5889,7 @@ function listView(items, t){
   return keys.map(d=>'<div class="date-group"><h3>'+(d===t?"Today":d===addDays(t,1)?"Tomorrow":esc(fmtDay(d)))+'</h3><section class="panel" style="padding:4px 18px"><ul class="list">'+
     groups[d].sort((a,b)=>(ord[a.kind]-ord[b.kind]) || ((a.x.time||a.x.from||"99")<(b.x.time||b.x.from||"99")?-1:1)).map(i=>{
       const st = STUDENT(), x = i.x;
-      if (i.kind==="tour") return '<li><div class="main"><div class="title">'+esc(x.name)+(i.days>1?' <span class="muted small">day '+i.day+' of '+i.days+'</span>':'')+'</div><div class="small muted">'+[st?"":'<a href="#/student/'+i.s.id+'/tournaments">'+esc(i.s.name)+'</a>', esc(x.location||""), st?esc(x.format||""):""].filter(Boolean).join(" · ")+'</div></div><span class="tag board">Tournament</span></li>';
+      if (i.kind==="tour") return '<li><div class="main"><div class="title">'+esc(x.name)+(i.round?' <span class="muted small">round '+i.day+'</span>':i.days>1?' <span class="muted small">day '+i.day+' of '+i.days+'</span>':'')+'</div><div class="small muted">'+[st?"":'<a href="#/student/'+i.s.id+'/tournaments">'+esc(i.s.name)+'</a>', esc(x.location||""), st?esc(x.format||""):""].filter(Boolean).join(" · ")+'</div></div><span class="tag board">Tournament</span></li>';
       if (i.kind==="due") return '<li><div class="main"><div class="title"><a href="#/assignment/'+x.id+'">'+esc(x.title)+'</a></div><div class="small muted">'+(st?"":esc(i.s.name)+' · ')+esc(x.type)+'</div></div><span class="tag warn">Assignment due</span></li>';
       if (i.kind==="req") return '<li><div class="main"><div class="title">'+(x.kind==="move"?"Move request":"Lesson request")+'</div><div class="small muted">'+[x.time, x.duration+" min", x.format].filter(Boolean).map(esc).join(" · ")+(x.note?' · '+esc(x.note):'')+'</div></div><div class="row-actions">'+(x.status==="pending"?'<span class="tag warn">Waiting for your coach</span><button class="btn small ghost" data-a="unreq" data-id="'+x.id+'">Cancel</button>':'<span class="tag flag">Declined</span>')+'</div></li>';
       if (i.kind==="taken") return '<li><div class="main"><div class="title muted">Taken '+esc(x.from)+'–'+esc(x.to)+'</div><div class="small muted">Another lesson</div></div><span class="tag">Booked</span></li>';
@@ -5974,6 +6006,10 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Rounds on consecutive days":"סבבים בימים רצופים", "One round at a time, on separate dates (e.g. weekly)":"סבב אחד בכל פעם, בתאריכים נפרדים (למשל פעם בשבוע)",
+  "Round dates":"תאריכי הסבבים", "Add a round":"הוספת סבב", "Remove":"הסרה",
+  "The date of each round. You can add the next rounds later, as they're published.":"התאריך של כל סבב. אפשר להוסיף את הסבבים הבאים בהמשך, כשהם מתפרסמים.",
+  "Add the date of at least one round.":"יש להוסיף תאריך של סבב אחד לפחות.",
   "No active students with a FIDE or ICF ID yet.":"עדיין אין תלמידים פעילים עם מספר FIDE או מספר באיגוד.", "Checking ratings…":"בודק דירוגים…",
   "Some ratings couldn't be read":"חלק מהדירוגים לא נקראו", "Couldn't check the ratings":"לא ניתן היה לבדוק את הדירוגים", "These couldn't be read:":"את אלה לא ניתן היה לקרוא:",
   "Check the ID in Edit profile. If it's right, send these details to whoever maintains the app:":"כדאי לבדוק את המספר בעריכת הפרופיל. אם הוא נכון, אפשר לשלוח את הפרטים האלה למי שמתחזק את האפליקציה:",
@@ -6302,6 +6338,10 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Round (\d+)$/, "סבב $1"], [/^round (\d+)$/, "סבב $1"], [/^R(\d+)$/, "ס׳$1"],
+  [/^(\d+) round dates?:$/, "$1 תאריכי סבבים:"],
+  [/^Round (\d+) today$/, "סבב $1 היום"], [/^Round (\d+) tomorrow$/, "סבב $1 מחר"], [/^Round (\d+) in (\d+) days$/, "סבב $1 בעוד $2 ימים"],
+  [/^today$/, "היום"], [/^tomorrow$/, "מחר"], [/^in (\d+) days$/, "בעוד $1 ימים"],
   [/^Ratings updated for (\d+) students?$/, "הדירוגים עודכנו ל־$1 תלמידים"], [/^Updated (\d+) students?\. These couldn't be read:$/, "עודכנו $1 תלמידים. את אלה לא ניתן היה לקרוא:"],
   [/^last checked (.+)\.$/, "נבדק לאחרונה $1."], [/^Couldn't read last time: (.+)$/, "לא נקראו בפעם הקודמת: $1"],
   [/^Send (.+) the link to the app:$/, "לשלוח ל־$1 את הקישור לאפליקציה:"],
