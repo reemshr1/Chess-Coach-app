@@ -55,10 +55,10 @@ export function parseIcf(html) {
   return { error: "No Israeli rating found on the chess.org.il page", sample: sampleAround(text, [/מד/, /rating/i]) };
 }
 
-async function getPage(url) {
+async function getPage(url, ms = 20000) {
   let r;
-  try { r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "en,he;q=0.8" }, signal: AbortSignal.timeout(15000) }); }
-  catch (e) { throw new Error(e && e.name === "TimeoutError" ? "The page didn't answer within 15 seconds" : "Couldn't reach the page: " + (e && e.message || e)); }
+  try { r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "en,he;q=0.8" }, signal: AbortSignal.timeout(ms) }); }
+  catch (e) { throw new Error(e && e.name === "TimeoutError" ? "The page didn't answer within " + Math.round(ms / 1000) + " seconds" : "Couldn't reach the page: " + (e && e.message || e)); }
   if (!r.ok) throw new Error("The page answered " + r.status);
   const buf = new Uint8Array(await r.arrayBuffer());
   const ct = r.headers.get("content-type") || "";
@@ -68,11 +68,16 @@ async function getPage(url) {
 }
 const cleanIds = (a, max = 80) => [...new Set((Array.isArray(a) ? a : []).map(x => String(x).replace(/\D/g, "")).filter(x => x.length >= 3 && x.length <= 12))].slice(0, max);
 
-// A few pages at a time, to be gentle with both sites.
-async function each(ids, fn, width = 4) {
+// A few pages at a time, to be gentle with both sites. Supabase stops a function after about 150 seconds,
+// so no new page is started after the deadline; those are reported and the app tries them again later.
+async function each(ids, fn, width, deadline) {
   const out = {}; let i = 0;
   await Promise.all(Array.from({ length: width }, async () => {
-    while (i < ids.length) { const id = ids[i++]; try { out[id] = await fn(id); } catch (e) { out[id] = { error: String(e && e.message || e) }; } }
+    while (i < ids.length) {
+      const id = ids[i++];
+      if (Date.now() > deadline) { out[id] = { error: "Not checked this time (the site was too slow); will try again" }; continue; }
+      try { out[id] = await fn(id); } catch (e) { out[id] = { error: String(e && e.message || e) }; }
+    }
   }));
   return out;
 }
@@ -90,8 +95,12 @@ export async function handle(req) {
   }
   let body;
   try { body = await req.json(); } catch { return json({ error: "Send JSON" }, 400); }
-  const fide = await each(cleanIds(body.fide), async id => parseFide(await getPage("https://ratings.fide.com/profile/" + id)));
-  const icf = await each(cleanIds(body.icf), async id => parseIcf(await getPage("https://www.chess.org.il/Players/Player.aspx?Id=" + id)));
+  // ratings.fide.com is slow: two pages at a time, up to 40 seconds each. chess.org.il at the same time.
+  const deadline = Date.now() + 95000;
+  const [fide, icf] = await Promise.all([
+    each(cleanIds(body.fide), async id => parseFide(await getPage("https://ratings.fide.com/profile/" + id, 40000)), 2, deadline),
+    each(cleanIds(body.icf), async id => parseIcf(await getPage("https://www.chess.org.il/Players/Player.aspx?Id=" + id, 20000)), 4, deadline),
+  ]);
   return json({ fide, icf, checked: new Date().toISOString() });
 }
 

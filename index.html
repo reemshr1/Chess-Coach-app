@@ -3245,7 +3245,9 @@ async function initStore(){
   if (db && userId){
     store = makeDbStore(db, userId);
     try { applyLoaded(await store.loadAll()); setSync("ok"); store.tidy(); store.subscribe(); portal = makePortal(db); portal.start();
-      if (WEB) setTimeout(()=>{ const t = today(); if ((state.settings.ratingsSyncedAt||"").slice(0,7)!==t.slice(0,7) && +t.slice(8)>=2) syncRatings(false); }, 4000);
+      if (WEB) setTimeout(()=>{ const t = today(), st = state.settings;
+        const monthly = (st.ratingsSyncedAt||"").slice(0,7)!==t.slice(0,7) && +t.slice(8)>=2, retry = (st.ratingsFailed||[]).length && st.ratingsTriedAt!==t;
+        if (monthly || retry) syncRatings(false); }, 4000);
       // Deleting a game or assignment also takes it off that student's page.
       const dg = store.deleteGame, da = store.deleteAssignment;
       store.deleteGame = id=>{ dg(id); portal.scheduleAll(); }; store.deleteAssignment = id=>{ da(id); portal.scheduleAll(); }; }
@@ -3977,10 +3979,10 @@ async function syncRatings(manual){
   if (!WEB || !sb || STUDENT() || ratingsBusy) return;
   const list = state.students.filter(s=>s.active && (s.fideId || s.icfId));
   if (!list.length){ if (manual) toast("No active students with a FIDE or ICF ID yet."); return; }
-  ratingsBusy = true; if (manual){ toast("Checking ratings…"); render(); }
+  ratingsBusy = true; if (manual){ toast("Checking ratings… this can take up to two minutes"); render(); }
   try {
     const ask = sb.functions.invoke("ratings", {body:{fide:list.map(s=>s.fideId).filter(Boolean), icf:list.map(s=>s.icfId).filter(Boolean)}});
-    const late = new Promise((_, no)=>setTimeout(()=>no(new Error("timeout")), 90000));
+    const late = new Promise((_, no)=>setTimeout(()=>no(new Error("timeout")), 160000));
     const { data, error } = await Promise.race([ask, late]);
     if (error) throw error;
     if (!data || !data.fide) throw new Error("bad answer");
@@ -3996,7 +3998,7 @@ async function syncRatings(manual){
         else failed.push({name:s.name, list:"ICF", id:s.icfId, why:(r&&r.error)||"No answer for this ID", sample:(r&&r.sample)||""}); }
       if (touched){ saveStudent(s); changed++; }
     });
-    state.settings.ratingsSyncedAt = t; state.settings.ratingsFailed = failed.map(f=>f.name+" ("+f.list+")"); saveSettings();
+    state.settings.ratingsSyncedAt = t; state.settings.ratingsTriedAt = t; state.settings.ratingsFailed = failed.map(f=>f.name+" ("+f.list+")"); saveSettings();
     if (failed.length && manual) ratingProblems(failed, changed);
     else if (changed) toast("Ratings updated for "+changed+" student"+(changed===1?"":"s"));
   } catch(e){
@@ -6051,7 +6053,7 @@ const HE = {
   "Round dates":"תאריכי הסבבים", "Add a round":"הוספת סבב", "Remove":"הסרה",
   "The date of each round. You can add the next rounds later, as they're published.":"התאריך של כל סבב. אפשר להוסיף את הסבבים הבאים בהמשך, כשהם מתפרסמים.",
   "Add the date of at least one round.":"יש להוסיף תאריך של סבב אחד לפחות.",
-  "No active students with a FIDE or ICF ID yet.":"עדיין אין תלמידים פעילים עם מספר FIDE או מספר באיגוד.", "Checking ratings…":"בודק דירוגים…",
+  "Checking ratings… this can take up to two minutes":"בודק דירוגים… זה יכול לקחת עד שתי דקות", "No active students with a FIDE or ICF ID yet.":"עדיין אין תלמידים פעילים עם מספר FIDE או מספר באיגוד.", "Checking ratings…":"בודק דירוגים…",
   "Some ratings couldn't be read":"חלק מהדירוגים לא נקראו", "Couldn't check the ratings":"לא ניתן היה לבדוק את הדירוגים", "These couldn't be read:":"את אלה לא ניתן היה לקרוא:",
   "Check the ID in Edit profile. If it's right, send these details to whoever maintains the app:":"כדאי לבדוק את המספר בעריכת הפרופיל. אם הוא נכון, אפשר לשלוח את הפרטים האלה למי שמתחזק את האפליקציה:",
   "The ratings service didn't answer. If this is the first time, the “ratings” function may not be set up in Supabase yet. Otherwise, check your internet connection and try again.":"שירות הדירוגים לא ענה. אם זו הפעם הראשונה, ייתכן שהפונקציה “ratings” עדיין לא הוגדרה ב־Supabase. אחרת, כדאי לבדוק את החיבור לאינטרנט ולנסות שוב.",
