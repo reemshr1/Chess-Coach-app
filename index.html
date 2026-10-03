@@ -2724,7 +2724,7 @@ const STUDENT = ()=>ROLE!=="coach";
 const PARENT = ()=>ROLE==="parent";
 const coachOnly = html=>STUDENT() ? "" : html;
 const isShared = v=>v===true || v==="1"; // older saves stored the form's "0"/"1"
-const PORTAL_KEYS = ["worklog","tournaments","books","training"]; // lists a student may add to and change
+const PORTAL_KEYS = ["worklog","tournaments","books","training","repertoire"]; // lists a student may add to and change
 /* families: a parent account follows one or more students */
 const families = ()=>state.settings.families||(state.settings.families=[]);
 const familyOf = x=>{ const sid = typeof x==="string" ? x : x && x.id; return families().find(f=>(f.studentIds||[]).includes(sid)); };
@@ -2778,13 +2778,14 @@ function portalDocs(s){
 // only deletes what they added, and asks for lessons rather than booking them.
 function applyOp(s, op, coachSide){
   const t = op.type, it = op.item, mine = x=>x && x.by==="student", list = k=>(s[k] = s[k]||[]);
-  let m = /^(worklog|tournaments|books|training)\.(upsert|delete)$/.exec(t);
+  let m = /^(worklog|tournaments|books|training|repertoire)\.(upsert|delete)$/.exec(t);
   if (m){
     const L = list(m[1]), i = L.findIndex(x=>x.id===(m[2]==="delete" ? op.id : it && it.id));
     if (m[2]==="delete"){ if (i>=0 && mine(L[i])) L.splice(i,1); return true; }
     if (!it || !it.id) return false;
     const fromS = m[1]==="tournaments" ? (({assist, assistDays, assistFee, assistReason, ...y})=>y)(it) : it; // the assistance price is the coach's
     const item = Object.assign({}, i>=0 ? L[i] : {}, fromS, i>=0 ? {} : {by:"student"});
+    if (m[1]==="repertoire" && i>=0) item.studentEdited = (op.at||"").slice(0,10) || today(); // so the coach can see the student changed it
     if (m[1]==="worklog" && item.bookId && item.page!=="" && item.page!=null && pageOrderError(s, (s.books||[]).find(b=>b.id===item.bookId), item.date, +item.page, item.id)) item.page = "";
     if (i>=0) L[i] = item; else L.push(item);
     if (coachSide && m[1]==="worklog"){
@@ -3746,7 +3747,8 @@ function pDashboard(v){
     else if (a.status==="Assigned" && a.due && a.due<=addDays(t,3)) tasks.push({s,x:{title:a.title,category:a.type,due:a.due,href:"#/assignment/"+a.id}});
   });
   sessions.sort((a,b)=>(a.x.date+(a.x.time||""))<(b.x.date+(b.x.time||""))?-1:1);
-  tours.sort((a,b)=>tourNext(a.x,t)<tourNext(b.x,t)?-1:1); tasks.sort((a,b)=>a.x.due<b.x.due?-1:1);
+  tours.sort((a,b)=>tourNext(a.x,t)<tourNext(b.x,t)?-1:1);
+  const tourGroups = []; tours.forEach(({s,x})=>{ const k = tourKey(x)+"|"+tourNext(x,t), g = tourGroups.find(y=>y.k===k); if (g) g.ss.push(s); else tourGroups.push({k, x, ss:[s]}); }); tasks.sort((a,b)=>a.x.due<b.x.due?-1:1);
   const owing = state.students.map(s=>({s,l:ledger(s)})).filter(o=>o.l.balance>0.009).sort((a,b)=>(b.l.overdue-a.l.overdue)||(b.l.balance-a.l.balance));
   const outstanding = owing.reduce((t,o)=>t+o.l.balance,0);
   const month = t.slice(0,7);
@@ -3765,7 +3767,7 @@ function pDashboard(v){
   '<div class="grid g2">'+
   panel("Coming up this week", sessions.length ? '<ul class="list">'+sessions.map(({s,x})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(x.topics||"No topic yet")+'</div></div><div style="text-align:end"><div class="small">'+esc(x.date===t?"Today":fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(x.time||"")+(x.duration?" · "+x.duration+" min":"")+'</div></div></li>').join("")+'</ul>' : '<p class="empty">No sessions planned for the next 7 days.</p>')+
   panel("Who owes you", owing.length ? '<ul class="list">'+owing.slice(0,8).map(({s,l})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a></div><div class="small muted">'+(l.lastPay?"Last paid "+esc(fmtShort(l.lastPay.date)):"No payments yet")+'</div></div><div style="text-align:end"><div class="money-owed num">'+money(l.balance)+'</div>'+(l.overdue?'<span class="tag flag">'+l.age+' days overdue</span>':'')+'<button class="btn small ghost" data-a="remind" data-id="'+s.id+'" style="margin-top:4px">Remind</button>'+'</div></li>').join("")+'</ul>' : '<p class="empty">Everyone is paid up.</p>')+
-  panel("Tournaments ahead", tours.length ? '<ul class="list">'+tours.map(({s,x})=>{ const d = daysBetween(t,tourNext(x,t)); return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted"><a href="#/student/'+s.id+'/tournaments">'+esc(s.name)+'</a>'+(x.location?" · "+esc(x.location):"")+'</div></div><div style="text-align:end"><div class="small">'+esc(fmtShort(tourNext(x,t)))+'</div><span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span></div></li>'; }).join("")+'</ul>' : '<p class="empty">No tournaments in the next 60 days.</p>')+
+  panel("Tournaments ahead", tours.length ? '<ul class="list">'+tourGroups.map(({x,ss})=>{ const d = daysBetween(t,tourNext(x,t)); return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+ss.map(s=>'<a href="#/student/'+s.id+'/tournaments">'+esc(s.name)+'</a>').join(", ")+(x.location?" · "+esc(x.location):"")+'</div></div><div style="text-align:end"><div class="small">'+esc(fmtShort(tourNext(x,t)))+'</div><span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span></div></li>'; }).join("")+'</ul>' : '<p class="empty">No tournaments in the next 60 days.</p>')+
   panel("Assignments due", tasks.length ? '<ul class="list">'+tasks.map(({s,x})=>'<li><div class="main"><div class="title">'+esc(x.title)+'</div><div class="small muted"><a href="'+(x.href||'#/student/'+s.id+'/work')+'">'+esc(s.name)+'</a> · '+esc(x.category)+'</div></div>'+(x.review?'<span class="tag warn">Done · to review</span>':'<span class="tag '+(x.due<t?"flag":x.due===t?"warn":"")+'">'+(x.due<t?"Overdue":x.due===t?"Today":esc(fmtShort(x.due)))+'</span>')+'</li>').join("")+'</ul>' : '<p class="empty">Nothing due in the next 3 days.</p>')+
   '</div>';
   $("#dSes").onclick = ()=>planSession();
@@ -3786,7 +3788,7 @@ function pDashboard(v){
           sendConfirm(r.kind==="cancel" ? "declinedCancel" : "declined", s, r.kind==="cancel" ? {date:r.was.date, time:r.was.time} : {date:r.date, time:r.time}); }); } });
 }
 const OP_LABEL = {"request":"a lesson request", "request.cancel":"a withdrawn request", "move.answer":"an answer about a lesson", "assignment.status":"an assignment marked done",
-  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game"};
+  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "repertoire.delete":"a deleted opening line"};
 function issuesPanel(){
   const list = portal ? portal.issues() : []; if (!list.length) return "";
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--flag)"><div class="panel-head"><h2>Problems with the student and parent app</h2></div><ul class="list">'+
@@ -4957,7 +4959,7 @@ function migrateRepertoire(s){
   return changed;
 }
 function editRep(s, item, preset){
-  const isNew = !item; const x = item || Object.assign({id:uid(), v:2, color:"White", firstMove:"1.e4", against:"", againstOther:"", name:"", eco:"", status:"Developing", developer:"Coach", reviewed:"", created:today(), lines:"", notes:""}, preset||{});
+  const isNew = !item; const x = item || Object.assign({id:uid(), v:2, color:"White", firstMove:"1.e4", against:"", againstOther:"", name:"", eco:"", status:"Developing", developer:STUDENT()?"Student":"Coach", reviewed:"", created:today(), lines:"", notes:""}, preset||{}, isNew && STUDENT() ? {by:"student"} : {});
   openForm({title:isNew?"Add opening line":"Edit opening line", submit:isNew?"Add line":"Save changes", fields:[
       {name:"color",label:"Colour",type:"select",options:["White","Black"],value:x.color},
       {name:"firstMove",label:"White's first move",type:"select",options:WHITE_FIRST,value:x.firstMove||"1.e4",show:v=>v.color==="White",hint:"The move the student opens with"},
@@ -4971,12 +4973,13 @@ function editRep(s, item, preset){
       {name:"reviewed",label:"Last reviewed",type:"date",value:x.reviewed,hint:"Lines not reviewed for 6 months are flagged as Needs review automatically"},
       {name:"lines",label:"Main lines",type:"textarea",value:x.lines,placeholder:"1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6"},
       {name:"notes",label:"Notes",type:"textarea",value:x.notes,placeholder:"Key ideas, typical plans, lines still missing"}],
-    danger: isNew?null:{label:"Delete line", onClick:()=>confirmBox("Delete “"+x.name+"”?","The line, its moves and notes will be removed. This can't be undone.","Delete",()=>{ s.repertoire = s.repertoire.filter(y=>y.id!==x.id); saveStudent(s); render(); toast("Line deleted"); })},
+    danger: isNew || (STUDENT() && x.by!=="student") ? null : {label:"Delete line", onClick:()=>confirmBox("Delete “"+x.name+"”?","The line, its moves and notes will be removed. This can't be undone.","Delete",()=>{ s.repertoire = s.repertoire.filter(y=>y.id!==x.id); saveStudent(s); render(); toast("Line deleted"); })},
     onSubmit:d=>{
       if (!d.name) return "Enter the name of the student's line.";
       if (d.color==="Black") d.firstMove = "";
       if (d.status!=="Developing") d.developer = "";
       Object.assign(x, d, {v:2});
+      if (!STUDENT()) delete x.studentEdited; // the coach has seen it
       if (isNew) s.repertoire.push(x);
       saveStudent(s); render(); toast(isNew?"Line added":"Changes saved");
     }});
@@ -5053,7 +5056,8 @@ function tRepertoire(el, s){
       (x.againstOther?'<div class="small muted">vs '+ltr(x.againstOther)+'</div>':'')+'</div>'+
       '<span class="tag '+tagCls[r.status]+'">'+esc(r.status)+(r.status==="Developing"&&x.developer?' · by '+(x.developer==="Coach"?"coach":"student"):'')+(r.auto?' · auto':'')+'</span></div>'+
       (x.lines?'<div class="line-box">'+esc(x.lines)+'</div>':'')+(x.notes?'<div class="small" style="margin-top:6px">'+esc(x.notes)+'</div>':'')+
-      '<div class="rep-foot"><span class="small muted">'+(x.reviewed?'Reviewed '+esc(monthsAgo(x.reviewed)):'Never reviewed')+(r.auto?' — over 6 months':'')+'</span><span class="row-actions">'+coachOnly('<button class="btn small" data-a="rev" data-id="'+x.id+'">Reviewed today</button><button class="btn small ghost" data-a="edit" data-id="'+x.id+'">Edit</button>')+'</span></div></div>';
+      (!STUDENT() && (x.studentEdited || x.by==="student") ? '<div style="margin-top:6px"><span class="tag">'+(x.studentEdited?'Changed by the student '+esc(fmtShort(x.studentEdited)):'Added by the student')+'</span></div>' : '')+
+      '<div class="rep-foot"><span class="small muted">'+(x.reviewed?'Reviewed '+esc(monthsAgo(x.reviewed)):'Never reviewed')+(r.auto?' — over 6 months':'')+'</span><span class="row-actions">'+('<button class="btn small" data-a="rev" data-id="'+x.id+'">Reviewed today</button><button class="btn small ghost" data-a="edit" data-id="'+x.id+'">Edit</button>')+'</span></div></div>';
   };
   const groupRows = (keys, lines, keyOf, coreN, presetOf)=>{
     let html = "", missCore = [], missOther = [];
@@ -5064,7 +5068,7 @@ function tRepertoire(el, s){
       if (!shown.length) return;
       html += '<div class="rep-group"><div class="rep-vs">vs '+ltr(k)+'</div>'+shown.map(card).join("")+'</div>';
     });
-    if (!STUDENT() && repFilter==="all" && !narrowed && (missCore.length||missOther.length)){
+    if (!PARENT() && repFilter==="all" && !narrowed && (missCore.length||missOther.length)){
       html += '<div class="rep-gaps">'+(missCore.length?'<div class="small"><b>No answer yet against:</b> '+missCore.map(k=>'<button class="chip warn" data-a="addp" data-id="'+esc(JSON.stringify(presetOf(k)))+'">'+ltr(k)+' +</button>').join("")+'</div>':'')+
         (missOther.length?'<div class="small muted" style="margin-top:4px">Less common: '+missOther.filter(k=>!/^(Other|Any)/.test(k)).map(k=>'<button class="chip" data-a="addp" data-id="'+esc(JSON.stringify(presetOf(k)))+'">'+ltr(k)+' +</button>').join("")+'</div>':'')+'</div>';
     }
@@ -5084,14 +5088,14 @@ function tRepertoire(el, s){
     (narrowed?'<p class="small" style="margin:0 0 10px">Showing <b>'+count("all")+'</b> line'+(count("all")===1?"":"s")+(repOpening?' for <b>'+esc(repOpening)+'</b>':'')+(repQuery?' matching “'+esc(repQuery)+'”':'')+'</p>':'')+
     '<div class="seg" role="group" aria-label="Filter by status">'+Object.keys(F).map(k=>'<button type="button" class="'+(repFilter===k?"on":"")+'" data-a="rf" data-id="'+esc(k)+'">'+(k==="all"?"All":k)+' ('+count(k)+')</button>').join("")+'</div>'+
     '<div class="grid g2">'+
-    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece w"></span>White</h3>'+coachOnly('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"White"}))+'">Add line</button>')+'</div>'+whiteHtml+'</section>'+
-    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece b"></span>Black</h3>'+coachOnly('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"Black"}))+'">Add line</button>')+'</div>'+blackHtml+'</section></div>';
+    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece w"></span>White</h3>'+('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"White"}))+'">Add line</button>')+'</div>'+whiteHtml+'</section>'+
+    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece b"></span>Black</h3>'+('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"Black"}))+'">Add line</button>')+'</div>'+blackHtml+'</section></div>';
   bindActions(el,{
     rf:id=>{ repFilter = id; render(); },
     clearRep:()=>{ repOpening = ""; repQuery = ""; render(); },
     addp:id=>editRep(s, null, JSON.parse(id)),
     edit:id=>editRep(s, s.repertoire.find(x=>x.id===id)),
-    rev:id=>{ const x = s.repertoire.find(y=>y.id===id); x.reviewed = today(); if (x.status==="Needs review") x.status = "Studied"; saveStudent(s); render(); toast("Marked as reviewed"); }
+    rev:id=>{ const x = s.repertoire.find(y=>y.id===id); x.reviewed = today(); if (!STUDENT()) delete x.studentEdited; if (x.status==="Needs review") x.status = "Studied"; saveStudent(s); render(); toast("Marked as reviewed"); }
   });
   $("#repOpen").onchange = e=>{ repOpening = e.target.value; render(); };
   let tmr; $("#repQ").oninput = e=>{ const v = e.target.value; clearTimeout(tmr); tmr = setTimeout(()=>{ repQuery = v.trim(); render(); const q = $("#repQ"); if (q){ q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 250); };
@@ -5136,6 +5140,7 @@ const ratingBefore = (s, src, date)=>sortBy(s.ratings.filter(r=>(r.source||mainS
 // A tournament plays either on consecutive days (start–end) or on separate dates, one round each (roundDates, e.g. weekly).
 const playDates = x=>Array.isArray(x.roundDates) && x.roundDates.length ? x.roundDates : null;
 const tourNext = (x, t)=>{ const pd = playDates(x); return pd ? (pd.find(d=>d>=t) || pd[pd.length-1]) : x.start; };
+const tourKey = x=>String(x.name||"").trim().replace(/\s+/g," ").toLowerCase();
 const tourDays = x=>playDates(x) ? playDates(x).length : x.start ? Math.max(1, daysBetween(x.start, x.end&&x.end>=x.start ? x.end : x.start)+1) : 1;
 const halfFee = s=>Math.round((+s.rate||0)*0.5*100)/100;
 function assistCharge(x){
@@ -5749,6 +5754,11 @@ function scheduleItems(from, to){
     (s.free||[]).forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"free", date:x.date, s, x}); });
     (s.taken||[]).forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"taken", date:x.date, s, x}); });
   });
+  // The coach sees one entry per tournament and day, with every student playing it.
+  if (!STUDENT()){ const seen = new Map();
+    return items.filter(i=>{ if (i.kind!=="tour") return true; const k = i.date+"|"+tourKey(i.x), first = seen.get(k);
+      if (!first){ i.all = [i.s]; seen.set(k, i); return true; }
+      first.all.push(i.s); return false; }); }
   return items;
 }
 let freeOpen = true; // the free-time panel stays as the coach left it
@@ -5854,7 +5864,7 @@ function weekGrid(ws, items, n=7){
   const head = '<div class="wk-corner"></div>'+days.map(d=>'<div class="wk-dh'+(d===t?" today":"")+'"><span>'+esc(new Date(d+"T00:00").toLocaleDateString(LOCALE(),{weekday:"short"}))+'</span><b>'+new Date(d+"T00:00").getDate()+'</b></div>').join("");
   const allday = '<div class="wk-corner small muted">All day</div>'+days.map(d=>{
     const its = items.filter(i=>i.date===d && i.kind!=="free" && i.kind!=="taken" && (!TIMED[i.kind] || toMin(i.x.time)===null));
-    const who = i=>STUDENT() ? "" : ' · '+esc(i.s.name.split(" ")[0]);
+    const who = i=>STUDENT() ? "" : ' · '+(i.all||[i.s]).map(x=>esc(x.name.split(" ")[0])).join(", ");
     return '<div class="wk-ad">'+its.map(i=>{
       if (i.kind==="tour") return '<div class="chip-ev tour" title="'+esc(i.x.name)+'">♜ '+esc(i.x.name)+who(i)+(i.round?' <span class="muted">R'+i.day+'</span>':i.days>1?' <span class="muted">'+i.day+'/'+i.days+'</span>':'')+'</div>';
       if (i.kind==="due") return '<a class="chip-ev due" href="#/assignment/'+i.x.id+'">Due: '+esc(i.x.title)+who(i)+'</a>';
@@ -5889,7 +5899,7 @@ function listView(items, t){
   return keys.map(d=>'<div class="date-group"><h3>'+(d===t?"Today":d===addDays(t,1)?"Tomorrow":esc(fmtDay(d)))+'</h3><section class="panel" style="padding:4px 18px"><ul class="list">'+
     groups[d].sort((a,b)=>(ord[a.kind]-ord[b.kind]) || ((a.x.time||a.x.from||"99")<(b.x.time||b.x.from||"99")?-1:1)).map(i=>{
       const st = STUDENT(), x = i.x;
-      if (i.kind==="tour") return '<li><div class="main"><div class="title">'+esc(x.name)+(i.round?' <span class="muted small">round '+i.day+'</span>':i.days>1?' <span class="muted small">day '+i.day+' of '+i.days+'</span>':'')+'</div><div class="small muted">'+[st?"":'<a href="#/student/'+i.s.id+'/tournaments">'+esc(i.s.name)+'</a>', esc(x.location||""), st?esc(x.format||""):""].filter(Boolean).join(" · ")+'</div></div><span class="tag board">Tournament</span></li>';
+      if (i.kind==="tour") return '<li><div class="main"><div class="title">'+esc(x.name)+(i.round?' <span class="muted small">round '+i.day+'</span>':i.days>1?' <span class="muted small">day '+i.day+' of '+i.days+'</span>':'')+'</div><div class="small muted">'+[st?"":(i.all||[i.s]).map(y=>'<a href="#/student/'+y.id+'/tournaments">'+esc(y.name)+'</a>').join(", "), esc(x.location||""), st?esc(x.format||""):""].filter(Boolean).join(" · ")+'</div></div><span class="tag board">Tournament</span></li>';
       if (i.kind==="due") return '<li><div class="main"><div class="title"><a href="#/assignment/'+x.id+'">'+esc(x.title)+'</a></div><div class="small muted">'+(st?"":esc(i.s.name)+' · ')+esc(x.type)+'</div></div><span class="tag warn">Assignment due</span></li>';
       if (i.kind==="req") return '<li><div class="main"><div class="title">'+(x.kind==="move"?"Move request":"Lesson request")+'</div><div class="small muted">'+[x.time, x.duration+" min", x.format].filter(Boolean).map(esc).join(" · ")+(x.note?' · '+esc(x.note):'')+'</div></div><div class="row-actions">'+(x.status==="pending"?'<span class="tag warn">Waiting for your coach</span><button class="btn small ghost" data-a="unreq" data-id="'+x.id+'">Cancel</button>':'<span class="tag flag">Declined</span>')+'</div></li>';
       if (i.kind==="taken") return '<li><div class="main"><div class="title muted">Taken '+esc(x.from)+'–'+esc(x.to)+'</div><div class="small muted">Another lesson</div></div><span class="tag">Booked</span></li>';
@@ -6006,6 +6016,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Added by the student":"נוסף על ידי התלמיד", "an opening line":"שורת פתיחה", "a deleted opening line":"שורת פתיחה שנמחקה",
   "Rounds on consecutive days":"סבבים בימים רצופים", "One round at a time, on separate dates (e.g. weekly)":"סבב אחד בכל פעם, בתאריכים נפרדים (למשל פעם בשבוע)",
   "Round dates":"תאריכי הסבבים", "Add a round":"הוספת סבב", "Remove":"הסרה",
   "The date of each round. You can add the next rounds later, as they're published.":"התאריך של כל סבב. אפשר להוסיף את הסבבים הבאים בהמשך, כשהם מתפרסמים.",
@@ -6338,6 +6349,7 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Changed by the student (.+)$/, "שונה על ידי התלמיד ב־$1"],
   [/^Round (\d+)$/, "סבב $1"], [/^round (\d+)$/, "סבב $1"], [/^R(\d+)$/, "ס׳$1"],
   [/^(\d+) round dates?:$/, "$1 תאריכי סבבים:"],
   [/^Round (\d+) today$/, "סבב $1 היום"], [/^Round (\d+) tomorrow$/, "סבב $1 מחר"], [/^Round (\d+) in (\d+) days$/, "סבב $1 בעוד $2 ימים"],
