@@ -2485,17 +2485,25 @@ function normalize(s){
 }
 
 /* ---------- money logic ---------- */
+// A payment can be for one lesson (payment.sessionId); that lesson then counts as paid.
+const lessonFee = (s, x)=>+x.fee>0 ? +x.fee : (+s.rate||0);
+const paidFor = (s, x, skipId)=>s.payments.filter(p=>p.sessionId===x.id && p.id!==skipId).reduce((a,p)=>a+(+p.amount||0), 0);
+const lessonPaid = (s, x)=>{ const p = paidFor(s, x); return p>0 && p>=lessonFee(s, x)-0.009; };
+const lessonWhen = x=>fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"})+(x.time?" "+x.time:"");
+const payLabel = (s, p)=>{ const x = p.sessionId && s.sessions.find(y=>y.id===p.sessionId); return "Payment"+(p.method?" · "+p.method:"")+(x?" · for the lesson on "+lessonWhen(x):""); };
 function ledger(s){
   const charges = [];
-  s.sessions.forEach(x=>{ if (x.status==="done" && +x.fee>0) charges.push({date:x.date, amount:+x.fee, label:"Session"+(x.topics?": "+x.topics:""), kind:"session"}); });
+  s.sessions.forEach(x=>{ if (x.status==="done" && +x.fee>0) charges.push({date:x.date, amount:+x.fee, label:"Session"+(x.topics?": "+x.topics:""), kind:"session", sessionId:x.id}); });
   s.charges.forEach(c=> charges.push({date:c.date, amount:+c.amount, label:c.note||"Charge", kind:"charge"}));
   (s.tournaments||[]).forEach(x=>{ const a = assistCharge(x); if (a && !tourAhead(x, today())) charges.push({date:x.end||x.start, amount:a.total, label:"Tournament assistance: "+x.name+" ("+a.days+" day"+(a.days===1?"":"s")+")", kind:"tour"}); });
   charges.sort((a,b)=>a.date<b.date?-1:1);
   const charged = charges.reduce((t,c)=>t+c.amount,0);
   const paid = s.payments.reduce((t,p)=>t+(+p.amount||0),0);
-  // allocate payments to oldest charges first to find what is still unpaid
-  let pool = paid, oldestUnpaid = null;
-  for (const c of charges){ if (pool >= c.amount){ pool -= c.amount; } else { oldestUnpaid = c.date; break; } }
+  // a payment for a lesson pays that lesson; the rest goes to the oldest charges first, to find what is still unpaid
+  const rem = charges.map(c=>c.amount); let pool = 0, oldestUnpaid = null;
+  s.payments.forEach(p=>{ const a = +p.amount||0, i = p.sessionId ? charges.findIndex(c=>c.sessionId===p.sessionId) : -1;
+    if (i>=0){ const use = Math.min(a, rem[i]); rem[i] -= use; pool += a-use; } else pool += a; });
+  for (let i=0; i<charges.length; i++){ if (rem[i]<=0.009) continue; if (pool >= rem[i]-0.009){ pool -= rem[i]; rem[i] = 0; } else { oldestUnpaid = charges[i].date; break; } }
   const balance = charged - paid;
   const age = oldestUnpaid ? daysBetween(oldestUnpaid, today()) : 0;
   const overdue = balance > 0.009 && age > (+state.settings.overdueDays||30);
@@ -2732,7 +2740,7 @@ const familyOf = x=>{ const sid = typeof x==="string" ? x : x && x.id; return fa
 function payView(s){
   const l = ledger(s), from = addDays(today(), -730);
   const rows = l.charges.filter(c=>c.date>=from).map(c=>({date:c.date, label:c.label, charge:c.amount}))
-    .concat(s.payments.filter(p=>p.date>=from).map(p=>({date:p.date, label:"Payment"+(p.method?" · "+p.method:""), paid:+p.amount||0})))
+    .concat(s.payments.filter(p=>p.date>=from).map(p=>({date:p.date, label:payLabel(s,p), paid:+p.amount||0})))
     .sort((a,b)=>a.date<b.date?1:-1);
   // booked tournament assistance, not charged yet (it goes on the statement once the tournament is played)
   const upcoming = sortBy((s.tournaments||[]).filter(x=>tourAhead(x, today())).map(x=>{ const a = assistCharge(x);
@@ -3322,6 +3330,9 @@ function openForm({title, fields, submit="Save", onSubmit, danger, parentOk}){
     firstPass = false;
   };
   refresh();
+  // `sets(value, values)` lets a choice fill in other fields (e.g. picking a lesson fills in its price)
+  form.addEventListener("change", e=>{ const f = fields.find(x=>x.name===e.target.name); if (f && f.sets){ const o = f.sets(e.target.value, readVals()) || {};
+    Object.entries(o).forEach(([k,v])=>{ if (form.elements[k]) form.elements[k].value = v; }); } });
   form.addEventListener("change", refresh);
   form.querySelector('[data-act="cancel"]').onclick = ()=>m.close();
   if (danger) form.querySelector('[data-act="danger"]').onclick = ()=>{ m.close(); danger.onClick(); };
@@ -4408,6 +4419,7 @@ function tSessions(el, s){
   const upAll = sortBy(s.sessions.filter(x=>x.status==="planned"),"date"); const up = upAll.slice(0,8);
   const past = sortBy(s.sessions.filter(x=>x.status!=="planned"),"date",-1);
   const row = x=>'<li><div class="main"><div class="title">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short",year:"numeric"}))+(x.time?' <span class="muted small">'+esc(x.time)+'</span>':"")+(x.slotId?' <span class="muted small">↻'+(x.custom?' moved':'')+'</span>':'')+'</div><div>'+esc(x.topics||"")+'</div>'+(x.notes?'<div class="small muted pre">'+esc(x.notes)+'</div>':"")+'<div class="small muted">'+[x.duration?x.duration+" min":"",x.format, x.fee!==""&&x.fee!=null?money(x.fee):""].filter(Boolean).map(esc).join(" · ")+'</div></div><div class="row-actions" style="flex-direction:column;align-items:flex-end">'+
+    (!STUDENT() && x.status!=="cancelled" && lessonPaid(s,x) ? '<span class="tag ok">'+(x.status==="done"?"Paid":"Paid in advance")+'</span> ' : '')+
     (x.status==="done"?'<span class="tag ok">Done</span>':x.status==="cancelled"?'<span class="tag">Cancelled</span>':(x.date<t?'<span class="tag warn">Not marked</span>':'<span class="tag board">Planned</span>'))+
     '<div class="row-actions">'+(x.status==="planned"?'<button class="btn small" data-a="done" data-id="'+x.id+'">Mark done</button>':"")+(x.status==="done"?'<button class="btn small" data-a="sum" data-id="'+x.id+'">Send summary</button>':"")+'<button class="btn small ghost" data-a="edit" data-id="'+x.id+'">Edit</button></div></div></li>';
   const slots = s.slots||[];
@@ -5229,13 +5241,24 @@ function tTournaments(el, s){
 }
 
 function editPayment(s, x){
-  crud(s,"payments",x,[{name:"date",label:"Date",type:"date",value:x?.date||today()},{name:"amount",label:"Amount ("+state.settings.currency+")",type:"number",value:x?.amount??(Math.max(0,Math.round(ledger(s).balance*100)/100)||s.rate),min:0,step:"any",required:true},
+  const t = today();
+  // lessons that can still be paid: done ones not yet paid (newest first), then upcoming ones (to pay in advance)
+  const open = y=>y.id===x?.sessionId || !lessonPaid(s, y);
+  const done = sortBy(s.sessions.filter(y=>y.status==="done" && lessonFee(s,y)>0 && open(y)),"date",-1).slice(0,15);
+  const ahead = sortBy(s.sessions.filter(y=>y.status==="planned" && y.date>=t && open(y)),"date").slice(0,5);
+  const left = y=>Math.max(0, Math.round((lessonFee(s,y)-paidFor(s,y,x?.id))*100)/100);
+  const lessonOpts = [["","No — towards the balance"], ...done.map(y=>[y.id, "Lesson on "+lessonWhen(y)+" · "+money(left(y))]), ...ahead.map(y=>[y.id, "Upcoming lesson on "+lessonWhen(y)+" · "+money(left(y))])];
+  if (x?.sessionId && !lessonOpts.some(o=>o[0]===x.sessionId)) lessonOpts.push([x.sessionId, "A lesson that's no longer listed"]);
+  crud(s,"payments",x,[{name:"sessionId",label:"Is it for a lesson?",type:"select",options:lessonOpts,value:x?.sessionId||"",full:true,
+      sets:v=>{ const y = s.sessions.find(z=>z.id===v); return y ? {amount:left(y)} : {}; },
+      hint:done.length||ahead.length ? "Choose the lesson to mark it as paid. Its price is filled in." : "No unpaid lessons right now."},
+    {name:"date",label:"Date",type:"date",value:x?.date||today()},{name:"amount",label:"Amount ("+state.settings.currency+")",type:"number",value:x?.amount??(Math.max(0,Math.round(ledger(s).balance*100)/100)||s.rate),min:0,step:"any",required:true},
     {name:"method",label:"Method",type:"select",options:["Bank transfer","Cash","Bit / PayBox","Credit card","PayPal","Other"],value:x?.method||"Bank transfer"},{name:"note",label:"Note",value:x?.note||"",placeholder:"e.g. Package of 4 sessions"}],"payment","Payment");
 }
 function tPayments(el, s){
   const l = ledger(s);
   let run = 0;
-  const rows = [...l.charges.map(c=>({date:c.date,label:c.label,charge:c.amount})), ...s.payments.map(p=>({date:p.date,label:"Payment · "+(p.method||""),pay:+p.amount,id:p.id,kind:"pay",note:p.note})), ...s.charges.map(c=>({date:c.date,id:c.id,kind:"chargeRef"}))]
+  const rows = [...l.charges.map(c=>({date:c.date,label:c.label,charge:c.amount})), ...s.payments.map(p=>({date:p.date,label:payLabel(s,p),pay:+p.amount,id:p.id,kind:"pay",note:p.note})), ...s.charges.map(c=>({date:c.date,id:c.id,kind:"chargeRef"}))]
     .filter(r=>r.kind!=="chargeRef").sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.pay?1:-1));
   rows.forEach(r=>{ run += (r.charge||0)-(r.pay||0); r.bal = run; });
   el.innerHTML = '<div class="stats" style="grid-template-columns:repeat(4,minmax(0,1fr))"><div class="stat"><div class="v num'+(l.balance>0.009?" money-owed":"")+'">'+money(Math.max(0,l.balance))+'</div><div class="l">'+(l.balance<-0.009?"In credit: "+money(-l.balance):"Owed now")+'</div></div><div class="stat"><div class="v num">'+money(l.charged)+'</div><div class="l">Total charged</div></div><div class="stat"><div class="v num">'+money(l.paid)+'</div><div class="l">Total paid</div></div><div class="stat"><div class="v num">'+money(s.rate)+'</div><div class="l">Per session</div></div></div>'+
@@ -6016,6 +6039,9 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Is it for a lesson?":"האם התשלום הוא על שיעור?", "No — towards the balance":"לא — על חשבון היתרה", "Paid":"שולם", "Paid in advance":"שולם מראש",
+  "Choose the lesson to mark it as paid. Its price is filled in.":"בחירת השיעור תסמן אותו כמשולם. המחיר שלו ימולא אוטומטית.", "No unpaid lessons right now.":"אין כרגע שיעורים שלא שולמו.",
+  "A lesson that's no longer listed":"שיעור שכבר לא מופיע ברשימה",
   "Added by the student":"נוסף על ידי התלמיד", "an opening line":"שורת פתיחה", "a deleted opening line":"שורת פתיחה שנמחקה",
   "Rounds on consecutive days":"סבבים בימים רצופים", "One round at a time, on separate dates (e.g. weekly)":"סבב אחד בכל פעם, בתאריכים נפרדים (למשל פעם בשבוע)",
   "Round dates":"תאריכי הסבבים", "Add a round":"הוספת סבב", "Remove":"הסרה",
@@ -6349,6 +6375,9 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Lesson on (.+) · (.+)$/, (m,a,b)=>"שיעור ב־"+heT(a)+" · "+b], [/^Upcoming lesson on (.+) · (.+)$/, (m,a,b)=>"שיעור קרוב ב־"+heT(a)+" · "+b],
+  [/^Payment(?: · (.+?))? · for the lesson on (.+)$/, (m,a,b)=>"תשלום"+(a?" · "+heT(a):"")+" · על השיעור ב־"+heT(b)],
+  [/^for the lesson on (.+)$/, (m,a)=>"על השיעור ב־"+heT(a)],
   [/^Changed by the student (.+)$/, "שונה על ידי התלמיד ב־$1"],
   [/^Round (\d+)$/, "סבב $1"], [/^round (\d+)$/, "סבב $1"], [/^R(\d+)$/, "ס׳$1"],
   [/^(\d+) round dates?:$/, "$1 תאריכי סבבים:"],
