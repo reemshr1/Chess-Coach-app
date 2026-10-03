@@ -1,4 +1,4 @@
-# Coach's Board — roadmap
+# Rank Up — roadmap
 
 Ideas agreed on but deliberately left for later. When picking up work on the
 app, check here first.
