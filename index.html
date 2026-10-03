@@ -421,6 +421,22 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .stats-5 > :nth-child(5){background:var(--tint-green)}
 .stats .stat .v{font-size:1.7rem}
 .stats-5 .stat .v{font-size:1.35rem}
+/* filter buttons inside a blue title bar stay readable */
+.panel > .panel-head .seg{background:var(--surface);border-color:transparent}
+.panel > .panel-head .seg button{color:var(--muted)}
+.panel > .panel-head .seg button.on{color:var(--ink)}
+/* phones */
+@media (max-width:600px){
+  .stats[style]{grid-template-columns:1fr 1fr!important}
+  .stats-5 .stat .v,.stats .stat .v{font-size:1.25rem}
+  .list li:has(> .row-actions){flex-wrap:wrap;row-gap:8px}
+  .list li:has(> .row-actions) > .main{flex-basis:100%}
+  .list li > .row-actions{flex-direction:row!important;align-items:center!important;flex-wrap:wrap;justify-content:flex-start}
+  .list li > .row-actions > .row-actions{flex-wrap:wrap}
+  .table-wrap table:not(.cards-m):has(th:nth-child(5)){min-width:520px}
+  .panel:has(> .panel-head){padding:0 14px 14px}
+  .panel > .panel-head{margin:0 -14px 12px;padding:11px 14px}
+}
 /* students as cards */
 .card-l{display:none}
 #slist{background:transparent;border:0;box-shadow:none;padding:0!important;display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
@@ -3138,6 +3154,8 @@ const STUDENT_TABS = {work:"Practice", studied:"Practice", tournaments:"Games", 
 function renderStudent(v, r){
   const s = state.students[0];
   if (!s){ v.innerHTML = linkPage(store.me()); bindLink(); return; }
+  // a parent following a link to another of their children switches to that child
+  if (PARENT() && r.page==="student" && r.id!==s.id && state.family && state.family.children.some(k=>k.id===r.id)){ store.pickChild(r.id); return; }
   if (r.page==="student" && r.id===s.id && STUDENT_TABS[r.tab]){
     v.innerHTML = '<div class="page-head"><div><h1>'+esc(STUDENT_TABS[r.tab])+'</h1></div></div><div id="tab"></div>';
     ({work:tWork, studied:tStudied, tournaments:tTournaments, games:tGames, assignments:tAssignments, books:tBooks, repertoire:tRepertoire})[r.tab]($("#tab"), s);
