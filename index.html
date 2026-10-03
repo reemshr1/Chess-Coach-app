@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rank Up</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#1E4E9C">
+<meta name="apple-mobile-web-app-title" content="Rank Up">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -118,6 +125,7 @@ kbd{font-family:var(--body);font-size:.75rem;border:1px solid var(--line);border
 /* a parent's board is view-only apart from lesson requests and changes */
 .parent-mode #view button[data-a]:not([data-a="req"]):not([data-a="reqat"]):not([data-a="les"]):not([data-a="open"]):not([data-a="ans"]):not([data-a="unreq"]):not([data-a="reqx"]):not([data-a="view"]):not([data-a="wk"]):not([data-a="more"]):not([data-a="all"]):not([data-a="src"]):not([data-a="gf"]):not([data-a="f"]):not([data-a="sf"]):not([data-a="rf"]):not([data-a="period"]):not([data-a="board"]):not([data-a="games"]):not([data-a="clearT"]):not([data-a="clearRep"]):not([data-a="dl"]):not([data-a="pp"]):not([data-a="ps"]){display:none}
 .parent-mode #view label:has(input[type=file]),.parent-mode #view .dropzone{display:none}
+.link-box{display:inline-block;direction:ltr;font-weight:600;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 8px;word-break:break-all;user-select:all}
 .code-box{font-family:var(--display);font-size:1.6rem;font-weight:700;letter-spacing:.18em;background:var(--paper);border:1px dashed var(--line);border-radius:var(--r-sm);padding:6px 14px;display:inline-block;direction:ltr}
 .steps{margin:8px 0 12px;padding-inline-start:20px;font-size:.92rem}
 .steps li{margin-bottom:4px}
@@ -507,10 +515,34 @@ dialog{border:2px solid var(--side);border-radius:14px}
 [dir="rtl"] h1,[dir="rtl"] h2,[dir="rtl"] h3{letter-spacing:0}
 [dir="rtl"] .crumb{direction:rtl}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+/* web app: sign-in screens and sign-out buttons */
+[data-signout]{display:none}
+.web .side [data-signout]{display:inline-flex}
+.web #view [data-signout]{display:inline-flex}
+.gate [data-signout]{display:inline-block}
+.web.student-mode .topbar [data-signout]{display:inline-flex}
+body.gated .app,body.gated .topbar,body.gated .bottom-nav{display:none}
+.gate{min-height:100vh;display:grid;place-items:center;padding:24px 16px;box-sizing:border-box;background:var(--bg)}
+.gate-card{width:100%;max-width:420px;background:var(--card,#fff);border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px;box-shadow:0 10px 30px rgba(22,36,63,.08)}
+.gate-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px}
+.gate-top .brand{padding:0}
+.gate h1{font-family:var(--display);font-size:1.4rem;margin:0 0 6px}
+.gate .sub{color:var(--muted);margin:0 0 14px}
+.gate-note{background:var(--tint-green,#E3F3DC);border-radius:8px;padding:10px 12px;font-size:.9rem;margin:0 0 14px}
+.gate-form{display:flex;flex-direction:column;gap:6px}
+.gate-form label{font-weight:600;font-size:.9rem;margin-top:6px}
+.gate-form input{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.gate-form input:focus{outline:2px solid var(--accent,#1E4E9C);outline-offset:1px}
+.gate-form .btn{margin-top:12px;justify-content:center}
+.gate-links{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:14px}
+.gate-choices{display:flex;flex-direction:column;gap:10px;margin:6px 0 12px}
+.gate-choices .btn{justify-content:center}
+.linkish{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--accent,#1E4E9C);cursor:pointer}
+.linkish:hover{text-decoration:underline}
 </style>
 </head>
 <body>
-<header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48" width="28" height="28"><rect width="48" height="48" rx="11" fill="#fff"/><svg x="0" y="6" width="38" height="38" viewBox="0 0 45 45"><path fill="#1E4E9C" stroke="#1E4E9C" stroke-width="1.5" stroke-linejoin="round" d="M22.5 9.5a5 5 0 0 0-3.2 8.8c-1.9 1.2-3.1 3.2-3.1 5.4 0 1.6.6 3 1.6 4.1-3.6 1.4-6.3 4.6-6.8 9.2h23c-.5-4.6-3.2-7.8-6.8-9.2 1-1.1 1.6-2.5 1.6-4.1 0-2.2-1.2-4.2-3.1-5.4a5 5 0 0 0-3.2-8.8z"/></svg><path d="M36 22V10m-5 5 5-5 5 5" fill="none" stroke="#3E9B3A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>Rank Up</b></div><button type="button" class="btn small ghost lang-btn" data-lang>עברית</button><a class="btn ghost small" href="#/search" aria-label="Search"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></a></header>
+<header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48" width="28" height="28"><rect width="48" height="48" rx="11" fill="#fff"/><svg x="0" y="6" width="38" height="38" viewBox="0 0 45 45"><path fill="#1E4E9C" stroke="#1E4E9C" stroke-width="1.5" stroke-linejoin="round" d="M22.5 9.5a5 5 0 0 0-3.2 8.8c-1.9 1.2-3.1 3.2-3.1 5.4 0 1.6.6 3 1.6 4.1-3.6 1.4-6.3 4.6-6.8 9.2h23c-.5-4.6-3.2-7.8-6.8-9.2 1-1.1 1.6-2.5 1.6-4.1 0-2.2-1.2-4.2-3.1-5.4a5 5 0 0 0-3.2-8.8z"/></svg><path d="M36 22V10m-5 5 5-5 5 5" fill="none" stroke="#3E9B3A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>Rank Up</b></div><button type="button" class="btn small ghost lang-btn" data-lang>עברית</button><button type="button" class="btn small ghost" data-signout>Sign out</button><a class="btn ghost small" href="#/search" aria-label="Search"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></a></header>
 <div class="app">
   <aside class="side">
     <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48" width="28" height="28"><rect width="48" height="48" rx="11" fill="#fff"/><svg x="0" y="6" width="38" height="38" viewBox="0 0 45 45"><path fill="#1E4E9C" stroke="#1E4E9C" stroke-width="1.5" stroke-linejoin="round" d="M22.5 9.5a5 5 0 0 0-3.2 8.8c-1.9 1.2-3.1 3.2-3.1 5.4 0 1.6.6 3 1.6 4.1-3.6 1.4-6.3 4.6-6.8 9.2h23c-.5-4.6-3.2-7.8-6.8-9.2 1-1.1 1.6-2.5 1.6-4.1 0-2.2-1.2-4.2-3.1-5.4a5 5 0 0 0-3.2-8.8z"/></svg><path d="M36 22V10m-5 5 5-5 5 5" fill="none" stroke="#3E9B3A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>Rank Up</b></div>
@@ -518,6 +550,7 @@ dialog{border:2px solid var(--side);border-radius:14px}
     <nav class="nav" id="nav"></nav>
     <select id="childPick" class="search" aria-label="Whose board" hidden style="margin:0 8px 8px;width:calc(100% - 16px);min-width:0;box-sizing:border-box"></select>
     <button type="button" class="btn small lang-btn" data-lang style="margin:0 8px 10px;align-self:flex-start">עברית</button>
+    <button type="button" class="btn small ghost" data-signout style="margin:0 8px 10px;align-self:flex-start">Sign out</button>
     <div class="side-foot" id="syncState"><span class="dot local"></span>Loading…</div>
   </aside>
   <main id="view" tabindex="-1"></main>
@@ -3001,10 +3034,177 @@ function applyLoaded(data){
   migrateGames();
   ensureAllRecurring();
 }
+/* ---------- the web app: Supabase sign-in and storage ---------- */
+// On claude.ai the page uses the artifact's own storage. Anywhere else on the web it signs in with Supabase
+// and keeps the same documents in one table, so the rest of the app doesn't change.
+const SUPABASE = {url:"https://gzcwvnynkcepvqkzwvkb.supabase.co", key:"sb_publishable_0on-hzzXoXPdk8dOFM3RNQ_9pEMALHx"};
+const WEB = !(window.claude && typeof window.claude.use==="function") && (/^https?:$/.test(location.protocol) || !!window.__supaFake);
+let sb = null, webUser = null;
+const loadScript = src=>new Promise((ok, fail)=>{ const el = document.createElement("script"); el.src = src; el.onload = ok; el.onerror = fail; document.head.appendChild(el); });
+// The same small document API the artifact storage offers (collection/doc, get/set/delete, live snapshots).
+function makeSupaDb(client){
+  const T = ()=>client.from("docs");
+  const ok = r=>{ if (r.error) throw r.error; return r.data; };
+  const copy = v=>v==null ? v : JSON.parse(JSON.stringify(v));
+  const snapDoc = (id, v)=>({id, exists:v!==undefined, data:()=>copy(v), metadata:{hasPendingWrites:false}});
+  async function fetchAll(col){
+    const out = []; for (let from = 0; ; from += 1000){
+      const rows = ok(await T().select("id,data").eq("col", col).range(from, from+999)); out.push(...rows); if (rows.length<1000) return out; }
+  }
+  async function fetchOne(col, id){ const r = ok(await T().select("data").eq("col", col).eq("id", id).maybeSingle()); return r ? r.data : undefined; }
+  let chn = 0;
+  // Live updates for one collection (or one document): load it, then follow inserts, updates and deletes.
+  // After a reconnect, or when the page comes back to the front, it reloads and reports only what changed.
+  function watch(col, only, cb, onErr){
+    const cur = new Map(); let closed = false, busy = null;
+    const emit = changes=>{ if (closed || !changes.length) return;
+      if (only!=null){ const v = cur.get(only); cb(snapDoc(only, v)); return; }
+      cb({docChanges:()=>changes, docs:[...cur].map(([id,v])=>snapDoc(id,v)), size:cur.size, empty:!cur.size, metadata:{hasPendingWrites:false}}); };
+    const resync = first=>busy = (busy||Promise.resolve()).then(async ()=>{
+      try {
+        const rows = only!=null ? (v=>v===undefined?[]:[{id:only, data:v}])(await fetchOne(col, only)) : await fetchAll(col);
+        const seen = new Set(), changes = [];
+        rows.forEach(r=>{ seen.add(r.id); const had = cur.has(r.id);
+          if (!had || JSON.stringify(cur.get(r.id))!==JSON.stringify(r.data)){ cur.set(r.id, r.data); changes.push({type:had?"modified":"added", doc:snapDoc(r.id, r.data)}); } });
+        [...cur.keys()].filter(id=>!seen.has(id)).forEach(id=>{ const v = cur.get(id); cur.delete(id); changes.push({type:"removed", doc:snapDoc(id, v)}); });
+        if (first && only!=null && !changes.length) return cb(snapDoc(only, undefined));
+        if (first && only==null && !changes.length) return cb({docChanges:()=>[], docs:[], size:0, empty:true, metadata:{hasPendingWrites:false}});
+        emit(changes);
+      } catch(e){ if (onErr) onErr(e); }
+    });
+    const one = id=>busy = (busy||Promise.resolve()).then(async ()=>{
+      try { const v = await fetchOne(col, id), had = cur.has(id);
+        if (v===undefined){ if (had){ const o = cur.get(id); cur.delete(id); emit([{type:"removed", doc:snapDoc(id, o)}]); } return; }
+        if (had && JSON.stringify(cur.get(id))===JSON.stringify(v)) return;
+        cur.set(id, v); emit([{type:had?"modified":"added", doc:snapDoc(id, v)}]);
+      } catch(e){}
+    });
+    const gone = id=>busy = (busy||Promise.resolve()).then(()=>{ if (!cur.has(id)) return; const o = cur.get(id); cur.delete(id); emit([{type:"removed", doc:snapDoc(id, o)}]); });
+    const filter = "col=eq."+col;
+    let joined = false;
+    const ch = client.channel("w"+(++chn)+"-"+Math.random().toString(36).slice(2,8))
+      .on("postgres_changes", {event:"INSERT", schema:"public", table:"docs", filter}, m=>{ const id = m.new && m.new.id; if (id!=null && (only==null || id===only)) one(id); })
+      .on("postgres_changes", {event:"UPDATE", schema:"public", table:"docs", filter}, m=>{ const id = m.new && m.new.id; if (id!=null && (only==null || id===only)) one(id); })
+      // deletes can't be filtered on the server, so they are matched here
+      .on("postgres_changes", {event:"DELETE", schema:"public", table:"docs"}, m=>{ const o = m.old||{}; if (o.col===col && (only==null || o.id===only)) gone(o.id); })
+      .subscribe(status=>{ if (status==="SUBSCRIBED"){ if (joined) resync(false); joined = true; } });
+    resync(true);
+    const vis = ()=>{ if (document.visibilityState==="visible") resync(false); };
+    document.addEventListener("visibilitychange", vis);
+    return ()=>{ closed = true; document.removeEventListener("visibilitychange", vis); try { client.removeChannel(ch); } catch(e){} };
+  }
+  const split = path=>{ const i = path.lastIndexOf("/"); return [path.slice(0,i), path.slice(i+1)]; };
+  function doc(col, id){ return {
+    id,
+    async get(){ return snapDoc(id, await fetchOne(col, id)); },
+    async set(v){ ok(await T().upsert({col, id, data:copy(v), updated_at:new Date().toISOString()})); },
+    async delete(){ ok(await T().delete().eq("col", col).eq("id", id)); },
+    onSnapshot(cb, err){ return watch(col, id, cb, err); },
+    collection:name=>coll(col+"/"+id+"/"+name) }; }
+  function coll(col){ return {
+    doc:id=>doc(col, id),
+    async get(){ const docs = (await fetchAll(col)).map(r=>snapDoc(r.id, r.data)); return {empty:!docs.length, size:docs.length, docs, docChanges:()=>docs.map(d=>({type:"added", doc:d})), metadata:{hasPendingWrites:false}}; },
+    onSnapshot(cb, err){ return watch(col, null, cb, err); } }; }
+  return {collection:coll, doc:path=>doc(...split(path))};
+}
+// The screens before the app: sign in, create an account, reset the password, and on a fresh install claim it as the coach.
+function gate(html){
+  let g = $("#gate"); if (!g){ g = document.createElement("div"); g.id = "gate"; g.className = "gate"; document.body.appendChild(g); }
+  const mark = (document.querySelector(".side .brand-mark")||{}).innerHTML||"";
+  g.innerHTML = '<div class="gate-card"><div class="gate-top"><div class="brand"><span class="brand-mark" aria-hidden="true">'+mark+'</span><b>Rank Up</b></div>'+
+    '<button type="button" class="btn small ghost" id="gateLang">'+(lang()==="he"?"English":"עברית")+'</button></div>'+html+'</div>';
+  $("#gateLang").onclick = ()=>{ state.settings.lang = lang()==="he" ? "en" : "he"; try { localStorage.setItem("rankup-lang", state.settings.lang); } catch(e){}
+    applyLang(); $("#gateLang").textContent = lang()==="he" ? "English" : "עברית"; };
+  document.body.classList.add("gated"); applyLang();
+  return g;
+}
+function ungate(){ const g = $("#gate"); if (g) g.remove(); document.body.classList.remove("gated"); }
+function authError(e){
+  const m = String(e && (e.message||e.error_description||e) || "").toLowerCase(), code = e && e.code || "";
+  if (code==="invalid_credentials" || m.includes("invalid login")) return "That email and password don't match. Check them and try again, or reset your password.";
+  if (code==="user_already_exists" || m.includes("already registered")) return "There's already an account with this email. Sign in instead.";
+  if (code==="weak_password" || m.includes("password should")) return "Use at least 8 characters for the password.";
+  if (code==="email_not_confirmed" || m.includes("not confirmed")) return "Confirm your email address first: open the link in the email you received.";
+  if (code==="over_email_send_rate_limit" || code==="over_request_rate_limit" || m.includes("rate limit")) return "Too many attempts. Wait a few minutes and try again.";
+  if (m.includes("fetch") || m.includes("network")) return "Couldn't reach Rank Up. Check your internet connection and try again.";
+  return "Something went wrong. Try again in a moment.";
+}
+function authForm(mode, note){
+  return new Promise(done=>{
+    const signup = mode==="signup", forgot = mode==="forgot", newpass = mode==="newpass";
+    const title = signup ? "Create your account" : forgot ? "Reset your password" : newpass ? "Choose a new password" : "Sign in";
+    const sub = signup ? "Use your email and a password of at least 8 characters." : forgot ? "Enter your email and we'll send you a link to choose a new password." : newpass ? "Enter the new password you'd like to use." : "Sign in with your email and password.";
+    const g = gate('<h1>'+title+'</h1><p class="sub">'+sub+'</p>'+(note?'<p class="gate-note">'+esc(note)+'</p>':'')+
+      '<form id="authF" class="gate-form" novalidate>'+
+      (newpass?'':'<label for="aEmail">Email</label><input id="aEmail" type="email" dir="ltr" autocomplete="email" required>')+
+      (forgot?'':'<label for="aPass">'+(newpass?"New password":"Password")+'</label><input id="aPass" type="password" dir="ltr" autocomplete="'+(signup||newpass?"new-password":"current-password")+'" required minlength="8">')+
+      '<p class="form-err" role="alert" hidden></p><button class="btn primary" type="submit">'+(signup?"Create account":forgot?"Send the link":newpass?"Save password":"Sign in")+'</button></form>'+
+      '<div class="gate-links">'+(mode==="signin"?'<button type="button" class="linkish" data-m="signup">New here? Create an account</button><button type="button" class="linkish" data-m="forgot">Forgot your password?</button>':
+        newpass?'':'<button type="button" class="linkish" data-m="signin">Back to sign in</button>')+'</div>');
+    g.querySelectorAll("[data-m]").forEach(b=>b.onclick = ()=>done({mode:b.dataset.m}));
+    const f = $("#authF"), err = f.querySelector(".form-err"), btn = f.querySelector("button[type=submit]");
+    const show = m=>{ err.textContent = m; err.hidden = !m; };
+    (f.querySelector("input")||{focus(){}}).focus();
+    f.onsubmit = async e=>{ e.preventDefault(); show("");
+      const email = f.aEmail ? f.aEmail.value.trim() : "", pass = f.aPass ? f.aPass.value : "";
+      if (f.aEmail && !/^\S+@\S+\.\S+$/.test(email)) return show("Enter your email address.");
+      if (f.aPass && pass.length<8) return show("Use at least 8 characters for the password.");
+      btn.disabled = true;
+      try {
+        if (mode==="signin"){ const r = await sb.auth.signInWithPassword({email, password:pass}); if (r.error) throw r.error; return done({user:r.data.user}); }
+        if (signup){ const r = await sb.auth.signUp({email, password:pass}); if (r.error) throw r.error;
+          if (r.data.session) return done({user:r.data.user});
+          return done({mode:"signin", note:"Check your email and open the link to confirm your address, then sign in here."}); }
+        if (forgot){ const r = await sb.auth.resetPasswordForEmail(email, {redirectTo:location.origin+location.pathname}); if (r.error) throw r.error;
+          return done({mode:"signin", note:"If there's an account for that email, a link to choose a new password is on its way. Check your inbox (and spam folder)."}); }
+        if (newpass){ const r = await sb.auth.updateUser({password:pass}); if (r.error) throw r.error; return done({user:r.data.user}); }
+      } catch(e){ show(authError(e)); btn.disabled = false; }
+    };
+  });
+}
+async function signOut(){ try { await sb.auth.signOut(); } catch(e){} location.hash = ""; location.reload(); }
+document.addEventListener("click", e=>{ if (e.target.closest("[data-signout]")) confirmBox("Sign out?", "You'll need your email and password to sign in again on this device.", "Sign out", signOut); });
+// Signs in (showing the screens above as needed) and returns the storage and the account; null if it can't connect.
+async function webStart(){
+  try { const l = localStorage.getItem("rankup-lang"); if (l) state.settings.lang = l; } catch(e){}
+  const recovering = /type=recovery/.test(location.hash);
+  gate('<p class="sub" style="margin-top:6px">Connecting…</p>');
+  try {
+    if (!window.supabase) await loadScript("vendor/supabase.js");
+    sb = window.supabase.createClient(SUPABASE.url, SUPABASE.key, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true}});
+    let { data } = await sb.auth.getSession(); let user = data.session && data.session.user, note = "";
+    let mode = recovering && user ? "newpass" : "signin";
+    if (recovering || /access_token=|error_description=/.test(location.hash)) history.replaceState(null, "", location.pathname+location.search);
+    while (!user || mode==="newpass"){
+      const r = await authForm(mode, note); note = r.note||"";
+      if (r.user){ user = r.user; mode = ""; } else mode = r.mode;
+    }
+    webUser = user;
+    // A fresh install has no coach yet: the first person to sign in decides whether they are the coach.
+    let c = await sb.from("coach").select("user_id").maybeSingle(); if (c.error) throw c.error;
+    if (!c.data){
+      const choice = await new Promise(done=>{
+        gate('<h1>Welcome to Rank Up</h1><p class="sub">This app doesn\'t have a coach yet.</p><p class="small muted">Signed in as <bdi dir="ltr">'+esc(user.email||"")+'</bdi></p>'+
+          '<div class="gate-choices"><button class="btn primary" id="gCoach">I\'m the coach — set up my board</button><button class="btn" id="gStudent">I\'m a student or parent</button></div>'+
+          '<p class="small muted">Only one account can be the coach, and it can\'t be changed later from the app.</p><div class="gate-links"><button type="button" class="linkish" data-signout>Sign out</button></div>');
+        $("#gCoach").onclick = ()=>done("coach"); $("#gStudent").onclick = ()=>done("student"); });
+      if (choice==="coach"){ const r = await sb.from("coach").insert({user_id:user.id}); if (r.error && r.error.code!=="23505") throw r.error;
+        c = await sb.from("coach").select("user_id").maybeSingle(); if (c.error) throw c.error; }
+    }
+    const isCoach = !!(c.data && c.data.user_id===user.id);
+    document.body.classList.add("web"); ungate();
+    if ("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+    return {db:makeSupaDb(sb), uid:user.id, user:{id:async()=>user.id, isOwner:async()=>isCoach}};
+  } catch(e){
+    gate('<h1>Couldn\'t connect</h1><p class="sub">'+esc(authError(e))+'</p><div class="gate-choices"><button class="btn primary" onclick="location.reload()">Try again</button></div>');
+    return null;
+  }
+}
 async function initStore(){
   let db = null, userApi = null, userId = null;
+  if (WEB){ const w = await webStart(); if (!w) return; db = w.db; userApi = w.user; userId = w.uid; }
   try {
-    if (window.claude && typeof window.claude.use==="function"){
+    if (!WEB && window.claude && typeof window.claude.use==="function"){
       [db, userApi] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
       if (userApi) userId = await userApi.id();
     }
@@ -3038,6 +3238,8 @@ function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add
 // Offer a generated file to the viewer (they confirm the save).
 async function saveFile(filename, data){
   let dl = null; try { dl = window.claude && await window.claude.use("downloads"); } catch(e){}
+  if (!dl && WEB){ const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], {type:/\.json$/.test(filename)?"application/json":/\.csv$/.test(filename)?"text/csv":"text/plain"}));
+    a.download = filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000); return true; }
   if (!dl) return toast("Downloads aren't available here.");
   try { await dl.save({filename, data}); return true; } catch(e){ if (e && e.code!=="cancelled") toast("The file wasn't saved."); }
   return false;
@@ -3726,7 +3928,7 @@ document.addEventListener("keydown", e=>{
 let studentFilter = {q:"", show:"active"};
 function pStudents(v){
   v.innerHTML = '<div class="page-head"><div><h1>Students</h1><p class="sub">'+state.students.filter(s=>s.active).length+' active</p></div><div class="row-actions"><input class="search" id="sq" type="search" placeholder="Search by name" value="'+esc(studentFilter.q)+'" aria-label="Search students"><select class="search" id="sf" style="min-width:auto" aria-label="Filter"><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><button class="btn primary" id="sAdd">Add student</button></div></div><section class="panel" style="padding:0" id="slist"></section>'+
-    '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are filled in by Claude'+(state.settings.ratingsSyncedAt?' — last updated '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. To refresh them, ask Claude in the chat: “Update my students’ ratings.”</p>';
+    (WEB ? '' : '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are filled in by Claude'+(state.settings.ratingsSyncedAt?' — last updated '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. To refresh them, ask Claude in the chat: “Update my students’ ratings.”</p>');
   $("#sf").value = studentFilter.show;
   const draw = ()=>{
     const q = studentFilter.q.toLowerCase(), t = today();
@@ -3940,7 +4142,7 @@ function parentPanel(s){
     const kids = (f.studentIds||[]).map(byId).filter(Boolean);
     body = '<p style="margin:0">'+esc(f.name)+' · '+kids.map(k=>esc(k.name)).join(", ")+'</p>'+
       (f.portal ? '<p class="small muted">Connected since '+esc(fmtDate(f.portal.linkedAt))+'. They see the balance and payments too, but never other families or notes you keep private.</p><div class="row-actions"><button class="btn small ghost danger" data-a="famUnlink">Disconnect</button>'
-       : f.invite ? '<ol class="steps"><li>Share Rank Up with the parent by email and give them Editor access. Don\'t turn on a public link.</li><li>Give them this code: <span class="code-box">'+esc(f.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Rank Up.</li></ol><div class="row-actions"><button class="btn small primary" data-a="famSend">Send invite message</button><button class="btn small ghost" data-a="famUninvite">Cancel invite</button>'
+       : f.invite ? '<ol class="steps">'+(WEB?'<li>Send them the link to the app: <bdi class="link-box" dir="ltr">'+esc(APP_LINK())+'</bdi></li><li>They create an account with their email and a password.</li>':'<li>Share Rank Up with the parent by email and give them Editor access. Don\'t turn on a public link.</li>')+'<li>Give them this code: <span class="code-box">'+esc(f.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Rank Up.</li></ol><div class="row-actions"><button class="btn small primary" data-a="famSend">Send invite message</button><button class="btn small ghost" data-a="famUninvite">Cancel invite</button>'
        : '<div class="row-actions" style="margin-top:8px"><button class="btn small primary" data-a="famInvite">Invite a parent</button>')+
       '<button class="btn small ghost" data-a="famRename">Rename family</button>'+(kids.length>1?'<button class="btn small ghost" data-a="famLeave">Remove '+esc(s.name.split(" ")[0])+' from the family</button>':'')+'</div>';
   }
@@ -3951,7 +4153,7 @@ function appPanel(s){
   let body;
   if (store.kind!=="db") body = '<p class="small muted" style="margin:0">The student app works in the published Rank Up on claude.ai, where your records are stored in your account.</p>';
   else if (s.portal) body = '<p style="margin:0">'+first+' is connected to the app since '+esc(fmtDate(s.portal.linkedAt))+'.</p><p class="small muted">They see their lessons, assignments, goals, games, practice, reading and repertoire. They don\'t see payments, fees, contact details, other students or notes you keep private.</p><button class="btn small ghost danger" data-a="unlink">Disconnect</button>';
-  else if (s.invite) body = '<ol class="steps"><li>Share Rank Up with '+first+' (or a parent) by email and give them Editor access. Don\'t turn on a public link.</li><li>Give them this code: <span class="code-box">'+esc(s.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Rank Up.</li></ol><div class="row-actions"><button class="btn small primary" data-a="sendInv">Send invite message</button><button class="btn small ghost" data-a="uninvite">Cancel invite</button></div>';
+  else if (s.invite) body = '<ol class="steps">'+(WEB?'<li>Send '+first+' the link to the app: <bdi class="link-box" dir="ltr">'+esc(APP_LINK())+'</bdi></li><li>They create an account with their email and a password.</li>':'<li>Share Rank Up with '+first+' (or a parent) by email and give them Editor access. Don\'t turn on a public link.</li>')+'<li>Give them this code: <span class="code-box">'+esc(s.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Rank Up.</li></ol><div class="row-actions"><button class="btn small primary" data-a="sendInv">Send invite message</button><button class="btn small ghost" data-a="uninvite">Cancel invite</button></div>';
   else body = '<p class="small muted" style="margin:0 0 10px">'+first+' can see their assignments, lessons and goals, log practice and games, and ask you for lessons — in their own account.</p><button class="btn small primary" data-a="invite">Invite to the app</button>';
   return '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Student app</h2>'+(s.portal?'<span class="tag ok">Connected</span>':s.invite?'<span class="tag warn">Waiting for '+first+'</span>':'')+'</div>'+body+'</section>';
 }
@@ -4037,10 +4239,12 @@ function shareMessage({title, sub, contact, text, subject, copied, startLang}){
   };
   m.showModal(); ta.focus();
 }
-const APP_LINK = ()=>state.settings.appLink || "https://claude.ai/artifact/HdUATP5UzeZDyRtZfVJoe6";
+const APP_LINK = ()=>WEB ? location.origin+location.pathname : (state.settings.appLink || "https://claude.ai/artifact/HdUATP5UzeZDyRtZfVJoe6");
 function inviteText(kind, s, code, lng){
   const first = s.name.split(" ")[0], coach = state.settings.coachName||"", he = lng==="he";
-  const steps = he
+  const steps = WEB ? (he
+    ? ["1. לפתוח את הקישור וליצור חשבון עם כתובת מייל וסיסמה (או להתחבר אם כבר יש חשבון):", APP_LINK(), "2. להזין את הקוד: "+code, "3. זהו — הלוח יופיע ברגע שאפתח את האפליקציה.", "", "טיפ: בטלפון אפשר להוסיף את האפליקציה למסך הבית דרך תפריט הדפדפן ← „הוספה למסך הבית”."]
+    : ["1. Open this link and create an account with your email and a password (or sign in if you already have one):", APP_LINK(), "2. Enter this code: "+code, "3. That's it — the board appears as soon as I open the app.", "", "Tip: on your phone, add it to your home screen from the browser menu → “Add to Home Screen”."]) : he
     ? ["1. לפתוח את הקישור ולהתחבר ל־claude.ai עם כתובת המייל ששיתפתי איתה את האפליקציה (אפשר לפתוח חשבון חינמי):", APP_LINK(), "2. להזין את הקוד: "+code, "3. זהו — הלוח יופיע ברגע שאפתח את האפליקציה."]
     : ["1. Open this link and sign in to claude.ai with the email address I shared the app with (a free account is fine):", APP_LINK(), "2. Enter this code: "+code, "3. That's it — the board appears as soon as I open the app."];
   const intro = kind==="parent"
@@ -5675,7 +5879,8 @@ function pSettings(v){
       '<div class="field full"><label for="s8">App link (in invite messages)</label><input id="s8" name="appLink" dir="ltr" value="'+esc(st.appLink||APP_LINK())+'"></div>'+
       '<div class="field full"><label for="s5">Week starts on</label><select id="s5" name="weekStart"><option value="0"'+(+st.weekStart===0?" selected":"")+'>Sunday</option><option value="1"'+(+st.weekStart===1?" selected":"")+'>Monday</option></select></div>'+
       '<div class="full"><button class="btn primary" type="submit">Save settings</button></div></form>')+
-    panel("Backup", '<p class="small muted" style="margin-top:0">'+(store&&store.kind==="db"?"Your data is saved to your account and is private to you, even if you share this page.":"Your data is saved in this browser only. Download a backup regularly.")+'</p><p class="small" style="margin-top:0">'+(st.lastBackup?"Last backup: "+esc(fmtDate(st.lastBackup)):"No backup downloaded yet.")+'</p><div class="row-actions"><button class="btn" id="exp">Download backup</button><label class="btn" for="imp">Restore from backup</label><input id="imp" type="file" accept="application/json,.json" hidden></div>')+
+    (WEB && webUser ? panel("Account", '<p style="margin-top:0">Signed in as <bdi dir="ltr">'+esc(webUser.email||"")+'</bdi></p><button class="btn" data-signout>Sign out</button>') : '')+
+    panel("Backup", '<p class="small muted" style="margin-top:0">'+(WEB?"Your data is saved to your account online. Students and parents only see what you share with them.":store&&store.kind==="db"?"Your data is saved to your account and is private to you, even if you share this page.":"Your data is saved in this browser only. Download a backup regularly.")+'</p><p class="small" style="margin-top:0">'+(st.lastBackup?"Last backup: "+esc(fmtDate(st.lastBackup)):"No backup downloaded yet.")+'</p><div class="row-actions"><button class="btn" id="exp">Download backup</button><label class="btn" for="imp">Restore from backup</label><input id="imp" type="file" accept="application/json,.json" hidden></div>')+
   '</div>';
   $("#setF").onsubmit = e=>{ e.preventDefault(); const f = e.target.elements;
     // only fields changed in this form are saved, so edits made on another device meanwhile are kept
@@ -5706,6 +5911,29 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Sign out":"התנתקות", "Sign out?":"להתנתק?", "You'll need your email and password to sign in again on this device.":"כדי להתחבר שוב במכשיר הזה יהיה צורך במייל ובסיסמה.",
+  "Create your account":"יצירת חשבון", "Reset your password":"איפוס סיסמה", "Choose a new password":"בחירת סיסמה חדשה", "Sign in":"התחברות",
+  "Use your email and a password of at least 8 characters.":"יש להשתמש בכתובת מייל ובסיסמה של 8 תווים לפחות.",
+  "Enter your email and we'll send you a link to choose a new password.":"יש להזין את כתובת המייל ונשלח קישור לבחירת סיסמה חדשה.",
+  "Enter the new password you'd like to use.":"יש להזין את הסיסמה החדשה.", "Sign in with your email and password.":"התחברות עם כתובת מייל וסיסמה.",
+  "Email":"מייל", "Password":"סיסמה", "New password":"סיסמה חדשה", "Create account":"יצירת חשבון", "Send the link":"שליחת הקישור", "Save password":"שמירת הסיסמה",
+  "New here? Create an account":"חדשים כאן? יצירת חשבון", "Forgot your password?":"שכחת את הסיסמה?", "Back to sign in":"חזרה להתחברות",
+  "Enter your email address.":"יש להזין כתובת מייל.", "Use at least 8 characters for the password.":"יש להשתמש בסיסמה של 8 תווים לפחות.",
+  "That email and password don't match. Check them and try again, or reset your password.":"המייל והסיסמה אינם תואמים. כדאי לבדוק ולנסות שוב, או לאפס את הסיסמה.",
+  "There's already an account with this email. Sign in instead.":"כבר קיים חשבון עם המייל הזה. אפשר להתחבר במקום.",
+  "Confirm your email address first: open the link in the email you received.":"קודם יש לאשר את כתובת המייל: לפתוח את הקישור במייל שהתקבל.",
+  "Too many attempts. Wait a few minutes and try again.":"יותר מדי ניסיונות. כדאי לחכות כמה דקות ולנסות שוב.",
+  "Couldn't reach Rank Up. Check your internet connection and try again.":"לא ניתן להתחבר לעולים בדרגה. כדאי לבדוק את החיבור לאינטרנט ולנסות שוב.",
+  "Something went wrong. Try again in a moment.":"משהו השתבש. כדאי לנסות שוב בעוד רגע.",
+  "Check your email and open the link to confirm your address, then sign in here.":"יש לבדוק את המייל ולפתוח את הקישור לאישור הכתובת, ואז להתחבר כאן.",
+  "If there's an account for that email, a link to choose a new password is on its way. Check your inbox (and spam folder).":"אם קיים חשבון עם המייל הזה, קישור לבחירת סיסמה חדשה בדרך. כדאי לבדוק את תיבת הדואר (וגם את הספאם).",
+  "Connecting…":"מתחבר…", "Couldn't connect":"לא ניתן להתחבר", "Try again":"ניסיון נוסף",
+  "I'm the coach — set up my board":"אני המאמן/ת — להקים את הלוח שלי", "I'm a student or parent":"אני תלמיד/ה או הורה",
+  "Only one account can be the coach, and it can't be changed later from the app.":"רק חשבון אחד יכול להיות המאמן, ואי אפשר לשנות זאת אחר כך מתוך האפליקציה.",
+  "This app doesn't have a coach yet.":"לאפליקציה עדיין אין מאמן.", "Signed in as":"מחובר/ת בתור", "Account":"חשבון",
+  "They create an account with their email and a password.":"הם יוצרים חשבון עם כתובת מייל וסיסמה.",
+  "Send them the link to the app:":"לשלוח להם את הקישור לאפליקציה:",
+  "Your data is saved to your account online. Students and parents only see what you share with them.":"הנתונים נשמרים בחשבון שלך ברשת. תלמידים והורים רואים רק את מה שבחרת לשתף איתם.",
   "Open in Lichess ↗":"פתיחה בליצ׳ס ↗",
   "Lichess’s free analysis board, with an engine":"לוח הניתוח החינמי של ליצ׳ס, עם מנוע",
   "Not charged yet:":"עדיין לא חויב:",
@@ -6001,6 +6229,7 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Send (.+) the link to the app:$/, "לשלוח ל־$1 את הקישור לאפליקציה:"],
   [/^Add weekly slot — (.+)$/, "הוספת שיעור קבוע — $1"], [/^Edit weekly slot — (.+)$/, "עריכת שיעור קבוע — $1"],
   [/^Assistance price — (.+)$/, "מחיר ליווי — $1"],
   [/^Price per day \((.+)\)$/, "מחיר ליום ($1)"],
