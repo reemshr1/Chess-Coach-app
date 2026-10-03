@@ -3172,12 +3172,12 @@ function renderStudent(v, r){
 function linkPage(me){
   let sq = ""; for (let r=0;r<2;r++) for (let c=0;c<8;c++) sq += '<i class="'+((r+c)%2?"d":"l")+'"></i>';
   const code = me.code||"", bad = code && me.error===code, waiting = code && !me.linked && !bad;
-  return '<div class="welcome"><div class="board" aria-hidden="true">'+sq+'</div><h1>Welcome to Coach\'s Board</h1>'+
+  return '<div class="welcome"><div class="board" aria-hidden="true">'+sq+'</div><h1>Welcome to Rank Up</h1>'+
     (me.linked ? '<p class="sub" style="margin:10px 0 0">Connected! Your board is being prepared — it appears here in a moment.</p>' :
       '<p class="sub" style="margin:10px 0 18px">Enter the code your coach gave you to connect your account.</p>'+
       (me.unlinked?'<p class="small" style="color:var(--flag)">Your coach has closed access to this board. Ask your coach for a new code.</p>':'')+
       (bad?'<p class="small" style="color:var(--flag)">That code wasn\'t recognised. Check it with your coach and try again.</p>':'')+
-      (waiting?'<p class="small">Code sent. You\'ll be connected as soon as your coach opens Coach\'s Board.</p>':'')+
+      (waiting?'<p class="small">Code sent. You\'ll be connected as soon as your coach opens Rank Up.</p>':'')+
       '<form id="linkF" class="row-actions"><input id="linkCode" class="search" dir="ltr" placeholder="ABC123" autocomplete="off" value="'+esc(code)+'" style="text-transform:uppercase;min-width:170px;letter-spacing:.1em" aria-label="Code from your coach"><button class="btn primary" type="submit">Connect</button></form>')+'</div>';
 }
 function bindLink(){
@@ -3940,7 +3940,7 @@ function parentPanel(s){
     const kids = (f.studentIds||[]).map(byId).filter(Boolean);
     body = '<p style="margin:0">'+esc(f.name)+' · '+kids.map(k=>esc(k.name)).join(", ")+'</p>'+
       (f.portal ? '<p class="small muted">Connected since '+esc(fmtDate(f.portal.linkedAt))+'. They see the balance and payments too, but never other families or notes you keep private.</p><div class="row-actions"><button class="btn small ghost danger" data-a="famUnlink">Disconnect</button>'
-       : f.invite ? '<ol class="steps"><li>Share Coach\'s Board with the parent by email and give them Editor access. Don\'t turn on a public link.</li><li>Give them this code: <span class="code-box">'+esc(f.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Coach\'s Board.</li></ol><div class="row-actions"><button class="btn small primary" data-a="famSend">Send invite message</button><button class="btn small ghost" data-a="famUninvite">Cancel invite</button>'
+       : f.invite ? '<ol class="steps"><li>Share Rank Up with the parent by email and give them Editor access. Don\'t turn on a public link.</li><li>Give them this code: <span class="code-box">'+esc(f.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Rank Up.</li></ol><div class="row-actions"><button class="btn small primary" data-a="famSend">Send invite message</button><button class="btn small ghost" data-a="famUninvite">Cancel invite</button>'
        : '<div class="row-actions" style="margin-top:8px"><button class="btn small primary" data-a="famInvite">Invite a parent</button>')+
       '<button class="btn small ghost" data-a="famRename">Rename family</button>'+(kids.length>1?'<button class="btn small ghost" data-a="famLeave">Remove '+esc(s.name.split(" ")[0])+' from the family</button>':'')+'</div>';
   }
@@ -3949,9 +3949,9 @@ function parentPanel(s){
 function appPanel(s){
   const first = esc(s.name.split(" ")[0]);
   let body;
-  if (store.kind!=="db") body = '<p class="small muted" style="margin:0">The student app works in the published Coach\'s Board on claude.ai, where your records are stored in your account.</p>';
+  if (store.kind!=="db") body = '<p class="small muted" style="margin:0">The student app works in the published Rank Up on claude.ai, where your records are stored in your account.</p>';
   else if (s.portal) body = '<p style="margin:0">'+first+' is connected to the app since '+esc(fmtDate(s.portal.linkedAt))+'.</p><p class="small muted">They see their lessons, assignments, goals, games, practice, reading and repertoire. They don\'t see payments, fees, contact details, other students or notes you keep private.</p><button class="btn small ghost danger" data-a="unlink">Disconnect</button>';
-  else if (s.invite) body = '<ol class="steps"><li>Share Coach\'s Board with '+first+' (or a parent) by email and give them Editor access. Don\'t turn on a public link.</li><li>Give them this code: <span class="code-box">'+esc(s.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Coach\'s Board.</li></ol><div class="row-actions"><button class="btn small primary" data-a="sendInv">Send invite message</button><button class="btn small ghost" data-a="uninvite">Cancel invite</button></div>';
+  else if (s.invite) body = '<ol class="steps"><li>Share Rank Up with '+first+' (or a parent) by email and give them Editor access. Don\'t turn on a public link.</li><li>Give them this code: <span class="code-box">'+esc(s.invite.code)+'</span></li><li>They open the app and enter the code. They\'re connected the next time you open Rank Up.</li></ol><div class="row-actions"><button class="btn small primary" data-a="sendInv">Send invite message</button><button class="btn small ghost" data-a="uninvite">Cancel invite</button></div>';
   else body = '<p class="small muted" style="margin:0 0 10px">'+first+' can see their assignments, lessons and goals, log practice and games, and ask you for lessons — in their own account.</p><button class="btn small primary" data-a="invite">Invite to the app</button>';
   return '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Student app</h2>'+(s.portal?'<span class="tag ok">Connected</span>':s.invite?'<span class="tag warn">Waiting for '+first+'</span>':'')+'</div>'+body+'</section>';
 }
@@ -6001,6 +6001,7 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Add weekly slot — (.+)$/, "הוספת שיעור קבוע — $1"], [/^Edit weekly slot — (.+)$/, "עריכת שיעור קבוע — $1"],
   [/^Assistance price — (.+)$/, "מחיר ליווי — $1"],
   [/^Price per day \((.+)\)$/, "מחיר ליום ($1)"],
   [/^Usually half the lesson fee: (.+)$/, "בדרך כלל חצי מתעריף השיעור: $1"],
