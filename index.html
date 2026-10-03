@@ -2701,8 +2701,11 @@ function payView(s){
   const rows = l.charges.filter(c=>c.date>=from).map(c=>({date:c.date, label:c.label, charge:c.amount}))
     .concat(s.payments.filter(p=>p.date>=from).map(p=>({date:p.date, label:"Payment"+(p.method?" · "+p.method:""), paid:+p.amount||0})))
     .sort((a,b)=>a.date<b.date?1:-1);
+  // booked tournament assistance, not charged yet (it goes on the statement once the tournament is played)
+  const upcoming = sortBy((s.tournaments||[]).filter(x=>tourAhead(x, today())).map(x=>{ const a = assistCharge(x);
+    return a && {date:x.start, end:x.end||"", label:"Tournament assistance: "+x.name+" ("+a.days+" day"+(a.days===1?"":"s")+")", amount:a.total}; }).filter(Boolean), "date");
   return {currency:state.settings.currency||"", howToPay:state.settings.payInfo||"", balance:l.balance, charged:l.charged, paid:l.paid, overdue:l.overdue, age:l.age,
-    rate:+s.rate||0, lastPay:l.lastPay?{date:l.lastPay.date, amount:+l.lastPay.amount||0}:null, rows};
+    rate:+s.rate||0, lastPay:l.lastPay?{date:l.lastPay.date, amount:+l.lastPay.amount||0}:null, rows, upcoming};
 }
 // Every document a parent's app reads: the family, and for each child the same records a student sees plus money.
 function familyDocs(f){
@@ -3252,6 +3255,9 @@ function pFamilyPay(v, s){
     '<div class="stats"><div class="stat"><div class="v num'+(p.balance>0.009?" money-owed":"")+'">'+(p.balance>0.009?m(p.balance):p.balance<-0.009?m(-p.balance):"✓")+'</div><div class="l">'+(p.balance>0.009?(p.overdue?p.age+" days overdue":"To pay"):p.balance<-0.009?"In credit":"Paid up")+'</div></div>'+
       '<div class="stat"><div class="v num">'+m(p.charged)+'</div><div class="l">Charged in total</div></div><div class="stat"><div class="v num">'+m(p.paid)+'</div><div class="l">Paid in total</div></div>'+
       '<div class="stat"><div class="v num">'+(p.lastPay?esc(fmtShort(p.lastPay.date)):"—")+'</div><div class="l">'+(p.lastPay?"Last payment · "+m(p.lastPay.amount):"No payments yet")+'</div></div></div>'+
+    (p.upcoming && p.upcoming.length ? panel("Coming up", '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Amount</th></tr></thead><tbody>'+
+      p.upcoming.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+(r.end&&r.end!==r.date?' – '+esc(fmtDate(r.end)):'')+'</td><td>'+esc(r.label)+'</td><td class="r num">'+m(r.amount)+'</td></tr>').join("")+'</tbody></table></div>'+
+      '<p class="small muted" style="margin:8px 0 0">Not charged yet: these are added to the balance once the tournament is played.</p>') : '')+
     (p.howToPay?panel("How to pay", '<p class="pre" style="margin:0">'+esc(p.howToPay)+'</p>'):'')+
     panel("Statement", p.rows.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Charge</th><th class="r">Paid</th></tr></thead><tbody>'+
       p.rows.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+'</td><td>'+esc(r.label)+'</td><td class="r num">'+(r.charge?m(r.charge):"")+'</td><td class="r num">'+(r.paid?m(r.paid):"")+'</td></tr>').join("")+'</tbody></table></div>'+
@@ -3279,6 +3285,7 @@ function pHome(v, s){
     (PARENT() && s.pay ? panel("Balance", (()=>{ const p = s.pay, m = n=>(p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
       return '<p style="margin:0;font-size:1.3rem;font-weight:700" class="num'+(p.balance>0.009?" money-owed":"")+'">'+(p.balance>0.009?m(p.balance)+' to pay':p.balance<-0.009?m(-p.balance)+' in credit':'Paid up')+'</p>'+
         (p.overdue?'<p class="small" style="color:var(--flag);margin:4px 0 0">'+p.age+' days overdue</p>':'')+
+        (p.upcoming && p.upcoming.length ? '<p class="small" style="margin:6px 0 0"><b>Not charged yet:</b> '+p.upcoming.map(r=>'<span>'+esc(r.label)+'</span> · <span class="num">'+m(r.amount)+'</span>').join("<br>")+'</p>' : '')+
         '<p class="small muted" style="margin:6px 0 0">'+(p.lastPay?'Last payment '+esc(fmtShort(p.lastPay.date))+' · '+m(p.lastPay.amount):'No payments yet')+'</p>'+
         (p.balance>0.009 && p.howToPay?'<p class="small pre" style="margin:8px 0 0"><b>How to pay:</b> '+esc(p.howToPay)+'</p>':''); })(), '<a class="btn small" href="#/payments">Statement</a>') : '')+
     updatesPanel(s)+
@@ -5175,13 +5182,17 @@ function openViewer(a, g, s, forceFlip){
     if (black) num++; black = !black;
   });
   m.innerHTML = '<div class="modal-form"><header style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h2>'+title+'</h2><p class="sub small">'+sub+'</p></div><button type="button" class="btn small ghost" id="vX" aria-label="Close">✕</button></header>'+
-    '<div class="viewer"><div><div class="cboard" id="vb" aria-label="Chess board"></div><div class="vctl"><button class="btn small" data-v="first" aria-label="Start">⏮</button><button class="btn small" data-v="prev" aria-label="Previous move">◀</button><button class="btn small" data-v="next" aria-label="Next move">▶</button><button class="btn small" data-v="last" aria-label="End">⏭</button><button class="btn small ghost" data-v="flip">Flip board</button></div><p class="small muted" style="margin:6px 0 0">Use the ← → keys to step through moves.</p></div>'+
+    '<div class="viewer"><div><div class="cboard" id="vb" aria-label="Chess board"></div><div class="vctl"><button class="btn small" data-v="first" aria-label="Start">⏮</button><button class="btn small" data-v="prev" aria-label="Previous move">◀</button><button class="btn small" data-v="next" aria-label="Next move">▶</button><button class="btn small" data-v="last" aria-label="End">⏭</button><button class="btn small ghost" data-v="flip">Flip board</button><a class="btn small ghost" id="vLi" target="_blank" rel="noopener" title="Lichess’s free analysis board, with an engine">Open in Lichess ↗</a></div><p class="small muted" style="margin:6px 0 0">Use the ← → keys to step through moves.</p></div>'+
     '<div style="min-width:0">'+(g.note?'<p class="small" style="margin:0 0 8px;background:var(--sq-light);padding:8px 10px;border-radius:var(--r-sm)">'+esc(g.note)+'</p>':"")+'<div class="moves" id="vm">'+mv+(h.Result?'<span class="mn"></span><span class="res">'+esc(h.Result)+'</span>':"")+'</div></div></div></div>';
   const draw = ()=>{
     $("#vb").innerHTML = boardHtml(fens[idx], flip, idx>0 ? hist[idx-1] : null);
     m.querySelectorAll(".mv").forEach(b=>b.classList.toggle("cur", +b.dataset.i===idx));
     const cur = m.querySelector(".mv.cur"); if (cur) cur.scrollIntoView({block:"nearest"});
+    $("#vLi").href = lichessUrl(idx);
   };
+  // the whole game on Lichess's analysis board, opened at the move shown here; a game from a set-up position opens at that position
+  const lichessUrl = n=>h.FEN ? "https://lichess.org/analysis/standard/"+fens[n].replace(/ /g,"_")
+    : "https://lichess.org/analysis/pgn/"+encodeURIComponent(hist.map(x=>x.san).join(" "))+(n?"#"+n:"");
   const go = n=>{ idx = Math.max(0, Math.min(fens.length-1, n)); draw(); };
   m.querySelectorAll("[data-v]").forEach(b=>b.onclick = ()=>{ const k = b.dataset.v; if (k==="first") go(0); else if (k==="prev") go(idx-1); else if (k==="next") go(idx+1); else if (k==="last") go(fens.length-1); else { flip = !flip; draw(); } });
   $("#vm").onclick = e=>{ const b = e.target.closest(".mv"); if (b) go(+b.dataset.i); };
@@ -5698,6 +5709,10 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Open in Lichess ↗":"פתיחה בליצ׳ס ↗",
+  "Lichess’s free analysis board, with an engine":"לוח הניתוח החינמי של ליצ׳ס, עם מנוע",
+  "Not charged yet:":"עדיין לא חויב:",
+  "Not charged yet: these are added to the balance once the tournament is played.":"עדיין לא חויב: יתווסף ליתרה לאחר שהטורניר ייערך.",
   "Change price":"שינוי מחיר",
   "Price changed:":"המחיר שונה:",
   "Half the usual fee":"חצי מהתעריף הרגיל",
