@@ -2759,7 +2759,7 @@ function studentView(s){
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
     worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[],
     coachName:state.settings.coachName||"", weekStart:state.settings.weekStart||0,
-    freeSet:freeRules().some(r=>r.kind!=="off"), ...openSlots(today(), addDays(today(),56), s.id)}));
+    freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56), s.id).free, taken:[]})); // other students' bookings just leave a gap
 }
 // The student's copy carries when the coach's app last wrote it.
 function stampView(v){ v.syncedAt = new Date().toISOString(); return v;
@@ -5889,7 +5889,7 @@ function weekGrid(ws, items, n=7){
     }).join("")+'</div>';
   }).join("");
   return '<div class="wk-wrap"><div class="wk'+(n<7?" wk-few":"")+'" style="--days:'+n+'"><div class="wk-row">'+head+'</div><div class="wk-row">'+allday+'</div><div class="wk-row wk-body">'+labels+cols+'</div></div></div>'+
-    '<p class="small muted" style="margin:8px 0 0">'+(STUDENT()?"Green is when your coach is free, striped is already taken · click inside green to request a lesson, or click your training to edit it.":"↻ weekly slot · green is your free time · click a session for actions, or click an empty spot to plan one.")+'</p>';
+    '<p class="small muted" style="margin:8px 0 0">'+(STUDENT()?"Green is when your coach is free · click inside green to request a lesson, or click your training to edit it.":"↻ weekly slot · green is your free time · click a session for actions, or click an empty spot to plan one.")+'</p>';
 }
 function listView(items, t){
   const groups = {}; items.forEach(i=>{ if (i.kind==="session" && i.x.status==="cancelled") return; (groups[i.date]=groups[i.date]||[]).push(i); });
@@ -6129,7 +6129,7 @@ const HE = {
   "No free time set yet.":"עדיין לא הוגדר זמן פנוי.", "Open for lessons":"פנוי לשיעורים", "Request":"בקשה",
   "When your coach is free":"מתי המאמן פנוי", "No free time in the coming weeks.":"אין זמן פנוי בשבועות הקרובים.",
   "Your coach isn't free then. Choose a time inside a green free slot on the Schedule.":"המאמן לא פנוי בזמן הזה. יש לבחור זמן בתוך משבצת פנויה ירוקה בלוח הזמנים.",
-  "Green is when your coach is free, striped is already taken · click inside green to request a lesson, or click your training to edit it.":"ירוק = המאמן פנוי, מפוספס = כבר תפוס · לחיצה בתוך הירוק לבקשת שיעור, או על אימון לעריכה.",
+  "Green is when your coach is free · click inside green to request a lesson, or click your training to edit it.":"ירוק = המאמן פנוי · לחיצה בתוך הירוק לבקשת שיעור, או על אימון לעריכה.",
   "↻ weekly slot · green is your free time · click a session for actions, or click an empty spot to plan one.":"↻ שיעור קבוע · ירוק = הזמן הפנוי שלך · לחיצה על שיעור לפעולות, או על מקום פנוי לתכנון שיעור.",
   "Requested lesson":"שיעור מבוקש", "Declined request":"בקשה שנדחתה", "Cancel request":"ביטול הבקשה", "Your lessons, tournaments, assignments and own training":"השיעורים, הטורנירים, המשימות והאימונים שלך",
   "Click an empty spot to request a lesson":"לחיצה על מקום פנוי לבקשת שיעור", "↻ weekly lesson · click your training to edit it, or click an empty spot to request a lesson.":"↻ שיעור קבוע · לחיצה על אימון לעריכה, או על מקום פנוי לבקשת שיעור.",
