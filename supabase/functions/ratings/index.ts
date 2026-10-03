@@ -80,6 +80,14 @@ async function each(ids, fn, width = 4) {
 export async function handle(req) {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Use POST" }, 405);
+  // Only signed-in users of the app. Checked here (instead of the "Verify JWT" switch, which can reject
+  // tokens from Supabase's newer signing keys) by asking Supabase who the token belongs to.
+  const env = globalThis.Deno && Deno.env;
+  const base = env && env.get("SUPABASE_URL"), anon = env && (env.get("SUPABASE_ANON_KEY") || env.get("SUPABASE_PUBLISHABLE_KEY"));
+  if (base && anon) {
+    const who = await fetch(base + "/auth/v1/user", { headers: { Authorization: req.headers.get("authorization") || "", apikey: anon } }).catch(() => null);
+    if (!who || !who.ok) return json({ error: "Sign in to the app to check ratings" }, 401);
+  }
   let body;
   try { body = await req.json(); } catch { return json({ error: "Send JSON" }, 400); }
   const fide = await each(cleanIds(body.fide), async id => parseFide(await getPage("https://ratings.fide.com/profile/" + id)));
