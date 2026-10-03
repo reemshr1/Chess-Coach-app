@@ -28,19 +28,35 @@ const sampleAround = (text, words) => {
   const i = Math.max(0, ...words.map(w => text.search(w))); return text.slice(Math.max(0, i - 150), i + 250);
 };
 
-// FIDE profile: the rating boxes read "std 1850", "rapid 1790", "blitz Not rated"; the details list "FIDE title: None".
+// FIDE profile. The page has a box per list (standard, rapid, blitz) holding the rating and the list's name,
+// e.g. <div class="profile-standart ..."><p>1850</p><p>STANDARD</p></div>, or "Not rated". Read the boxes first;
+// otherwise read the text, where the number comes either before the name ("1850 STANDARD") or after it ("std 1850").
+const LISTS = [["std", "standart|standard|std|classical"], ["rapid", "rapid"], ["blitz", "blitz"]];
+const ratingIn = t => { const m = /(\d{3,4})|(not\s*rated|unrated)/i.exec(t); return !m ? undefined : m[2] ? "" : plausible(m[1]); };
 export function parseFide(html) {
-  const text = pageText(html);
   const out = {};
-  let found = 0;
-  for (const [key, label] of [["std", "std"], ["rapid", "rapid"], ["blitz", "blitz"]]) {
-    const m = new RegExp("\\b" + label + "\\b\\s*(\\d{3,4}|not rated|unrated)", "i").exec(text);
-    if (!m) continue;
-    found++;
-    if (/rated/i.test(m[1])) out[key] = "";
-    else { const n = plausible(m[1]); if (n == null) return { error: "Unexpected " + key + " rating: " + m[1], sample: sampleAround(text, [/\bstd\b/i]) }; out[key] = n; }
+  // 1. the rating boxes, by their class names
+  for (const [key, names] of LISTS) {
+    const m = new RegExp('class="[^"]*\\bprofile-(?:' + names + ')\\b[^"]*"[^>]*>([\\s\\S]*?)</div>', "i").exec(html);
+    if (m) { const v = ratingIn(pageText(m[1])); if (v !== undefined && v !== null) out[key] = v; }
   }
-  if (!found) return { error: "No ratings found on the FIDE page", sample: sampleAround(text, [/rating/i, /\bstd\b/i]) };
+  const text = pageText(html);
+  // 2. the text: "1850 STANDARD 1700 RAPID Not rated BLITZ" or "std 1850 rapid 1700 blitz Not rated"
+  if (!Object.keys(out).length) {
+    const after = new RegExp("(\\d{3,4}|not\\s*rated|unrated)\\s*(" + LISTS.map(l => l[1]).join("|") + ")\\b", "gi");
+    const before = new RegExp("\\b(" + LISTS.map(l => l[1]).join("|") + ")\\b\\s*(\\d{3,4}|not\\s*rated|unrated)", "gi");
+    const keyOf = name => LISTS.find(([, n]) => new RegExp("^(?:" + n + ")$", "i").test(name))[0];
+    // the layout is "number first" when a number sits right before STANDARD/RAPID/BLITZ in capitals
+    const numberFirst = /(\d{3,4}|not\s*rated)\s*(STANDARD|STANDART|RAPID|BLITZ)\b/.test(text);
+    for (const m of text.matchAll(numberFirst ? after : before)) {
+      const [val, name] = numberFirst ? [m[1], m[2]] : [m[2], m[1]];
+      const k = keyOf(name); if (k in out) continue;
+      const v = ratingIn(val); if (v === null) return { error: "Unexpected " + k + " rating: " + val, sample: sampleAround(text, [/standard|\bstd\b/i]) };
+      out[k] = v;
+    }
+  }
+  if (!Object.keys(out).length) return { error: "No ratings found on the FIDE page", sample: sampleAround(text, [/standard|\bstd\b/i, /rating/i]) };
+  // a list that wasn't shown at all is left as it was, not cleared
   const t = /FIDE title:?\s*(.{1,40}?)\s+(?:Other titles|Federation|B-Year|Sex|FIDE ID|World Rank|$)/i.exec(text);
   out.title = t && !/^(none|-)$/i.test(t[1].trim()) ? t[1].trim() : "";
   return out;

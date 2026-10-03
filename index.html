@@ -3990,7 +3990,8 @@ async function syncRatings(manual){
     list.forEach(s=>{
       let touched = false;
       if (s.fideId){ const r = data.fide[s.fideId];
-        if (r && !r.error){ s.fide = Object.assign({}, s.fide, {std:r.std??"", rapid:r.rapid??"", blitz:r.blitz??"", title:r.title||"", updated:t});
+        if (r && !r.error){ const got = {}; ["std","rapid","blitz"].forEach(k=>{ if (k in r) got[k] = r[k]; }); // a list the page didn't show keeps its value
+          s.fide = Object.assign({}, s.fide, got, {title:r.title||"", updated:t});
           if (hasVal(r.std)) addRating(s,"FIDE",r.std,t); if (hasVal(r.rapid)) addRating(s,"FIDE Rapid",r.rapid,t); if (hasVal(r.blitz)) addRating(s,"FIDE Blitz",r.blitz,t); touched = true; }
         else failed.push({name:s.name, list:"FIDE", id:s.fideId, why:(r&&r.error)||"No answer for this ID", sample:(r&&r.sample)||""}); }
       if (s.icfId){ const r = (data.icf||{})[s.icfId];
