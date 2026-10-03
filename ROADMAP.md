@@ -18,7 +18,6 @@ app, check here first.
 
 ## Later
 
-- **Minimum notice for lesson requests** (e.g. 24 hours), set in Settings.
 
 - **"Open in Lichess" button** in the game viewer: open the game on Lichess's
   analysis board (engine) at the move being viewed.
@@ -26,6 +25,8 @@ app, check here first.
   are left and warning when a package runs out.
 
 ## Decided against (for now)
+
+- Minimum notice for lesson requests.
 
 - Skill levels per student (the stored `skills` data is unused).
 - A "cancelled but charged" status for late cancellations.

@@ -4943,20 +4943,44 @@ function asRow(a, showStudent){ const s = byId(a.studentId); const n = (a.games|
   return '<a class="as-row" href="#/assignment/'+a.id+'"><div class="main"><div class="title">'+esc(a.title)+'</div><div class="small muted">'+[showStudent&&s?esc(s.name):"", esc(a.type), n+" game"+(n===1?"":"s"), a.due?"due "+esc(fmtShort(a.due)):""].filter(Boolean).join(" · ")+'</div></div>'+asTag(a)+'</a>'; }
 function asSort(list){ const rank = {Submitted:0, Assigned:1, Reviewed:2}; return list.slice().sort((a,b)=>(rank[a.status]-rank[b.status]) || (a.status==="Reviewed" ? ((b.due||"")>(a.due||"")?1:-1) : ((a.due||"9")<(b.due||"9")?-1:1))); }
 
-function editAssignment(a, sid){
+/* assignment library: reusable assignments kept in settings (title, type, instructions, games) */
+const asLib = ()=>state.settings.asLib||(state.settings.asLib=[]);
+const LIB_GAMES_MAX = 120000; // keep the settings document well under its size limit
+function saveToLibrary(a){
+  const t = {id:"tp-"+uid(), title:a.title, type:a.type, instructions:a.instructions||"", games:JSON.parse(JSON.stringify(a.games||[])), saved:today()};
+  let note = "";
+  if (JSON.stringify(t.games).length > LIB_GAMES_MAX || JSON.stringify(state.settings).length + JSON.stringify(t).length > 200000){ t.games = []; note = " (without its games — too large to keep)"; }
+  const same = asLib().find(x=>x.title.trim().toLowerCase()===t.title.trim().toLowerCase());
+  const go = ()=>{ state.settings.asLib = asLib().filter(x=>x!==same).concat(t); saveSettings(); render(); toast("Saved to the assignment library"+note); };
+  if (same) confirmBox("Replace “"+same.title+"” in the library?", "There is already a library assignment with this title. Replace it with this one?", "Replace", go); else go();
+}
+function libraryPanel(){
+  const lib = sortBy(asLib(),"title");
+  return '<details class="panel fold" id="libFold" style="margin-top:16px"'+(libOpen?' open':'')+'><summary><h2>Assignment library ('+lib.length+')</h2></summary>'+
+    (lib.length ? '<ul class="list" style="margin-top:8px">'+lib.map(t=>'<li><div class="main"><div class="title">'+esc(t.title)+'</div><div class="small muted">'+[esc(t.type), t.games.length?t.games.length+" game"+(t.games.length===1?"":"s"):"", t.instructions?esc(t.instructions.slice(0,80))+(t.instructions.length>80?"…":""):""].filter(Boolean).join(" · ")+'</div></div>'+
+      '<div class="row-actions"><button class="btn small primary" data-a="libUse" data-id="'+t.id+'">Give to…</button><button class="btn small ghost" data-a="libDel" data-id="'+t.id+'">Delete</button></div></li>').join("")+'</ul>'
+      : '<p class="empty" style="padding:8px 0 4px">No saved assignments yet. Open an assignment and click “Save to library” to reuse it for other students.</p>')+'</details>';
+}
+let libOpen = false;
+function editAssignment(a, sid, tplId){
   const act = state.students.filter(s=>s.active || (a && s.id===a.studentId));
   if (!act.length){ toast("Add a student first."); return; }
   const isNew = !a;
   const x = a || {id:"as-"+uid(), studentId:sid||act[0].id, title:"", type:AS_TYPES[0], instructions:"", assigned:today(), due:addDays(today(),7), status:"Assigned", feedback:"", games:[]};
+  const lib = isNew ? sortBy(asLib(),"title") : [];
+  const fromLib = v=>!!v.tpl;
   openForm({title:isNew?"New assignment":"Edit assignment", submit:isNew?"Create assignment":"Save changes", fields:[
+      ...(lib.length ? [{name:"tpl",label:"From library",type:"select",options:[["","— Write a new one —"], ...lib.map(t=>[t.id, t.title+(t.games.length?" ("+t.games.length+" game"+(t.games.length===1?"":"s")+")":"")])],value:tplId||"",full:true}] : []),
       {name:"studentId",label:"Student",type:"select",options:sortBy(act,"name").map(s=>[s.id,s.name]),value:x.studentId,full:true},
-      {name:"title",label:"Title",value:x.title,full:true,required:true,placeholder:"e.g. 30 puzzles on pins, or Analyse your round 3 loss"},
-      {name:"type",label:"Type",type:"select",options:AS_TYPES,value:x.type},
+      {name:"title",label:"Title",value:x.title,full:true,placeholder:"e.g. 30 puzzles on pins, or Analyse your round 3 loss",show:v=>!fromLib(v)},
+      {name:"type",label:"Type",type:"select",options:AS_TYPES,value:x.type,show:v=>!fromLib(v)},
       {name:"due",label:"Due",type:"date",value:x.due},
-      {name:"instructions",label:"Instructions",type:"textarea",value:x.instructions,placeholder:"e.g. Find the moment the position turned. Write down your candidate moves on move 18."}],
+      {name:"instructions",label:"Instructions",type:"textarea",value:x.instructions,placeholder:"e.g. Find the moment the position turned. Write down your candidate moves on move 18.",show:v=>!fromLib(v)}],
     danger: isNew?null:{label:"Delete assignment", onClick:()=>confirmBox("Delete “"+x.title+"”?","The assignment and its "+x.games.length+" uploaded game(s) will be removed.","Delete",()=>{
       state.assignments = state.assignments.filter(y=>y.id!==x.id); store.deleteAssignment(x.id); location.hash = "#/student/"+x.studentId+"/assignments"; toast("Assignment deleted"); })},
     onSubmit:d=>{
+      const t = d.tpl && asLib().find(y=>y.id===d.tpl); delete d.tpl;
+      if (t){ Object.assign(d, {title:t.title, type:t.type, instructions:t.instructions}); x.games = JSON.parse(JSON.stringify(t.games||[])); }
       if (!d.title) return "Give the assignment a title.";
       Object.assign(x,d);
       if (isNew){ state.assignments.push(x); saveAssignment(x); location.hash = "#/assignment/"+x.id; toast("Assignment created"); }
@@ -4973,8 +4997,12 @@ function pAssignments(v){
   v.innerHTML = '<div class="page-head"><div><h1>Assignments</h1><p class="sub">Games in PGN and study tasks for your students</p></div><button class="btn primary" id="asNew">New assignment</button></div>'+
     '<div class="seg" role="group" aria-label="Filter assignments">'+Object.keys(F).map(k=>'<button type="button" class="'+(asFilter===k?"on":"")+'" data-a="f" data-id="'+k+'">'+L[k]+' ('+list.filter(F[k]).length+')</button>').join("")+'</div>'+
     '<section class="panel" style="padding:4px 0">'+(shown.length ? shown.map(a=>asRow(a,true)).join("") : '<p class="empty" style="padding:14px 18px">'+(list.length?"Nothing here.":"No assignments yet. Create one, then upload the PGN of the games you want the student to work on.")+'</p>')+'</section>';
+  v.insertAdjacentHTML("beforeend", libraryPanel());
+  const lf = $("#libFold"); if (lf) lf.addEventListener("toggle", ()=>{ libOpen = lf.open; });
   $("#asNew").onclick = ()=>editAssignment(null);
-  bindActions(v,{ f:id=>{ asFilter = id; render(); } });
+  bindActions(v,{ f:id=>{ asFilter = id; render(); },
+    libUse:id=>editAssignment(null, null, id),
+    libDel:id=>{ const t = asLib().find(x=>x.id===id); if (t) confirmBox("Delete “"+t.title+"” from the library?", "Assignments already given to students stay as they are.", "Delete", ()=>{ state.settings.asLib = asLib().filter(x=>x!==t); saveSettings(); render(); toast("Removed from the library"); }); } });
 }
 function tAssignments(el, s){
   const list = asSort(state.assignments.filter(a=>a.studentId===s.id));
@@ -5023,7 +5051,7 @@ function pAssignment(v, r){
   const pct = Math.round(JSON.stringify(a).length / MAX_DOC * 100);
   v.innerHTML = '<a class="crumb" href="#/student/'+s.id+'/assignments">‹ '+esc(s.name)+'</a>'+
     '<div class="page-head"><div><h1>'+esc(a.title)+'</h1><p class="sub">'+[esc(a.type), "Given "+esc(fmtShort(a.assigned||today())), a.due?"due "+esc(fmtDate(a.due)):""].filter(Boolean).join(" · ")+'</p></div>'+
-    '<div class="row-actions"><div class="seg" role="group" aria-label="Status" style="margin:0">'+(STUDENT() && a.status==="Reviewed" ? '<button type="button" class="on">'+STATUS_LABEL.Reviewed+'</button>' : AS_STATUS.filter(x=>!STUDENT() || x!=="Reviewed").map(x=>'<button type="button" class="'+(a.status===x?"on":"")+'" data-a="status" data-id="'+x+'">'+STATUS_LABEL[x]+'</button>').join(""))+'</div>'+coachOnly('<button class="btn" data-a="edit">Edit</button>')+'</div></div>'+
+    '<div class="row-actions"><div class="seg" role="group" aria-label="Status" style="margin:0">'+(STUDENT() && a.status==="Reviewed" ? '<button type="button" class="on">'+STATUS_LABEL.Reviewed+'</button>' : AS_STATUS.filter(x=>!STUDENT() || x!=="Reviewed").map(x=>'<button type="button" class="'+(a.status===x?"on":"")+'" data-a="status" data-id="'+x+'">'+STATUS_LABEL[x]+'</button>').join(""))+'</div>'+coachOnly('<button class="btn" data-a="lib">Save to library</button><button class="btn" data-a="edit">Edit</button>')+'</div></div>'+
     '<section class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>Games <span class="small muted" style="font-weight:400;font-family:var(--body)">optional</span></h2><div class="row-actions">'+
       coachOnly('<label class="btn small primary" for="pgnFile">Upload PGN</label><input id="pgnFile" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain" multiple hidden>'+
       '<button class="btn small" data-a="paste">Paste PGN</button>')+(a.games.length?'<button class="btn small" data-a="dl">Download PGN</button>':"")+'</div></div>'+
@@ -5050,7 +5078,7 @@ function pAssignment(v, r){
   }
   const saveFb = ()=>{ a.feedback = $("#fb").value.trim(); };
   bindActions(v,{
-    edit:()=>editAssignment(a),
+    edit:()=>editAssignment(a), lib:()=>saveToLibrary(a),
     status:id=>{ if (STUDENT() && id==="Reviewed") return; a.status = id; if (id==="Reviewed") a.reviewedOn = today(); if (id==="Submitted" && !a.submitted) a.submitted = today(); saveAssignment(a); render(); if (STUDENT() && id==="Submitted") toast("Marked done — your coach will review it"); },
     paste:()=>openForm({title:"Paste PGN", submit:"Add games", fields:[{name:"pgn",label:"PGN text",type:"textarea",value:"",placeholder:'[Event "City Open"]\n[White "..."]\n[Black "..."]\n\n1. e4 c5 2. Nf3 ...'}],
       onSubmit:d=>{ if (!d.pgn) return "Paste the PGN of one or more games."; const res = addPgnText(a, d.pgn); if (!res.added) return res.full ? "This assignment is full. Create another assignment for these games." : "No games found in that text."; saveAssignment(a); setTimeout(()=>{ render(); reportAdd(res); },0); }}),
@@ -5642,6 +5670,11 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Save to library":"שמירה בספרייה", "From library":"מהספרייה", "— Write a new one —":"— כתיבת משימה חדשה —", "Give to…":"מתן ל…",
+  "Saved to the assignment library":"נשמר בספריית המשימות", "Removed from the library":"הוסר מהספרייה", "Replace":"החלפה",
+  "Assignments already given to students stay as they are.":"משימות שכבר ניתנו לתלמידים נשארות כמו שהן.",
+  "There is already a library assignment with this title. Replace it with this one?":"כבר יש בספרייה משימה בשם הזה. להחליף אותה בזו?",
+  "No saved assignments yet. Open an assignment and click “Save to library” to reuse it for other students.":"עדיין אין משימות שמורות. אפשר לפתוח משימה וללחוץ ״שמירה בספרייה״ כדי להשתמש בה שוב לתלמידים אחרים.",
   "Rating":"דירוג",
   "Assignments due this week":"משימות להגשה השבוע", "Nothing due this week.":"אין הגשות השבוע.",
   "Let them know now — they see it in the app too.":"כדאי לעדכן עכשיו — הם יראו את זה גם באפליקציה.",
@@ -5911,6 +5944,9 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Assignment library \((\d+)\)$/, "ספריית משימות ($1)"],
+  [/^Saved to the assignment library \(without its games — too large to keep\)$/, "נשמר בספריית המשימות (בלי המשחקים — גדולים מדי לשמירה)"],
+  [/^Replace “(.+)” in the library\?$/, "להחליף את ״$1״ בספרייה?"], [/^Delete “(.+)” from the library\?$/, "למחוק את ״$1״ מהספרייה?"],
   [/^(Lesson confirmed|Lesson moved|Lesson cancelled|Request declined|Lesson stays|Move declined) — (.+)$/, (m,k,n)=>({"Lesson confirmed":"השיעור אושר","Lesson moved":"השיעור הוזז","Lesson cancelled":"השיעור בוטל","Request declined":"הבקשה נדחתה","Lesson stays":"השיעור נשאר","Move declined":"ההזזה נדחתה"})[k]+" — "+n],
   [/^Lessons \(([\d.]+) h\)$/, "שיעורים ($1 שע׳)"], [/^([\d.]+) h$/, "$1 שע׳"], [/^(.+)’s progress$/, "ההתקדמות של $1"],
   [/^Now (\d+)(?: · ([+-]?\d+) since (.+))?$/, (m,n,d,w)=>"עכשיו "+n+(d?" · "+d+" מאז "+w:"")],
