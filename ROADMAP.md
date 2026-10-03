@@ -12,6 +12,10 @@ app, check here first.
 - Invite messages, "how to pay" for parents, payment reminders, lesson
   reminders, visible sync problems, and safe editing on two devices.
 
+- **Tournament assistance:** charged per tournament day (by default half the
+  lesson fee), added to the balance once the tournament is played; students
+  never see the price.
+
 ## Next phase
 
 - **Design pass** over the coach, student and parent screens together.
@@ -21,12 +25,11 @@ app, check here first.
 
 - **"Open in Lichess" button** in the game viewer: open the game on Lichess's
   analysis board (engine) at the move being viewed.
-- **Lesson packages:** prepaid packs of lessons (e.g. 10), showing how many
-  are left and warning when a package runs out.
 
 ## Decided against (for now)
 
 - Minimum notice for lesson requests.
+- Prepaid lesson packages (not used).
 
 - Skill levels per student (the stored `skills` data is unused).
 - A "cancelled but charged" status for late cancellations.

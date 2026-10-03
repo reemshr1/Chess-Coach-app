@@ -2456,6 +2456,7 @@ function ledger(s){
   const charges = [];
   s.sessions.forEach(x=>{ if (x.status==="done" && +x.fee>0) charges.push({date:x.date, amount:+x.fee, label:"Session"+(x.topics?": "+x.topics:""), kind:"session"}); });
   s.charges.forEach(c=> charges.push({date:c.date, amount:+c.amount, label:c.note||"Charge", kind:"charge"}));
+  (s.tournaments||[]).forEach(x=>{ const a = assistCharge(x); if (a && !tourAhead(x, today())) charges.push({date:x.end||x.start, amount:a.total, label:"Tournament assistance: "+x.name+" ("+a.days+" day"+(a.days===1?"":"s")+")", kind:"tour"}); });
   charges.sort((a,b)=>a.date<b.date?-1:1);
   const charged = charges.reduce((t,c)=>t+c.amount,0);
   const paid = s.payments.reduce((t,p)=>t+(+p.amount||0),0);
@@ -2720,7 +2721,7 @@ function studentView(s){
   return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
-    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments, books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[],
+    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[],
     coachName:state.settings.coachName||"", weekStart:state.settings.weekStart||0,
     freeSet:freeRules().some(r=>r.kind!=="off"), ...openSlots(today(), addDays(today(),56), s.id)}));
 }
@@ -2746,7 +2747,8 @@ function applyOp(s, op, coachSide){
     const L = list(m[1]), i = L.findIndex(x=>x.id===(m[2]==="delete" ? op.id : it && it.id));
     if (m[2]==="delete"){ if (i>=0 && mine(L[i])) L.splice(i,1); return true; }
     if (!it || !it.id) return false;
-    const item = Object.assign({}, i>=0 ? L[i] : {}, it, i>=0 ? {} : {by:"student"});
+    const fromS = m[1]==="tournaments" ? (({assist, assistDays, assistFee, ...y})=>y)(it) : it; // the assistance price is the coach's
+    const item = Object.assign({}, i>=0 ? L[i] : {}, fromS, i>=0 ? {} : {by:"student"});
     if (m[1]==="worklog" && item.bookId && item.page!=="" && item.page!=null && pageOrderError(s, (s.books||[]).find(b=>b.id===item.bookId), item.date, +item.page, item.id)) item.page = "";
     if (i>=0) L[i] = item; else L.push(item);
     if (coachSide && m[1]==="worklog"){
@@ -4841,13 +4843,20 @@ const resultOf = (s, x)=>{ if (x.result) return x.result; const g = gamesScore(s
 const TC_SOURCE = {Rapid:"FIDE Rapid", Blitz:"FIDE Blitz", Online:"Online"};
 const tourSource = (s, format)=>TC_SOURCE[format] || mainSource(s);
 const ratingBefore = (s, src, date)=>sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===src && r.date<=date),"date").pop();
+// Tournament assistance: a fee per tournament day (by default half the usual lesson fee).
+const tourDays = x=>x.start ? Math.max(1, daysBetween(x.start, x.end&&x.end>=x.start ? x.end : x.start)+1) : 1;
+function assistCharge(x){
+  if (!x || !x.assist) return null;
+  const days = +x.assistDays>0 ? +x.assistDays : tourDays(x), fee = +x.assistFee||0;
+  return fee>0 ? {days, fee, total:days*fee} : null;
+}
 // A tournament is still ahead until it ends, unless its actual result is already in.
 const tourAhead = (x, t)=>(x.end||x.start)>=t && !String(x.result||"").trim();
 function tTournaments(el, s){
   const t = today();
   const up = sortBy(s.tournaments.filter(x=>tourAhead(x,t)),"start"); const past = sortBy(s.tournaments.filter(x=>!tourAhead(x,t)),"start",-1);
   const row = (x,isUp)=>{ const d = daysBetween(t,x.start);
-    return '<li style="align-items:flex-start"><div class="main"><div class="title">'+esc(x.name)+(x.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+'</div><div class="small muted">'+esc(fmtDate(x.start))+(x.end&&x.end!==x.start?" – "+esc(fmtDate(x.end)):"")+[x.location,x.format,x.rounds?x.rounds+" rounds":""].filter(Boolean).map(v=>" · "+esc(v)).join("")+'</div>'+(x.notes?'<div class="small pre" style="margin-top:4px">'+esc(x.notes)+'</div>':"")+
+    return '<li style="align-items:flex-start"><div class="main"><div class="title">'+esc(x.name)+(x.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+(()=>{ const a = !STUDENT() && assistCharge(x); return a ? ' <span class="tag ok" title="'+(isUp?"Charged once the tournament is played":"Added to the balance")+'">Assistance · '+a.days+' day'+(a.days===1?'':'s')+' × '+esc(money(a.fee))+'</span>' : ''; })()+'</div><div class="small muted">'+esc(fmtDate(x.start))+(x.end&&x.end!==x.start?" – "+esc(fmtDate(x.end)):"")+[x.location,x.format,x.rounds?x.rounds+" rounds":""].filter(Boolean).map(v=>" · "+esc(v)).join("")+'</div>'+(x.notes?'<div class="small pre" style="margin-top:4px">'+esc(x.notes)+'</div>':"")+
     (()=>{ const ex = parseScore(x.expected, x.rounds), ac = parseScore(resultOf(s,x), x.rounds);
       if (isUp) return '<div class="expect small">'+(ex?'Expected score: <b class="num">'+esc(fmtScore(ex))+'</b>':'<span class="tag warn">No expected score yet</span> <button class="btn small ghost" data-a="expect" data-id="'+x.id+'">Set it</button>')+'</div>';
       if (!ex && !ac) return "";
@@ -4874,6 +4883,10 @@ function tTournaments(el, s){
     {name:"addRating",label:"Add to rating history",type:"select",options:[["","No"],...RATING_SOURCES.map(r=>[r,"Yes — "+r+" list"])],
       value:(()=>{ const src = tourSource(s, x?.format||"Classical"); return x && ratingBefore(s, src, x.end||x.start) ? src : ""; })(),
       show:v=>!STUDENT() && !!v.start && v.start<=today() && v.ratingChange!=="" && !x?.ratingAdded, hint:"Adds a new rating: the last one before the tournament plus the change, dated the last day"},
+    ...(STUDENT() ? [] : [
+      {name:"assist",label:"Tournament assistance",type:"select",options:[["","No"],["1","Yes — charged per tournament day"]],value:x?.assist?"1":"",full:true},
+      {name:"assistDays",label:"Days of assistance",type:"number",value:x?.assistDays??"",min:1,placeholder:"All tournament days",show:v=>!!v.assist,hint:"Leave empty to use every day of the tournament"},
+      {name:"assistFee",label:"Fee per day ("+state.settings.currency+")",type:"number",value:x?.assistFee??Math.round((+s.rate||0)/2),min:0,step:"any",show:v=>!!v.assist,hint:"Half the usual fee of "+money(+s.rate||0)+" · charged once the tournament is played"}]),
     {name:"notes",label:"Preparation & reflection",type:"textarea",value:x?.notes||""}];
   const validate = d=>{
     if (d.expected && !parseScore(d.expected, d.rounds)) return "Write the expected score like 5/9 or 5.5/9 (and no more than the number of rounds).";
@@ -4882,6 +4895,7 @@ function tTournaments(el, s){
   };
   // Adds the post-tournament rating once; `ratingAdded` stops a later edit from counting the change twice.
   const after = y=>{
+    if (!STUDENT()){ y.assist = y.assist===true || y.assist==="1"; if (!y.assist){ delete y.assistDays; delete y.assistFee; } }
     const src = y.addRating; delete y.addRating;
     if (!src || y.ratingChange==="" || y.ratingAdded) return;
     const date = y.end||y.start, value = +ratingBefore(s, src, date).value + +y.ratingChange;
@@ -5670,6 +5684,13 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Tournament assistance":"ליווי בטורניר",
+  "Yes — charged per tournament day":"כן — בחיוב לפי יום טורניר",
+  "Days of assistance":"ימי ליווי",
+  "All tournament days":"כל ימי הטורניר",
+  "Leave empty to use every day of the tournament":"השאירו ריק כדי לחייב על כל ימי הטורניר",
+  "Charged once the tournament is played":"יחויב לאחר שהטורניר ייערך",
+  "Added to the balance":"נוסף ליתרה",
   "Save to library":"שמירה בספרייה", "From library":"מהספרייה", "— Write a new one —":"— כתיבת משימה חדשה —", "Give to…":"מתן ל…",
   "Saved to the assignment library":"נשמר בספריית המשימות", "Removed from the library":"הוסר מהספרייה", "Replace":"החלפה",
   "Assignments already given to students stay as they are.":"משימות שכבר ניתנו לתלמידים נשארות כמו שהן.",
@@ -5944,6 +5965,10 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Fee per day \((.+)\)$/, "תשלום ליום ($1)"],
+  [/^Half the usual fee of (.+) · charged once the tournament is played$/, "חצי מהתעריף הרגיל של $1 · יחויב לאחר שהטורניר ייערך"],
+  [/^Tournament assistance: (.+) \((\d+) days?\)$/, "ליווי בטורניר: $1 ($2 ימים)"],
+  [/^Assistance · (\d+) days? × (.+)$/, "ליווי · $1 ימים × $2"],
   [/^Assignment library \((\d+)\)$/, "ספריית משימות ($1)"],
   [/^Saved to the assignment library \(without its games — too large to keep\)$/, "נשמר בספריית המשימות (בלי המשחקים — גדולים מדי לשמירה)"],
   [/^Replace “(.+)” in the library\?$/, "להחליף את ״$1״ בספרייה?"], [/^Delete “(.+)” from the library\?$/, "למחוק את ״$1״ מהספרייה?"],
