@@ -3200,9 +3200,22 @@ async function webStart(){
     return null;
   }
 }
+// The claude.ai copy points everyone to the web app; "Open the old version" still lets the coach in to fetch old data.
+const MOVED_TO = "https://rank-up-chess.netlify.app";
+function movedNotice(){
+  return new Promise(done=>{
+    gate('<h1>Rank Up has moved</h1><p class="sub">The app now has its own address. Open it there and sign in with your email, or create an account if this is your first time.</p>'+
+      '<div class="gate-choices"><a class="btn primary" href="'+MOVED_TO+'" target="_blank" rel="noopener">Open Rank Up</a></div>'+
+      '<p class="small" style="margin:0 0 12px"><bdi class="link-box" dir="ltr">'+MOVED_TO.replace("https://","")+'</bdi></p>'+
+      '<p class="small muted">This old version is no longer updated, and changes made here don\'t reach the new app.</p>'+
+      '<div class="gate-links"><button type="button" class="linkish" id="gOld">Open the old version anyway</button></div>');
+    $("#gOld").onclick = ()=>{ ungate(); done(); };
+  });
+}
 async function initStore(){
   let db = null, userApi = null, userId = null;
   if (WEB){ const w = await webStart(); if (!w) return; db = w.db; userApi = w.user; userId = w.uid; }
+  else if (window.claude && !window.__stayHere) await movedNotice();
   try {
     if (!WEB && window.claude && typeof window.claude.use==="function"){
       [db, userApi] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
@@ -5911,6 +5924,9 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Rank Up has moved":"עולים בדרגה עברה לכתובת חדשה", "Open Rank Up":"פתיחת עולים בדרגה", "Open the old version anyway":"לפתוח בכל זאת את הגרסה הישנה",
+  "The app now has its own address. Open it there and sign in with your email, or create an account if this is your first time.":"לאפליקציה יש עכשיו כתובת משלה. אפשר לפתוח אותה שם ולהתחבר עם המייל, או ליצור חשבון אם זו הפעם הראשונה.",
+  "This old version is no longer updated, and changes made here don't reach the new app.":"הגרסה הישנה כבר לא מתעדכנת, ושינויים שנעשים בה לא מגיעים לאפליקציה החדשה.",
   "All tasks are done, nice job!":"כל המשימות הושלמו, כל הכבוד!", "All assignments are done.":"כל המשימות הושלמו.",
   "Sign out":"התנתקות", "Sign out?":"להתנתק?", "You'll need your email and password to sign in again on this device.":"כדי להתחבר שוב במכשיר הזה יהיה צורך במייל ובסיסמה.",
   "Create your account":"יצירת חשבון", "Reset your password":"איפוס סיסמה", "Choose a new password":"בחירת סיסמה חדשה", "Sign in":"התחברות",
