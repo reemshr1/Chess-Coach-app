@@ -3985,9 +3985,15 @@ async function syncRatings(manual){
   if (!list.length){ if (manual) toast("No active students with a FIDE or ICF ID yet."); return; }
   ratingsBusy = true; if (manual){ toast("Checking ratings… this can take up to two minutes"); render(); }
   try {
-    const ask = sb.functions.invoke("ratings", {body:{fide:list.map(s=>s.fideId).filter(Boolean), icf:list.map(s=>s.icfId).filter(Boolean)}});
+    const body = {fide:list.map(s=>s.fideId).filter(Boolean), icf:list.map(s=>s.icfId).filter(Boolean)};
+    // send a fresh sign-in token: after the app sat in the background the stored one may have expired
+    const token = async renew=>{ let ses = null;
+      try { ses = (await sb.auth.getSession()).data.session; if (renew || (ses && ses.expires_at && ses.expires_at*1000 < Date.now()+60000)) ses = (await sb.auth.refreshSession()).data.session || ses; } catch(e){}
+      return ses ? {Authorization:"Bearer "+ses.access_token} : {}; };
+    const call = async renew=>sb.functions.invoke("ratings", {body, headers:await token(renew)});
     const late = new Promise((_, no)=>setTimeout(()=>no(new Error("timeout")), 160000));
-    const { data, error } = await Promise.race([ask, late]);
+    let { data, error } = await Promise.race([call(false), late]);
+    if (error && error.context && error.context.status===401) ({ data, error } = await Promise.race([call(true), late])); // renew the token and try once more
     if (error) throw error;
     if (!data || !data.fide) throw new Error("bad answer");
     const t = today(), failed = []; let changed = 0;
