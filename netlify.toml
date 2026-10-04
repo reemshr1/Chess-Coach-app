@@ -2,6 +2,10 @@
 [build]
   publish = "."
   command = ""
+  # Each published deploy costs Netlify credits (the free plan has 300 a month, about 15 per deploy),
+  # so only commits whose message contains [release] are published; everything else is skipped.
+  # (Netlify skips the build when this command exits 0.)
+  ignore = "git log -1 --pretty=%B | grep -qF '[release]' && exit 1 || exit 0"
 
 [[headers]]
   for = "/*"
