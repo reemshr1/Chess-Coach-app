@@ -102,12 +102,19 @@ export async function handle(req) {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Use POST" }, 405);
   // Only signed-in users of the app. Checked here (instead of the "Verify JWT" switch, which can reject
-  // tokens from Supabase's newer signing keys) by asking Supabase who the token belongs to.
+  // tokens from Supabase's newer signing keys) by asking Supabase who the token belongs to. The project key
+  // for that question is the one the app itself sent (it's public), else the one Supabase provides.
   const env = globalThis.Deno && Deno.env;
-  const base = env && env.get("SUPABASE_URL"), anon = env && (env.get("SUPABASE_ANON_KEY") || env.get("SUPABASE_PUBLISHABLE_KEY"));
-  if (base && anon) {
-    const who = await fetch(base + "/auth/v1/user", { headers: { Authorization: req.headers.get("authorization") || "", apikey: anon } }).catch(() => null);
-    if (!who || !who.ok) return json({ error: "Sign in to the app to check ratings" }, 401);
+  const base = env && env.get("SUPABASE_URL");
+  if (base) {
+    const keys = [req.headers.get("apikey"), env.get("SUPABASE_ANON_KEY"), env.get("SUPABASE_PUBLISHABLE_KEY")].filter(Boolean);
+    let ok = false; const why = [];
+    for (const k of [...new Set(keys)]) {
+      const who = await fetch(base + "/auth/v1/user", { headers: { Authorization: req.headers.get("authorization") || "", apikey: k } }).catch(e => ({ ok: false, status: 0, text: async () => String(e) }));
+      if (who.ok) { ok = true; break; }
+      why.push("auth answered " + who.status + ": " + (await who.text()).slice(0, 160));
+    }
+    if (!ok) return json({ error: "Sign in to the app to check ratings", detail: why.join(" | ") || "no project key" }, 401);
   }
   let body;
   try { body = await req.json(); } catch { return json({ error: "Send JSON" }, 400); }
