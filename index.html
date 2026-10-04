@@ -3378,8 +3378,12 @@ function renderNav(){
   // Lesson requests from students wait on Today; the badge says how many.
   const nReq = state.students.reduce((a,s)=>a+(s.requests||[]).filter(q=>q.status==="pending").length, 0);
   const badge = k=>k==="dashboard" && nReq ? '<i class="nav-badge" aria-label="'+nReq+' lesson request'+(nReq===1?'':'s')+'">'+nReq+'</i>' : "";
-  const html = NAV.map(([k,l,ic])=>'<a href="#/'+k+'"'+(cur===k?' aria-current="page"':"")+'>'+ic+'<span>'+l+'</span>'+badge(k)+'</a>').join("");
-  $("#nav").innerHTML = html; $("#bnav").innerHTML = html;
+  // the coach's own profile gets its own "My chess" item (and doesn't light up Students)
+  const me = myself(), meOn = !!me && r.page==="student" && r.id===me.id;
+  const item = ([k,l,ic])=>'<a href="#/'+k+'"'+(cur===k && !meOn?' aria-current="page"':"")+'>'+ic+'<span>'+l+'</span>'+badge(k)+'</a>';
+  const html = NAV.map(item).join("");
+  const mine = me ? '<a href="#/student/'+me.id+'/overview"'+(meOn?' aria-current="page"':'')+'>'+ICONS.progress+'<span>My chess</span></a>' : "";
+  $("#nav").innerHTML = html+mine; $("#bnav").innerHTML = html;
 }
 const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["progress","#/progress","Progress",ICONS.progress], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[]),["work",b+"work","Practice",ICONS.practice],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Assignments",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
 document.addEventListener("change", e=>{ if (e.target.id==="childPick" && store && store.pickChild) store.pickChild(e.target.value); });
@@ -3747,14 +3751,14 @@ function addSample(){
 }
 
 /* ---------- dashboard ---------- */
+// The coach's own profile ("Me"): followed like a student, but not part of the coaching business.
+const myself = ()=>state.students.find(s=>s.self && s.active);
 function pDashboard(v){
   const t = today(), wkEnd = addDays(t,7);
-  const active = state.students.filter(s=>s.active);
+  const active = state.students.filter(s=>s.active && !s.self);
   const sessions = [], tours = [], tasks = [];
-  active.forEach(s=>{
-    s.sessions.forEach(x=>{ if (x.status==="planned" && x.date>=t && x.date<=wkEnd) sessions.push({s,x}); });
-    s.tournaments.forEach(x=>{ if (tourAhead(x,t) && tourNext(x,t)<=addDays(t,60)) tours.push({s,x}); });
-  });
+  active.forEach(s=>{ s.sessions.forEach(x=>{ if (x.status==="planned" && x.date>=t && x.date<=wkEnd) sessions.push({s,x}); }); });
+  state.students.filter(s=>s.active).forEach(s=>{ s.tournaments.forEach(x=>{ if (tourAhead(x,t) && tourNext(x,t)<=addDays(t,60)) tours.push({s,x}); }); });
   state.assignments.forEach(a=>{ const s = byId(a.studentId); if (!s || !s.active) return;
     if (a.status==="Submitted") tasks.push({s,x:{title:a.title,category:a.type,due:a.submitted||t,href:"#/assignment/"+a.id,review:true}});
     else if (a.status==="Assigned" && a.due && a.due<=addDays(t,3)) tasks.push({s,x:{title:a.title,category:a.type,due:a.due,href:"#/assignment/"+a.id}});
@@ -3762,10 +3766,10 @@ function pDashboard(v){
   sessions.sort((a,b)=>(a.x.date+(a.x.time||""))<(b.x.date+(b.x.time||""))?-1:1);
   tours.sort((a,b)=>tourNext(a.x,t)<tourNext(b.x,t)?-1:1);
   const tourGroups = []; tours.forEach(({s,x})=>{ const k = tourKey(x)+"|"+tourNext(x,t), g = tourGroups.find(y=>y.k===k); if (g) g.ss.push(s); else tourGroups.push({k, x, ss:[s]}); }); tasks.sort((a,b)=>a.x.due<b.x.due?-1:1);
-  const owing = state.students.map(s=>({s,l:ledger(s)})).filter(o=>o.l.balance>0.009).sort((a,b)=>(b.l.overdue-a.l.overdue)||(b.l.balance-a.l.balance));
+  const owing = state.students.filter(s=>!s.self).map(s=>({s,l:ledger(s)})).filter(o=>o.l.balance>0.009).sort((a,b)=>(b.l.overdue-a.l.overdue)||(b.l.balance-a.l.balance));
   const outstanding = owing.reduce((t,o)=>t+o.l.balance,0);
   const month = t.slice(0,7);
-  const received = state.students.reduce((tt,s)=>tt+s.payments.filter(p=>p.date.slice(0,7)===month).reduce((a,p)=>a+(+p.amount||0),0),0);
+  const received = state.students.filter(s=>!s.self).reduce((tt,s)=>tt+s.payments.filter(p=>p.date.slice(0,7)===month).reduce((a,p)=>a+(+p.amount||0),0),0);
   const hr = new Date().getHours(); const greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
 
   v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+greet+(state.settings.coachName?", "+esc(state.settings.coachName):"")+'</h1></div><div class="row-actions"><button class="btn" id="dPay">Record payment</button><button class="btn primary" id="dSes">Plan session</button></div></div>'+
@@ -3899,7 +3903,7 @@ function attentionPanel(active, t){
 }
 function panel(title, body, action){ return '<section class="panel"><div class="panel-head"><h2>'+esc(title)+'</h2>'+(action||"")+'</div>'+body+'</section>'; }
 function pickStudent(title, then){
-  const act = state.students.filter(s=>s.active);
+  const act = state.students.filter(s=>s.active && !s.self);
   if (!act.length){ toast("Add a student first."); return; }
   openForm({title, submit:"Continue", fields:[{name:"sid",label:"Student",type:"select",options:act.map(s=>[s.id,s.name]),full:true}],
     onSubmit:d=>{ setTimeout(()=>then(byId(d.sid)),0); }});
@@ -4026,18 +4030,18 @@ function ratingProblems(failed, changed, why){
 /* ---------- students list ---------- */
 let studentFilter = {q:"", show:"active"};
 function pStudents(v){
-  v.innerHTML = '<div class="page-head"><div><h1>Students</h1><p class="sub">'+state.students.filter(s=>s.active).length+' active</p></div><div class="row-actions"><input class="search" id="sq" type="search" placeholder="Search by name" value="'+esc(studentFilter.q)+'" aria-label="Search students"><select class="search" id="sf" style="min-width:auto" aria-label="Filter"><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><button class="btn primary" id="sAdd">Add student</button></div></div><section class="panel" style="padding:0" id="slist"></section>'+
+  v.innerHTML = '<div class="page-head"><div><h1>Students</h1><p class="sub">'+state.students.filter(s=>s.active && !s.self).length+' active</p></div><div class="row-actions"><input class="search" id="sq" type="search" placeholder="Search by name" value="'+esc(studentFilter.q)+'" aria-label="Search students"><select class="search" id="sf" style="min-width:auto" aria-label="Filter"><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><button class="btn primary" id="sAdd">Add student</button></div></div><section class="panel" style="padding:0" id="slist"></section>'+
     (WEB ? '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are checked automatically once a month'+(state.settings.ratingsSyncedAt?' — last checked '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. <button type="button" class="btn small ghost" id="ratingsNow"'+(ratingsBusy?' disabled':'')+'>'+(ratingsBusy?'Checking…':'Check now')+'</button></p>'+
       ((state.settings.ratingsFailed||[]).length ? '<p class="small" style="color:var(--warn);margin-top:0">Couldn\'t read last time: '+state.settings.ratingsFailed.map(esc).join(", ")+'</p>' : '') : '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are filled in by Claude'+(state.settings.ratingsSyncedAt?' — last updated '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. To refresh them, ask Claude in the chat: “Update my students’ ratings.”</p>');
   $("#sf").value = studentFilter.show;
   if ($("#ratingsNow")) $("#ratingsNow").onclick = ()=>syncRatings(true);
   const draw = ()=>{
     const q = studentFilter.q.toLowerCase(), t = today();
-    const list = sortBy(state.students,"name").filter(s=>(studentFilter.show==="all"||(studentFilter.show==="active")===s.active) && s.name.toLowerCase().includes(q));
+    const list = sortBy(state.students,"name").sort((a,b)=>(b.self?1:0)-(a.self?1:0)).filter(s=>(studentFilter.show==="all"||(studentFilter.show==="active")===s.active) && s.name.toLowerCase().includes(q));
     $("#slist").innerHTML = list.length ? list.map(s=>{
       const l = ledger(s); const next = sortBy(s.sessions.filter(x=>x.status==="planned"&&x.date>=t),"date")[0];
       const r = sortBy(s.ratings.filter(x=>(x.source||mainSource(s))===mainSource(s)),"date"); const delta = r.length>1 ? r[r.length-1].value - r[r.length-2].value : null;
-      return '<a class="student-row" href="#/student/'+s.id+'"><div class="who"><span class="avatar">'+esc(initials(s.name))+'</span><div style="min-width:0"><div class="name">'+esc(s.name)+'</div><div class="small muted">'+esc(s.level||"")+(s.active?"":" · Archived")+'</div></div></div>'+
+      return '<a class="student-row" href="#/student/'+s.id+'"><div class="who"><span class="avatar">'+esc(initials(s.name))+'</span><div style="min-width:0"><div class="name">'+esc(s.name)+(s.self?' <span class="tag ok">Me</span>':'')+'</div><div class="small muted">'+esc(s.level||"")+(s.active?"":" · Archived")+'</div></div></div>'+
         '<div class="num"><span class="card-l small muted">Rating</span><div style="font-weight:600">'+esc(s.rating||"—")+'</div>'+(delta!==null?'<div class="small" style="color:'+(delta>=0?"var(--ok)":"var(--flag)")+'">'+(delta>=0?"+":"")+delta+'</div>':"")+'</div>'+
         '<div class="small hide-m">'+(next?"Next: "+esc(fmtDate(next.date,{weekday:"short",day:"numeric",month:"short"}))+(next.time?" "+esc(next.time):""):'<span class="muted">No session planned</span>')+'</div>'+
         '<div style="text-align:end" class="num">'+(l.balance>0.009?'<span class="'+(l.overdue?"tag flag":"money-owed")+'">'+money(l.balance)+'</span>':'<span class="small muted">Paid up</span>')+'</div></a>';
@@ -4075,6 +4079,8 @@ function editStudent(s){
       {name:"guardian",label:"Parent / guardian",value:x.guardian},
       {name:"rate",label:"Fee per session ("+state.settings.currency+")",type:"number",value:x.rate,min:0,step:"any"},
       {name:"active",label:"Status",type:"select",options:[["1","Active"],["0","Archived"]],value:x.active?"1":"0"},
+      {name:"self",label:"Who is this?",type:"select",options:[["","A student I coach"],["1","Me — to follow my own chess"]],value:x.self?"1":"",
+        hint:"“Me” leaves you out of lessons, payments, reminders and the student count, and adds “My chess” to the menu"},
       {name:"goals",label:"Goals",type:"textarea",value:x.goals},
       {name:"notes",label:"Coach notes",type:"textarea",value:x.notes},
       {name:"notesShared",label:"Coach notes in the student app",type:"select",options:[["0","Private — only you see them"],["1","Visible to the student"]],value:x.notesShared?"1":"0",full:true}
@@ -4088,11 +4094,12 @@ function editStudent(s){
       if (d.idStatus==="has" && !fid && !iid) return "Enter the player's FIDE ID or Israeli Chess Federation ID, or choose “No ID yet”.";
       if (fid && !/^\d{3,10}$/.test(fid)) return "The FIDE ID should be digits only, like 2807681.";
       if (iid && !/^\d{1,10}$/.test(iid)) return "The ICF ID should be digits only, like 20256.";
+      if (d.self==="1" && state.students.some(y=>y.id!==x.id && y.self)) return "Another profile is already marked as you.";
       if (fid && state.students.some(y=>y.id!==x.id && y.fideId===fid)) return "Another student already has FIDE ID "+fid+".";
       if (iid && state.students.some(y=>y.id!==x.id && y.icfId===iid)) return "Another student already has ICF ID "+iid+".";
       const oldRating = x.rating, oldRate = +x.rate||0;
       if (fid!==x.fideId) x.fide = {}; if (iid!==x.icfId) x.icf = {};
-      Object.assign(x,{name:d.name,fideId:fid,icfId:iid,noId:d.idStatus==="none"&&!fid&&!iid,rating:d.rating,ratingType:d.ratingType,level:d.level,birthYear:d.birthYear,contact:d.contact,guardian:d.guardian,rate:d.rate===""?0:d.rate,active:d.active==="1",goals:d.goals,notes:d.notes,notesShared:d.notesShared==="1"});
+      Object.assign(x,{name:d.name,fideId:fid,icfId:iid,noId:d.idStatus==="none"&&!fid&&!iid,rating:d.rating,ratingType:d.ratingType,level:d.level,birthYear:d.birthYear,contact:d.contact,guardian:d.guardian,rate:d.rate===""?0:d.rate,active:d.active==="1",self:d.self==="1",goals:d.goals,notes:d.notes,notesShared:d.notesShared==="1"});
       if (d.rating!=="" && d.rating!==oldRating && d.ratingType!=="Unrated") addRating(x, mainSource(x), d.rating);
       // A new fee applies to weekly slots and upcoming planned sessions that were on the old fee.
       // Sessions and slots with a fee of their own, and anything already done, keep their price.
@@ -4116,7 +4123,7 @@ function pStudent(v, r){
     (s.fideId?'<a class="btn small" href="'+fideUrl(s.fideId)+'" target="_blank" rel="noopener">FIDE '+esc(s.fideId)+' ↗</a>':'')+
     (s.icfId?'<a class="btn small" href="'+icfUrl(s.icfId)+'" target="_blank" rel="noopener">ICF '+esc(s.icfId)+' ↗</a>':'')+
     '<button class="btn" id="stEdit">Edit profile</button></div>'+
-    '<nav class="tabs" aria-label="Student sections">'+TABS.map(([k,lab])=>'<a href="#/student/'+s.id+'/'+k+'"'+(r.tab===k||(k==="tournaments"&&r.tab==="games")||(k==="work"&&r.tab==="studied")?' aria-current="page"':"")+'>'+lab+'</a>').join("")+'</nav><div id="tab"></div>';
+    '<nav class="tabs" aria-label="Student sections">'+TABS.filter(([k])=>!(s.self && k==="payments")).map(([k,lab])=>'<a href="#/student/'+s.id+'/'+k+'"'+(r.tab===k||(k==="tournaments"&&r.tab==="games")||(k==="work"&&r.tab==="studied")?' aria-current="page"':"")+'>'+lab+'</a>').join("")+'</nav><div id="tab"></div>';
   $("#stEdit").onclick = ()=>editStudent(s);
   const T = {overview:tOverview, sessions:tSessions, work:tWork, assignments:tAssignments, books:tBooks, games:tGames, studied:tStudied, repertoire:tRepertoire, tournaments:tTournaments, payments:tPayments};
   (T[r.tab]||tOverview)($("#tab"), s);
@@ -4189,8 +4196,7 @@ function tOverview(el, s){
       '<h3 class="subh">Coach notes '+(s.notesShared?'<span class="tag ok">Visible to student</span>':'<span class="tag">Private</span>')+'</h3>'+(s.notes?'<p class="pre" style="margin:0">'+esc(s.notes)+'</p>':'<p class="empty" style="padding:0">No notes yet.</p>')+
       (s.notes?'<button class="btn small ghost" data-a="shareNotes" style="margin-top:8px">'+(s.notesShared?"Make private":"Show to student")+'</button>':''),'<button class="btn small" data-a="edit">Edit</button>')+
     '</div>'+
-    appPanel(s)+
-    parentPanel(s)+
+    (s.self ? '' : appPanel(s)+parentPanel(s))+
     '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Details</h2></div><dl class="kv">'+
       '<dt>Sessions done</dt><dd class="num">'+done.length+' ('+hours.toFixed(1)+' h)</dd><dt>Last session</dt><dd>'+(last?esc(fmtDate(last.date))+' — '+esc(last.topics||""):"—")+'</dd>'+
       '<dt>Next tournament</dt><dd>'+(nextT?esc(nextT.name)+", "+esc(fmtShort(tourNext(nextT,t))):"—")+'</dd>'+
@@ -5692,7 +5698,7 @@ function editSlot(s, sl, preset){
 
 // Plan a one-off or weekly session from the Schedule or the dashboard.
 function planSession(preset){
-  const act = sortBy(state.students.filter(s=>s.active),"name");
+  const act = sortBy(state.students.filter(s=>s.active && !s.self),"name");
   if (!act.length){ toast("Add a student first."); return; }
   const p = preset||{}; const ack = {};
   const first = byId(p.sid) || act[0];
@@ -5817,7 +5823,7 @@ function pSchedule(v){
   const t = today();
   if (!schedWeek) schedWeek = weekStartOf(t);
   const unmarked = [], st = STUDENT(), me = st && state.students[0];
-  if (!st) state.students.filter(s=>s.active).forEach(s=>s.sessions.forEach(x=>{ if (x.status==="planned" && x.date<t) unmarked.push({s,x}); }));
+  if (!st) state.students.filter(s=>s.active && !s.self).forEach(s=>s.sessions.forEach(x=>{ if (x.status==="planned" && x.date<t) unmarked.push({s,x}); }));
   // On a phone the week view shows PHONE_DAYS days at a time, starting today, instead of a sideways-scrolling week.
   const phone = isPhone(), n = phone ? PHONE_DAYS : 7;
   if (!schedDay) schedDay = t;
@@ -5946,10 +5952,10 @@ function listView(items, t){
 
 /* ---------- payments overview ---------- */
 function pPayments(v){
-  const rows = state.students.map(s=>({s,l:ledger(s)})).filter(o=>o.s.active||o.l.balance>0.009).sort((a,b)=>(b.l.overdue-a.l.overdue)||(b.l.balance-a.l.balance));
+  const rows = state.students.filter(s=>!s.self).map(s=>({s,l:ledger(s)})).filter(o=>o.s.active||o.l.balance>0.009).sort((a,b)=>(b.l.overdue-a.l.overdue)||(b.l.balance-a.l.balance));
   const out = rows.reduce((a,o)=>a+Math.max(0,o.l.balance),0);
   const month = today().slice(0,7); const allPays = [];
-  state.students.forEach(s=>s.payments.forEach(p=>allPays.push({s,p})));
+  state.students.filter(s=>!s.self).forEach(s=>s.payments.forEach(p=>allPays.push({s,p})));
   allPays.sort((a,b)=>a.p.date<b.p.date?1:-1);
   const rec = allPays.filter(x=>x.p.date.slice(0,7)===month).reduce((a,x)=>a+(+x.p.amount||0),0);
   const overdueN = rows.filter(o=>o.l.overdue).length;
@@ -6046,6 +6052,9 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Who is this?":"מי זה?", "A student I coach":"תלמיד/ה שאני מאמן/ת", "Me — to follow my own chess":"אני — כדי לעקוב אחרי השחמט שלי", "My chess":"השחמט שלי", "Me":"אני",
+  "“Me” leaves you out of lessons, payments, reminders and the student count, and adds “My chess” to the menu":"„אני” מוציא אותך משיעורים, תשלומים, תזכורות ומספר התלמידים, ומוסיף „השחמט שלי” לתפריט",
+  "Another profile is already marked as you.":"פרופיל אחר כבר מסומן בתור את/ה.",
   "Is it for a lesson?":"האם התשלום הוא על שיעור?", "No — towards the balance":"לא — על חשבון היתרה", "Paid":"שולם", "Paid in advance":"שולם מראש",
   "Choose the lesson to mark it as paid. Its price is filled in.":"בחירת השיעור תסמן אותו כמשולם. המחיר שלו ימולא אוטומטית.", "No unpaid lessons right now.":"אין כרגע שיעורים שלא שולמו.",
   "A lesson that's no longer listed":"שיעור שכבר לא מופיע ברשימה",
