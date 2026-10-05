@@ -6,7 +6,7 @@ parents.
 
 The whole app lives in `index.html` and runs in two places:
 
-- **On the web** (Netlify + Supabase). Everyone signs in with an email and a
+- **On the web** (GitHub Pages + Supabase), at https://reemshr1.github.io/Chess-Coach-app/. Everyone signs in with an email and a
   password. The data is stored in Supabase, in one `docs` table with access
   rules: the coach can do everything; students and parents read only their own
   pages and can only send messages to the coach. The first account to sign in
@@ -22,5 +22,8 @@ The whole app lives in `index.html` and runs in two places:
 - `vendor/supabase.js` — the Supabase browser library (supabase-js 2.117.2, MIT).
 - `manifest.webmanifest`, `sw.js`, `icons/` — let phones install the app from
   the browser ("Add to Home Screen").
-- `netlify.toml` — Netlify settings: the repository is published as is, with
-  no build step.
+- Publishing: GitHub Pages serves the `live` branch. Work happens on other
+  branches; merging into `live` publishes it. `.nojekyll` makes Pages serve the
+  files exactly as they are.
+- `netlify.toml` — the earlier Netlify hosting (rank-up-chess.netlify.app),
+  which now shows a "moved" notice.

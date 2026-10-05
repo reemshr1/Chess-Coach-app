@@ -3235,13 +3235,13 @@ async function webStart(){
     return null;
   }
 }
-// The claude.ai copy points everyone to the web app; "Open the old version" still lets the coach in to fetch old data.
-const MOVED_TO = "https://rank-up-chess.netlify.app";
+// The old Netlify address and the claude.ai copy point everyone to the current address; "Open the old version" still lets the coach in to fetch old data.
+const MOVED_TO = "https://reemshr1.github.io/Chess-Coach-app/";
 function movedNotice(){
   return new Promise(done=>{
     gate('<h1>Rank Up has moved</h1><p class="sub">The app now has its own address. Open it there and sign in with your email, or create an account if this is your first time.</p>'+
       '<div class="gate-choices"><a class="btn primary" href="'+MOVED_TO+'" target="_blank" rel="noopener">Open Rank Up</a></div>'+
-      '<p class="small" style="margin:0 0 12px"><bdi class="link-box" dir="ltr">'+MOVED_TO.replace("https://","")+'</bdi></p>'+
+      '<p class="small" style="margin:0 0 12px"><bdi class="link-box" dir="ltr">'+MOVED_TO.replace("https://","").replace(/\/$/,"")+'</bdi></p>'+
       '<p class="small muted">This old version is no longer updated, and changes made here don\'t reach the new app.</p>'+
       '<div class="gate-links"><button type="button" class="linkish" id="gOld">Open the old version anyway</button></div>');
     $("#gOld").onclick = ()=>{ ungate(); done(); };
@@ -3249,6 +3249,7 @@ function movedNotice(){
 }
 async function initStore(){
   let db = null, userApi = null, userId = null;
+  if (WEB && /\.netlify\.app$/.test(location.hostname) && !window.__stayHere) await movedNotice(); // the app moved to GitHub Pages
   if (WEB){ const w = await webStart(); if (!w) return; db = w.db; userApi = w.user; userId = w.uid; }
   else if (window.claude && !window.__stayHere) await movedNotice();
   try {
