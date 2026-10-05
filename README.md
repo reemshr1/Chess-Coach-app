@@ -6,7 +6,7 @@ parents.
 
 The whole app lives in `index.html` and runs in two places:
 
-- **On the web** (GitHub Pages + Supabase), at https://reemshr1.github.io/Chess-Coach-app/. Everyone signs in with an email and a
+- **On the web** (GitHub Pages + Supabase), at https://reemshr1.github.io/Rank-Up-Chess/. Everyone signs in with an email and a
   password. The data is stored in Supabase, in one `docs` table with access
   rules: the coach can do everything; students and parents read only their own
   pages and can only send messages to the coach. The first account to sign in
