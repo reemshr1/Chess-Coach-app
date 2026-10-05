@@ -2743,7 +2743,7 @@ const familyOf = x=>{ const sid = typeof x==="string" ? x : x && x.id; return fa
 // What a parent sees of the money: the balance and a statement, never other students or private notes.
 function payView(s){
   const l = ledger(s), from = addDays(today(), -730);
-  const rows = l.charges.filter(c=>c.date>=from).map(c=>({date:c.date, label:c.label, charge:c.amount}))
+  const rows = l.charges.filter(c=>c.date>=from).map(c=>Object.assign({date:c.date, label:c.label, charge:c.amount}, c.sessionId ? {sessionId:c.sessionId, lessonPaid:lessonPaid(s, s.sessions.find(x=>x.id===c.sessionId)||{})} : {}))
     .concat(s.payments.filter(p=>p.date>=from).map(p=>({date:p.date, label:payLabel(s,p), paid:+p.amount||0})))
     .sort((a,b)=>a.date<b.date?1:-1);
   // booked tournament assistance, not charged yet (it goes on the statement once the tournament is played)
@@ -3522,21 +3522,25 @@ function pProgress(v, s){
 }
 // The parent's money page: balance and statement for the child shown.
 // The parent's reported payments: waiting for the coach, or not received.
+// The coach's name in what parents read about payments, so they know who confirms.
+const coachCalled = ()=>(state.settings.coachName||"").trim() || "your coach";
+const pendingReports = s=>(s.payReports||[]).filter(r=>r.status==="pending");
 function payReportsBox(s){
-  const p = s.pay||{}, m = n=>(p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
-  const rs = sortBy((s.payReports||[]).filter(r=>r.status!=="confirmed"),"date",-1);
-  return panel("Paid already?", '<p class="small muted" style="margin:0 0 10px">After you pay, let your coach know here. It shows in your statement once your coach confirms it.</p>'+
+  const p = s.pay||{}, m = n=>(p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE()), c = coachCalled();
+  const rs = sortBy((s.payReports||[]).filter(r=>r.status!=="confirmed"),"date",-1), waiting = pendingReports(s).length;
+  return panel("Paid already?", '<p class="small muted" style="margin:0 0 10px">After you pay, let '+esc(c)+' know here. It shows in your statement once '+esc(c)+' confirms it.</p>'+
     (rs.length ? '<ul class="list">'+rs.map(r=>'<li><div class="main"><div class="title num">'+m(r.amount)+'</div><div class="small muted">'+esc(fmtDate(r.date))+(r.method?' · '+esc(r.method):'')+(r.note?' · “'+esc(r.note)+'”':'')+'</div></div>'+
-      (r.status==="declined" ? '<span class="tag flag">Not received — please check with your coach</span>' : '<span class="tag warn">Waiting for your coach to confirm</span>')+'</li>').join("")+'</ul>' : ''),
-    '<button type="button" class="btn small primary" id="iPaid">I\'ve made a payment</button>');
+      (r.status==="declined" ? '<span class="tag flag">'+esc("Not received — please check with "+c)+'</span>' : '<span class="tag warn">'+esc("Waiting for "+c+" to confirm")+'</span>')+'</li>').join("")+'</ul>' : '')+
+    (waiting ? '<p class="small" style="margin:10px 0 0">Paid something else as well? <button type="button" class="linkish" id="iPaid">Report another payment</button></p>' : ''),
+    waiting ? '' : '<button type="button" class="btn small primary" id="iPaid">I\'ve made a payment</button>');
 }
 // A parent tells the coach about a payment: what it was for (a lesson, or the balance), how much, when, how.
 document.addEventListener("click", e=>{ if (e.target.closest("#iPaid") && PARENT() && state.students[0]) reportPayment(state.students[0]); });
 function reportPayment(s){
-  const p = s.pay||{}, open = p.open||[], m = n=>(p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
+  const p = s.pay||{}, held = new Set(pendingReports(s).map(r=>r.sessionId).filter(Boolean)), open = (p.open||[]).filter(x=>!held.has(x.id)), m = n=>(p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
   const when = x=>fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"})+(x.time?" "+x.time:"");
   const opts = [["","Towards the balance"], ...open.map(x=>[x.id, (x.upcoming?"Upcoming lesson on ":"Lesson on ")+when(x)+" · "+m(x.left)])];
-  openForm({title:"Tell your coach about a payment", submit:"Send", parentOk:true, fields:[
+  openForm({title:"Tell "+coachCalled()+" about a payment", submit:"Send", parentOk:true, fields:[
     {name:"sessionId",label:"What was it for?",type:"select",options:opts,value:open.some(x=>!x.upcoming)?open.find(x=>!x.upcoming).id:"",full:true,
       sets:v=>{ const x = open.find(y=>y.id===v); return x ? {amount:x.left} : {}; }},
     {name:"amount",label:"Amount ("+(p.currency||"")+")",type:"number",min:0,step:"any",required:true,value:(()=>{ const x = open.find(y=>!y.upcoming); return x ? x.left : (p.balance>0 ? Math.round(p.balance*100)/100 : (p.rate||"")); })()},
@@ -3547,8 +3551,17 @@ function reportPayment(s){
       if (!(+d.amount>0)) return "Enter the amount you paid.";
       if (!d.date) return "Enter the date you paid.";
       const op = {type:"payment.report", item:{id:"pr-"+uid(), date:d.date, amount:+d.amount, method:d.method, note:d.note, sessionId:d.sessionId}};
-      store.send(op); applyOp(s, op, false); render(); toast("Sent — your coach will confirm it");
+      store.send(op); applyOp(s, op, false); render();
+      setTimeout(()=>{ const m2 = $("#modal"), c = coachCalled();
+        m2.innerHTML = '<div class="modal-form"><header><h2>Sent!</h2></header><div style="padding:8px 20px"><p style="margin-top:0">'+esc(c+" will confirm the payment. Until then it shows as waiting (yellow).")+'</p></div><footer><button type="button" class="btn primary" id="psOk">OK</button></footer></div>';
+        $("#psOk").onclick = ()=>m2.close(); m2.showModal(); }, 0);
     }});
+}
+// A lesson's payment state for the parent: paid (green), payment sent and waiting (yellow), unpaid (red).
+function lessonPayTag(s, r){
+  if (r.lessonPaid) return '<span class="tag ok">Paid</span>';
+  if (pendingReports(s).some(x=>x.sessionId===r.sessionId)) return '<span class="tag warn">'+esc("Waiting for "+coachCalled())+'</span>';
+  return '<span class="tag flag">Unpaid</span>';
 }
 function pFamilyPay(v, s){
   const p = s.pay; const m = n=>(p && p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
@@ -3563,7 +3576,7 @@ function pFamilyPay(v, s){
     payReportsBox(s)+
     (p.howToPay?panel("How to pay", '<p class="pre" style="margin:0">'+esc(p.howToPay)+'</p>'):'')+
     panel("Statement", p.rows.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Charge</th><th class="r">Paid</th></tr></thead><tbody>'+
-      p.rows.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+'</td><td>'+esc(r.label)+'</td><td class="r num">'+(r.charge?m(r.charge):"")+'</td><td class="r num">'+(r.paid?m(r.paid):"")+'</td></tr>').join("")+'</tbody></table></div>'+
+      p.rows.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+'</td><td>'+esc(r.label)+(r.sessionId ? ' '+lessonPayTag(s, r) : '')+'</td><td class="r num">'+(r.charge?m(r.charge):"")+'</td><td class="r num">'+(r.paid?m(r.paid):"")+'</td></tr>').join("")+'</tbody></table></div>'+
       '<p class="small muted" style="margin:8px 0 0">The last two years. Lessons are charged once they have taken place; cancelled lessons aren\'t charged.</p>' : '<p class="empty">No charges or payments yet.</p>');
 }
 function pHome(v, s){
@@ -3591,8 +3604,9 @@ function pHome(v, s){
         (p.upcoming && p.upcoming.length ? '<p class="small" style="margin:6px 0 0"><b>Not charged yet:</b> '+p.upcoming.map(r=>'<span>'+esc(r.label)+'</span> · <span class="num">'+m(r.amount)+'</span>').join("<br>")+'</p>' : '')+
         '<p class="small muted" style="margin:6px 0 0">'+(p.lastPay?'Last payment '+esc(fmtShort(p.lastPay.date))+' · '+m(p.lastPay.amount):'No payments yet')+'</p>'+
         (p.balance>0.009 && p.howToPay?'<p class="small pre" style="margin:8px 0 0"><b>How to pay:</b> '+esc(p.howToPay)+'</p>':'')+
-        ((s.payReports||[]).some(r=>r.status==="pending")?'<p class="small" style="margin:6px 0 0"><span class="tag warn">A payment you reported is waiting for your coach to confirm</span></p>':''); })(),
-      '<div class="row-actions"><button type="button" class="btn small" id="iPaid">I\'ve paid</button><a class="btn small" href="#/payments">Statement</a></div>') : '')+
+        (pendingReports(s).length ? '<p class="small" style="margin:10px 0 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span class="tag warn">Payment sent</span><bdi class="num">'+esc((p.currency||"")+pendingReports(s).reduce((a,r)=>a+(+r.amount||0),0).toLocaleString(LOCALE()))+'</bdi><span class="muted">'+esc("Waiting for "+coachCalled()+" to confirm")+'</span></p>' : ''); })(),
+      '<div class="row-actions">'+(pendingReports(s).length ? ''
+        : (s.pay.balance>0.009 || (s.pay.open||[]).some(x=>!x.upcoming)) ? '<button type="button" class="btn small" id="iPaid">I\'ve paid</button>' : '')+'<a class="btn small" href="#/payments">Statement</a></div>') : '')+
     updatesPanel(s)+
     panel("Coming up", (lessons.length||tours.length||pend.length) ? '<ul class="list">'+
         lessons.map(x=>{ const pc = pendingChange(s, x); return '<li><div class="main"><div class="title">Lesson'+(needsAnswer(s, x)?' <span class="tag warn">Answer needed</span>':'')+(pc?' <span class="tag warn">'+(pc.kind==="cancel"?"Cancel requested":"Move requested")+'</span>':'')+'</div><div class="small muted">'+[x.format, x.duration?x.duration+" min":"", x.topics].filter(Boolean).map(esc).join(" · ")+'</div>'+
@@ -3900,7 +3914,11 @@ function payReportsPanel(){
   const when = x=>fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"})+(x.time?" "+x.time:"");
   return '<section class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>Payments reported by parents ('+list.length+')</h2></div><ul class="list">'+
     list.map(({s,r})=>{ const les = r.sessionId && s.sessions.find(x=>x.id===r.sessionId);
-      return '<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a> · <span class="num">'+money(r.amount)+'</span></div><div class="small muted">'+
+      // the same lesson already paid or reported, or the same amount on the same day
+      const earlier = (s.payReports||[]).filter(x=>x!==r && x.status!=="declined" && (x.reported||"")+x.id < (r.reported||"")+r.id);
+      const dup = (les && lessonPaid(s, les)) || earlier.some(x=>(r.sessionId && x.sessionId===r.sessionId) || (+x.amount===+r.amount && x.date===r.date))
+        || s.payments.some(p=>+p.amount===+r.amount && p.date===r.date && !earlier.some(x=>x.paymentId===p.id) && !(s.payReports||[]).some(x=>x.paymentId===p.id));
+      return '<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a> · <span class="num">'+money(r.amount)+'</span>'+(dup?' <span class="tag flag">Possible duplicate</span>':'')+'</div><div class="small muted">'+
         esc(fmtDate(r.date))+(r.method?' · '+esc(r.method):'')+' · '+(les?esc("for the lesson on "+when(les)):esc("towards the balance"))+(r.note?' · “'+esc(r.note)+'”':'')+'</div></div>'+
         '<div class="row-actions"><button class="btn small primary" data-a="prOk" data-id="'+esc(s.id+"|"+r.id)+'">Confirm</button><button class="btn small ghost" data-a="prNo" data-id="'+esc(s.id+"|"+r.id)+'">Not received</button></div></li>'; }).join("")+
     '</ul><p class="small muted" style="margin:8px 0 0">Confirm adds the payment to the ledger'+'. Nothing is recorded until you confirm.</p></section>';
@@ -6235,6 +6253,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
   "This month:":"החודש:", "so far":"עד עכשיו",
   "Add club class":"הוספת חוג במועדון", "Edit club class":"עריכת חוג במועדון", "Club class":"חוג במועדון", "Club work":"עבודה במועדון", "Options":"אפשרויות",
   "e.g. Club juniors group":"למשל: קבוצת הצעירים במועדון", "e.g. the local chess club":"למשל: מועדון השחמט המקומי", "When":"מתי", "Every week":"כל שבוע", "One date only":"תאריך אחד בלבד",
@@ -6595,9 +6614,17 @@ const heAgo = x=>{ if (x==="today") return "היום"; if (x==="yesterday") retu
   let m = /^(\d+) days? ago$/.exec(x); if (m) return +m[1]===1 ? "לפני יום" : "לפני "+m[1]+" ימים";
   m = /^(\d+) months? ago$/.exec(x); if (m) return +m[1]===1 ? "לפני חודש" : "לפני "+m[1]+" חודשים"; return x; };
 const heT = x=>trCore(x) ?? x;
+const heCoach = (c, bare)=>c==="your coach" ? (bare ? "המאמן" : "המאמן") : c;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^After you pay, let (.+) know here\. It shows in your statement once \1 confirms it\.$/, (m,c)=>"אחרי התשלום אפשר לעדכן כאן את "+heCoach(c)+". התשלום יופיע בפירוט אחרי שיאושר."],
+  [/^Not received — please check with (.+)$/, (m,c)=>"לא התקבל — כדאי לבדוק עם "+heCoach(c)],
+  [/^Waiting for (.+) to confirm$/, (m,c)=>"ממתין לאישור של "+heCoach(c)],
+  [/^Waiting for (.+)$/, (m,c)=>"ממתין ל"+(c==="your coach"?"מאמן":"־"+c)],
+  [/^Payment sent · waiting for (.+)$/, (m,c)=>"התשלום נשלח · ממתין ל"+(c==="your coach"?"מאמן":"־"+c)],
+  [/^Tell (.+) about a payment$/, (m,c)=>"עדכון "+heCoach(c)+" על תשלום"],
+  [/^(.+) will confirm the payment\. Until then it shows as waiting \(yellow\)\.$/, (m,c)=>"התשלום יאושר על ידי "+heCoach(c)+". עד אז הוא יופיע כממתין (בצהוב)."],
   [/^\(whole month: (.+)\)$/, "(כל החודש: $1)"],
   [/^Club classes \((\d+)\)$/, "חוגים במועדון ($1)"], [/^Hourly rate \((.+)\)$/, "תעריף לשעה ($1)"],
   [/^Your club class (.+) (\d\d:\d\d–\d\d:\d\d)$/, "החוג שלך במועדון $1 $2"], [/^Cancelled for (.+)$/, (m,d)=>"בוטל ל־"+heT(d)],
