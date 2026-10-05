@@ -2328,6 +2328,7 @@ const TACTICS_SITES = {
   "Chess.com": [["Puzzles (rated)","rated"],["Puzzle Rush – 3 min","score"],["Puzzle Rush – 5 min","score"],["Puzzle Rush – Survival","score"],["Puzzle Battle","score"],["Daily Puzzle","count"],["Custom puzzles (by theme)","count"]],
   "Lichess": [["Puzzles (rated)","rated"],["Puzzle Themes","count"],["Puzzle Streak","score"],["Puzzle Storm","score"],["Puzzle Racer","score"]],
   "ChessTempo": [["Tactics (rated)","rated"],["Custom problem set","count"]],
+  "Listudy": [["Tactics","count"],["Blind tactics","count"],["Endgame practice","count"],["Spaced repetition","count"]],
   "Chessable": [["Tactics course","count"]],
   "Book / workbook": [["Exercises","count"]],
   "Other": [["Exercises","count"]]
@@ -2747,7 +2748,14 @@ function payView(s){
   const upcoming = sortBy((s.tournaments||[]).filter(x=>tourAhead(x, today())).map(x=>{ const a = assistCharge(x);
     return a && {date:x.start, end:x.end||"", label:"Tournament assistance: "+x.name+" ("+a.days+" day"+(a.days===1?"":"s")+")", amount:a.total}; }).filter(Boolean), "date");
   return {currency:state.settings.currency||"", howToPay:state.settings.payInfo||"", balance:l.balance, charged:l.charged, paid:l.paid, overdue:l.overdue, age:l.age,
-    rate:+s.rate||0, lastPay:l.lastPay?{date:l.lastPay.date, amount:+l.lastPay.amount||0}:null, rows, upcoming};
+    rate:+s.rate||0, lastPay:l.lastPay?{date:l.lastPay.date, amount:+l.lastPay.amount||0}:null, rows, upcoming, open:openLessons(s)};
+}
+// Lessons a parent can say they paid for: done ones not yet paid (newest first), then upcoming ones.
+function openLessons(s, keepId){
+  const t = today(), open = y=>y.id===keepId || !lessonPaid(s, y), left = y=>Math.max(0, Math.round((lessonFee(s,y)-paidFor(s,y))*100)/100);
+  const done = sortBy(s.sessions.filter(y=>y.status==="done" && lessonFee(s,y)>0 && open(y)),"date",-1).slice(0,15);
+  const ahead = sortBy(s.sessions.filter(y=>y.status==="planned" && y.date>=t && open(y)),"date").slice(0,5);
+  return [...done, ...ahead].map(y=>({id:y.id, date:y.date, time:y.time||"", upcoming:y.status==="planned", left:left(y)}));
 }
 // Every document a parent's app reads: the family, and for each child the same records a student sees plus money.
 function familyDocs(f){
@@ -2755,7 +2763,7 @@ function familyDocs(f){
   out.family = stampView({name:f.name, children:kids.map(k=>({id:k.id, name:k.name})), coachName:state.settings.coachName||"", weekStart:state.settings.weekStart||0});
   kids.forEach(k=>{
     const parts = splitStudent(studentView(k));
-    out["ch-"+k.id] = Object.assign(parts.main, {pay:payView(k)});
+    out["ch-"+k.id] = Object.assign(parts.main, {pay:payView(k), payReports:(k.payReports||[]).filter(r=>r.status==="pending" || daysBetween(r.decided||r.reported||today(), today())<=30)});
     Object.keys(parts.logs).forEach(id=>{ out[id] = parts.logs[id]; });
     state.assignments.filter(a=>a.studentId===k.id).forEach(a=>{ out[a.id] = a; });
     state.games.filter(g=>g.studentId===k.id).forEach(g=>{ out[g.id] = g; });
@@ -2842,6 +2850,13 @@ function applyOp(s, op, coachSide){
     r.needsAnswer = false; r.answer = op.choice; r.answered = (op.at||"").slice(0,10)||today();
     return true;
   }
+  if (t==="payment.report"){
+    if (!it || !it.id || !(+it.amount>0) || !/^\d{4}-\d{2}-\d{2}$/.test(it.date||"")) return false;
+    const L = list("payReports"); if (L.some(r=>r.id===it.id)) return true;
+    const les = it.sessionId && s.sessions.find(x=>x.id===it.sessionId);
+    L.push({id:it.id, date:it.date, amount:+it.amount, method:String(it.method||"").slice(0,40), note:String(it.note||"").slice(0,300), sessionId:les?les.id:"", status:"pending", reported:(op.at||"").slice(0,10)||today()});
+    return true;
+  }
   if (t==="request.cancel"){ const r = list("requests").find(x=>x.id===op.id); if (r && r.status==="pending") r.status = "cancelled"; return true; }
   return false;
 }
@@ -2878,7 +2893,7 @@ function makePortal(db){
     clearTimeout(timers[sid]); timers[sid] = setTimeout(()=>{ sync(byId(sid)).catch(()=>{}); }, 900);
   }
   // owner(): the student or family this account belongs to now; childOf(o, op): which student an op is about.
-  const PARENT_OPS = ["request","request.cancel","move.answer"];
+  const PARENT_OPS = ["request","request.cancel","move.answer","payment.report"];
   function watchInbox(uid){
     if (subs[uid]) return;
     subs[uid] = db.collection("portal/"+uid+"/inbox").onSnapshot(snap=>{
@@ -2891,8 +2906,13 @@ function makePortal(db){
       fresh.forEach(o=>{ taken.add(o._id);
         try {
           // a parent may only ask about lessons, and only for a child in their family
-          const who = st || ((fam.studentIds||[]).includes(o.sid) && PARENT_OPS.includes(o.type) && byId(o.sid));
-          if (who){ if (fam && o.item) o.item.by = "parent"; if (applyOp(who, o, true)) touched.add(who); }
+          const who = st ? (o.type==="payment.report" ? null : st) : ((fam.studentIds||[]).includes(o.sid) && PARENT_OPS.includes(o.type) && byId(o.sid)); // payments are reported by parents only
+          if (who && fam && o.item) o.item.by = "parent";
+          const ok = who && applyOp(who, o, true);
+          if (ok) touched.add(who);
+          // a lesson request or answer that can't be applied stays in the inbox and shows on Today with the reason
+          if (!ok && (["request","move.answer"].includes(o.type) || (fam && !who))){
+            issue("op:"+o._id, {who:(st||fam).name, what:"Couldn't take in "+(OP_LABEL[o.type]||"a change"), err:askedFor(o)+whyNotApplied(who, o), uid, opId:o._id}); return; }
           done.push(o); clear("op:"+o._id);
         } catch(e){
           // kept in the inbox and shown on Today, never dropped silently
@@ -3377,7 +3397,7 @@ function renderNav(){
   }
   const cur = r.page==="student" ? "students" : r.page==="assignment" ? "assignments" : r.page;
   // Lesson requests from students wait on Today; the badge says how many.
-  const nReq = state.students.reduce((a,s)=>a+(s.requests||[]).filter(q=>q.status==="pending").length, 0);
+  const nReq = state.students.reduce((a,s)=>a+(s.requests||[]).filter(q=>q.status==="pending").length+(s.payReports||[]).filter(q=>q.status==="pending").length, 0);
   const badge = k=>k==="dashboard" && nReq ? '<i class="nav-badge" aria-label="'+nReq+' lesson request'+(nReq===1?'':'s')+'">'+nReq+'</i>' : "";
   // the coach's own profile gets its own "My chess" item (and doesn't light up Students)
   const me = myself(), meOn = !!me && r.page==="student" && r.id===me.id;
@@ -3498,6 +3518,35 @@ function pProgress(v, s){
   bindActions(v,{ pp:id=>{ progPeriod = +id; render(); }, ps:id=>{ progSource = id; render(); } });
 }
 // The parent's money page: balance and statement for the child shown.
+// The parent's reported payments: waiting for the coach, or not received.
+function payReportsBox(s){
+  const p = s.pay||{}, m = n=>(p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
+  const rs = sortBy((s.payReports||[]).filter(r=>r.status!=="confirmed"),"date",-1);
+  return panel("Paid already?", '<p class="small muted" style="margin:0 0 10px">After you pay, let your coach know here. It shows in your statement once your coach confirms it.</p>'+
+    (rs.length ? '<ul class="list">'+rs.map(r=>'<li><div class="main"><div class="title num">'+m(r.amount)+'</div><div class="small muted">'+esc(fmtDate(r.date))+(r.method?' · '+esc(r.method):'')+(r.note?' · “'+esc(r.note)+'”':'')+'</div></div>'+
+      (r.status==="declined" ? '<span class="tag flag">Not received — please check with your coach</span>' : '<span class="tag warn">Waiting for your coach to confirm</span>')+'</li>').join("")+'</ul>' : ''),
+    '<button type="button" class="btn small primary" id="iPaid">I\'ve made a payment</button>');
+}
+// A parent tells the coach about a payment: what it was for (a lesson, or the balance), how much, when, how.
+document.addEventListener("click", e=>{ if (e.target.closest("#iPaid") && PARENT() && state.students[0]) reportPayment(state.students[0]); });
+function reportPayment(s){
+  const p = s.pay||{}, open = p.open||[], m = n=>(p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
+  const when = x=>fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"})+(x.time?" "+x.time:"");
+  const opts = [["","Towards the balance"], ...open.map(x=>[x.id, (x.upcoming?"Upcoming lesson on ":"Lesson on ")+when(x)+" · "+m(x.left)])];
+  openForm({title:"Tell your coach about a payment", submit:"Send", parentOk:true, fields:[
+    {name:"sessionId",label:"What was it for?",type:"select",options:opts,value:open.some(x=>!x.upcoming)?open.find(x=>!x.upcoming).id:"",full:true,
+      sets:v=>{ const x = open.find(y=>y.id===v); return x ? {amount:x.left} : {}; }},
+    {name:"amount",label:"Amount ("+(p.currency||"")+")",type:"number",min:0,step:"any",required:true,value:(()=>{ const x = open.find(y=>!y.upcoming); return x ? x.left : (p.balance>0 ? Math.round(p.balance*100)/100 : (p.rate||"")); })()},
+    {name:"date",label:"Paid on",type:"date",value:today()},
+    {name:"method",label:"How",type:"select",options:["Bit / PayBox","Bank transfer","Cash","Credit card","PayPal","Other"],value:"Bit / PayBox"},
+    {name:"note",label:"Note (optional)",value:"",full:true,placeholder:"e.g. paid for two lessons"}],
+    onSubmit:d=>{
+      if (!(+d.amount>0)) return "Enter the amount you paid.";
+      if (!d.date) return "Enter the date you paid.";
+      const op = {type:"payment.report", item:{id:"pr-"+uid(), date:d.date, amount:+d.amount, method:d.method, note:d.note, sessionId:d.sessionId}};
+      store.send(op); applyOp(s, op, false); render(); toast("Sent — your coach will confirm it");
+    }});
+}
 function pFamilyPay(v, s){
   const p = s.pay; const m = n=>(p && p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
   if (!p){ v.innerHTML = '<div class="page-head"><div><h1>Payments</h1></div></div><p class="empty">Nothing here yet.</p>'; return; }
@@ -3508,6 +3557,7 @@ function pFamilyPay(v, s){
     (p.upcoming && p.upcoming.length ? panel("Coming up", '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Amount</th></tr></thead><tbody>'+
       p.upcoming.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+(r.end&&r.end!==r.date?' – '+esc(fmtDate(r.end)):'')+'</td><td>'+esc(r.label)+'</td><td class="r num">'+m(r.amount)+'</td></tr>').join("")+'</tbody></table></div>'+
       '<p class="small muted" style="margin:8px 0 0">Not charged yet: these are added to the balance once the tournament is played.</p>') : '')+
+    payReportsBox(s)+
     (p.howToPay?panel("How to pay", '<p class="pre" style="margin:0">'+esc(p.howToPay)+'</p>'):'')+
     panel("Statement", p.rows.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Charge</th><th class="r">Paid</th></tr></thead><tbody>'+
       p.rows.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+'</td><td>'+esc(r.label)+'</td><td class="r num">'+(r.charge?m(r.charge):"")+'</td><td class="r num">'+(r.paid?m(r.paid):"")+'</td></tr>').join("")+'</tbody></table></div>'+
@@ -3537,7 +3587,9 @@ function pHome(v, s){
         (p.overdue?'<p class="small" style="color:var(--flag);margin:4px 0 0">'+p.age+' days overdue</p>':'')+
         (p.upcoming && p.upcoming.length ? '<p class="small" style="margin:6px 0 0"><b>Not charged yet:</b> '+p.upcoming.map(r=>'<span>'+esc(r.label)+'</span> · <span class="num">'+m(r.amount)+'</span>').join("<br>")+'</p>' : '')+
         '<p class="small muted" style="margin:6px 0 0">'+(p.lastPay?'Last payment '+esc(fmtShort(p.lastPay.date))+' · '+m(p.lastPay.amount):'No payments yet')+'</p>'+
-        (p.balance>0.009 && p.howToPay?'<p class="small pre" style="margin:8px 0 0"><b>How to pay:</b> '+esc(p.howToPay)+'</p>':''); })(), '<a class="btn small" href="#/payments">Statement</a>') : '')+
+        (p.balance>0.009 && p.howToPay?'<p class="small pre" style="margin:8px 0 0"><b>How to pay:</b> '+esc(p.howToPay)+'</p>':'')+
+        ((s.payReports||[]).some(r=>r.status==="pending")?'<p class="small" style="margin:6px 0 0"><span class="tag warn">A payment you reported is waiting for your coach to confirm</span></p>':''); })(),
+      '<div class="row-actions"><button type="button" class="btn small" id="iPaid">I\'ve paid</button><a class="btn small" href="#/payments">Statement</a></div>') : '')+
     updatesPanel(s)+
     panel("Coming up", (lessons.length||tours.length||pend.length) ? '<ul class="list">'+
         lessons.map(x=>{ const pc = pendingChange(s, x); return '<li><div class="main"><div class="title">Lesson'+(needsAnswer(s, x)?' <span class="tag warn">Answer needed</span>':'')+(pc?' <span class="tag warn">'+(pc.kind==="cancel"?"Cancel requested":"Move requested")+'</span>':'')+'</div><div class="small muted">'+[x.format, x.duration?x.duration+" min":"", x.topics].filter(Boolean).map(esc).join(" · ")+'</div>'+
@@ -3781,6 +3833,7 @@ function pDashboard(v){
   backupNote(t)+
   issuesPanel()+
   requestsPanel()+
+  payReportsPanel()+
   attentionPanel(active, t)+
   '<div class="grid g2">'+
   panel("Coming up this week", sessions.length ? '<ul class="list">'+sessions.map(({s,x})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(x.topics||"No topic yet")+'</div></div><div style="text-align:end"><div class="small">'+esc(x.date===t?"Today":fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(x.time||"")+(x.duration?" · "+x.duration+" min":"")+'</div></div></li>').join("")+'</ul>' : '<p class="empty">No sessions planned for the next 7 days.</p>')+
@@ -3792,7 +3845,7 @@ function pDashboard(v){
   $("#dPay").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
   const find = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && s.sessions.find(y=>y.id===b)]; };
   const req = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && (s.requests||[]).find(y=>y.id===b)]; };
-  bindActions(v,{ done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}), backup:()=>downloadBackup(),
+  bindActions(v,{ prOk:id=>decidePayReport(id, true), prNo:id=>decidePayReport(id, false), done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}), backup:()=>downloadBackup(),
     approve:id=>{ const [s,r] = req(id); if (r) approveRequest(s,r); },
     remind:id=>{ const x = byId(id); if (x) sendReminder(x); },
     issueRetry:id=>portal && portal.retry(id), issueDrop:id=>confirmBox("Discard this change?", "What they sent will be deleted. They can send it again from their app.", "Discard", ()=>portal.discard(id)),
@@ -3805,13 +3858,57 @@ function pDashboard(v){
         : s.name+" asked for "+fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"})+" "+r.time+". They'll see it as declined.","Decline",()=>{ r.status = "declined"; r.decided = today(); saveStudent(s); render(); toast("Request declined");
           sendConfirm(r.kind==="cancel" ? "declinedCancel" : "declined", s, r.kind==="cancel" ? {date:r.was.date, time:r.was.time} : {date:r.date, time:r.time}); }); } });
 }
+// What a request asked for, so the coach can still act on one that couldn't be applied.
+function askedFor(o){
+  const it = o.item||{}; if (o.type!=="request" || !it.date) return "";
+  const when = fmtDate(it.date,{weekday:"short",day:"numeric",month:"short"})+(it.time?" "+it.time:"");
+  return (it.kind==="cancel" ? "Asked to cancel a lesson" : it.kind==="move" ? "Asked to move a lesson to "+when : "Asked for a lesson on "+when)+(it.note?" — “"+it.note+"”":"")+". ";
+}
+// Why a change from the student or parent app couldn't be applied, in plain words.
+function whyNotApplied(s, o){
+  if (!s) return "It was for a child who isn't in this family. Check the family in the student's Parent app box.";
+  const it = o.item||{}, when = x=>fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"})+(x.time?" "+x.time:"");
+  if (o.type==="request"){
+    if (!it.date) return "It had no date.";
+    if (it.kind==="cancel" || it.kind==="move"){
+      const les = s.sessions.find(x=>x.id===it.sessionId);
+      if (!les) return "The lesson it's about no longer exists (it may have been deleted or rescheduled).";
+      if (les.status!=="planned") return "The lesson on "+when(les)+" is no longer planned (it's marked "+(les.status==="done"?"done":"cancelled")+").";
+      if (les.date<today()) return "The lesson on "+when(les)+" has already passed.";
+      return "There's already a pending change for the lesson on "+when(les)+".";
+    }
+    return "It couldn't be added to "+s.name.split(" ")[0]+"'s requests.";
+  }
+  if (o.type==="move.answer") return "The question it answers was already settled.";
+  return "It didn't match anything current.";
+}
 const OP_LABEL = {"request":"a lesson request", "request.cancel":"a withdrawn request", "move.answer":"an answer about a lesson", "assignment.status":"an assignment marked done",
-  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "repertoire.delete":"a deleted opening line"};
+  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
 function issuesPanel(){
   const list = portal ? portal.issues() : []; if (!list.length) return "";
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--flag)"><div class="panel-head"><h2>Problems with the student and parent app</h2></div><ul class="list">'+
     list.map(i=>'<li><div class="main"><div class="title">'+esc(i.what)+(i.who?' — '+esc(i.who):'')+'</div><div class="small muted">'+esc(i.err)+'</div></div><div class="row-actions">'+(i.opId?'<button class="btn small ghost" data-a="issueDrop" data-id="'+esc(i.key)+'">Discard</button>':'')+'<button class="btn small" data-a="issueRetry" data-id="'+esc(i.key)+'">Try again</button></div></li>').join("")+
     '</ul><p class="small muted" style="margin:8px 0 0">Nothing is lost: what they sent stays waiting until it is taken in or you discard it.</p></section>';
+}
+// Payments parents say they made, waiting for the coach to confirm (then they become real payments).
+function payReportsPanel(){
+  const list = []; state.students.forEach(s=>(s.payReports||[]).forEach(r=>{ if (r.status==="pending") list.push({s,r}); }));
+  if (!list.length) return "";
+  const when = x=>fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"})+(x.time?" "+x.time:"");
+  return '<section class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>Payments reported by parents ('+list.length+')</h2></div><ul class="list">'+
+    list.map(({s,r})=>{ const les = r.sessionId && s.sessions.find(x=>x.id===r.sessionId);
+      return '<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a> · <span class="num">'+money(r.amount)+'</span></div><div class="small muted">'+
+        esc(fmtDate(r.date))+(r.method?' · '+esc(r.method):'')+' · '+(les?esc("for the lesson on "+when(les)):esc("towards the balance"))+(r.note?' · “'+esc(r.note)+'”':'')+'</div></div>'+
+        '<div class="row-actions"><button class="btn small primary" data-a="prOk" data-id="'+esc(s.id+"|"+r.id)+'">Confirm</button><button class="btn small ghost" data-a="prNo" data-id="'+esc(s.id+"|"+r.id)+'">Not received</button></div></li>'; }).join("")+
+    '</ul><p class="small muted" style="margin:8px 0 0">Confirm adds the payment to the ledger'+'. Nothing is recorded until you confirm.</p></section>';
+}
+function decidePayReport(key, ok){
+  const [sid, rid] = key.split("|"), s = byId(sid), r = s && (s.payReports||[]).find(x=>x.id===rid); if (!r) return;
+  if (!ok) return confirmBox("Mark as not received?", "The parent will see that you haven't received this payment, so they can check with you.", "Not received", ()=>{
+    r.status = "declined"; r.decided = today(); saveStudent(s); render(); toast("Marked as not received"); });
+  const p = {id:uid(), date:r.date, amount:+r.amount, method:r.method||"", note:"Reported by the parent"+(r.note?": "+r.note:""), sessionId:r.sessionId||""};
+  s.payments.push(p); r.status = "confirmed"; r.decided = today(); r.paymentId = p.id;
+  saveStudent(s); render(); toast("Payment recorded");
 }
 // Lessons students asked for in their app, waiting for the coach; and students' answers after a declined move.
 function requestsPanel(){
@@ -6057,6 +6154,19 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
+  "Payments reported by parents":"תשלומים שדווחו על ידי הורים", "Confirm":"אישור", "Not received":"לא התקבל", "Mark as not received?":"לסמן שלא התקבל?",
+  "The parent will see that you haven't received this payment, so they can check with you.":"ההורה יראה שהתשלום לא התקבל אצלך, כדי שיוכל לבדוק איתך.",
+  "Marked as not received":"סומן שלא התקבל", "Payment recorded":"התשלום נרשם", "Confirm adds the payment to the ledger. Nothing is recorded until you confirm.":"אישור מוסיף את התשלום לפירוט. שום דבר לא נרשם עד שתאשר/י.",
+  "towards the balance":"על חשבון היתרה", "Towards the balance":"על חשבון היתרה", "Tell your coach about a payment":"עדכון המאמן על תשלום", "Send":"שליחה",
+  "What was it for?":"על מה התשלום?", "Paid on":"תאריך התשלום", "How":"איך", "Note (optional)":"הערה (לא חובה)", "e.g. paid for two lessons":"למשל: שילמתי על שני שיעורים",
+  "Enter the amount you paid.":"יש להזין את הסכום ששולם.", "Enter the date you paid.":"יש להזין את תאריך התשלום.", "Sent — your coach will confirm it":"נשלח — המאמן יאשר",
+  "Paid already?":"כבר שילמת?", "After you pay, let your coach know here. It shows in your statement once your coach confirms it.":"אחרי התשלום אפשר לעדכן את המאמן כאן. התשלום יופיע בפירוט אחרי שהמאמן יאשר.",
+  "Not received — please check with your coach":"לא התקבל — כדאי לבדוק עם המאמן", "Waiting for your coach to confirm":"ממתין לאישור המאמן",
+  "I've made a payment":"ביצעתי תשלום", "I've paid":"שילמתי", "A payment you reported is waiting for your coach to confirm":"תשלום שדיווחת ממתין לאישור המאמן",
+  "a payment report":"דיווח על תשלום", "Reported by the parent":"דווח על ידי ההורה",
+  "It was for a child who isn't in this family. Check the family in the student's Parent app box.":"זה היה עבור ילד/ה שלא במשפחה הזו. כדאי לבדוק את המשפחה בתיבת אפליקציית ההורים של התלמיד.",
+  "It had no date.":"לא היה בזה תאריך.", "The lesson it's about no longer exists (it may have been deleted or rescheduled).":"השיעור שזה מתייחס אליו כבר לא קיים (אולי נמחק או הוזז).",
+  "The question it answers was already settled.":"השאלה שזה עונה עליה כבר נסגרה.", "It didn't match anything current.":"זה לא התאים לשום דבר עדכני.",
   "Who is this?":"מי זה?", "A student I coach":"תלמיד/ה שאני מאמן/ת", "Me — to follow my own chess":"אני — כדי לעקוב אחרי השחמט שלי", "My chess":"השחמט שלי", "Me":"אני",
   "“Me” leaves you out of lessons, payments, reminders and the student count, and adds “My chess” to the menu":"„אני” מוציא אותך משיעורים, תשלומים, תזכורות ומספר התלמידים, ומוסיף „השחמט שלי” לתפריט",
   "Another profile is already marked as you.":"פרופיל אחר כבר מסומן בתור את/ה.",
@@ -6396,6 +6506,15 @@ const heT = x=>trCore(x) ?? x;
 const heSide = c=>c==="Black" ? "שחור" : c==="White" ? "לבן" : c;
 const heRating = r=>r==="FIDE" ? "פיד״ה" : r==="ICF" ? "איגוד" : r==="FIDE Rapid" ? "פיד״ה רפיד" : r==="FIDE Blitz" ? "פיד״ה בליץ" : r==="Online" ? "אונליין" : r;
 const HE_RX = [
+  [/^Payments reported by parents \((\d+)\)$/, "תשלומים שדווחו על ידי הורים ($1)"],
+  [/^Reported by the parent: (.+)$/, "דווח על ידי ההורה: $1"],
+  [/^Asked to cancel a lesson(?: — “(.*)”)?\.$/, (m,n)=>"ביקשו לבטל שיעור"+(n?" — „"+n+"”":"")+"."],
+  [/^Asked to move a lesson to (.+?)(?: — “(.*)”)?\.$/, (m,w,n)=>"ביקשו להזיז שיעור ל־"+heT(w)+(n?" — „"+n+"”":"")+"."],
+  [/^Asked for a lesson on (.+?)(?: — “(.*)”)?\.$/, (m,w,n)=>"ביקשו שיעור ב־"+heT(w)+(n?" — „"+n+"”":"")+"."],
+  [/^The lesson on (.+) is no longer planned \(it's marked (done|cancelled)\)\.$/, (m,w,st)=>"השיעור ב־"+heT(w)+" כבר לא מתוכנן (הוא מסומן "+(st==="done"?"כבוצע":"כמבוטל")+")."],
+  [/^The lesson on (.+) has already passed\.$/, (m,w)=>"השיעור ב־"+heT(w)+" כבר עבר."],
+  [/^There's already a pending change for the lesson on (.+)\.$/, (m,w)=>"כבר יש שינוי שממתין לשיעור ב־"+heT(w)+"."],
+  [/^It couldn't be added to (.+)'s requests\.$/, "לא ניתן היה להוסיף את זה לבקשות של $1."],
   [/^Lesson on (.+) · (.+)$/, (m,a,b)=>"שיעור ב־"+heT(a)+" · "+b], [/^Upcoming lesson on (.+) · (.+)$/, (m,a,b)=>"שיעור קרוב ב־"+heT(a)+" · "+b],
   [/^Payment(?: · (.+?))? · for the lesson on (.+)$/, (m,a,b)=>"תשלום"+(a?" · "+heT(a):"")+" · על השיעור ב־"+heT(b)],
   [/^for the lesson on (.+)$/, (m,a)=>"על השיעור ב־"+heT(a)],
