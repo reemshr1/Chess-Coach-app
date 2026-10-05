@@ -2449,14 +2449,34 @@ function trCore(core){
   }
   return undefined;
 }
+// Students and parents see the coach's name wherever the app says "coach" (Settings → Your name / in Hebrew).
+const nameOn = ()=>STUDENT() && !!(state.settings.coachName||"").trim();
+const signName = lng=>(lng==="he" && (state.settings.coachNameHe||"").trim()) || (state.settings.coachName||"").trim();
+const escRx = x=>x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function namePass(t){
+  const en = (state.settings.coachName||"").trim(); if (!en) return t;
+  if (appliedLang!=="he") return t
+    .replace(/\b[Yy]our coach(?:'s|’s) app\b/g, en+"’s app")
+    .replace(/\b[Yy]our coach\b/g, en).replace(/\bCoach (notes|feedback)\b/g, en+"’s $1").replace(/\bCoach free\b/g, en+" free")
+    .replace(/\b(with|by|for) (?:the )?coach\b/g, "$1 "+en).replace(/\b[Tt]he coach\b/g, en).replace(/^(\s*)Coach(\s*)$/, "$1"+en+"$2");
+  const he = signName("he"), heb = /^[\u0590-\u05FF]/.test(he), pre = x=>x+(heb?"":"־")+he;
+  const B = "(?<![\u0590-\u05FF])", E = "(?![\u0590-\u05FF/])";
+  return t
+    .replace(new RegExp(B+"(לאישור|הערות|משוב) המאמן"+E, "g"), (m, w)=>(w==="לאישור"?w:"ה"+w)+" של "+he)
+    .replace(new RegExp(B+"(כש|ש|מ|ו)המאמן"+E, "g"), (m, x)=>pre(x)).replace(new RegExp(B+"למאמן"+E, "g"), pre("ל"))
+    .replace(new RegExp(B+"המאמן"+E, "g"), he).replace(/^(\s*)מאמן(\s*)$/, "$1"+he+"$2")
+    .replace(new RegExp("(?<![A-Za-z\u0590-\u05FF])(כש|ש|מ|ל|ו)?־?"+escRx(en)+"(?![A-Za-z])", "g"), (m, x)=>x ? pre(x) : he);
+}
+function trText(v){ let t = appliedLang==="he" ? trPhrase(v) : v; if (nameOn()) t = namePass(t); return t; }
 function trNode(n){
   const p = n.parentElement; if (!p || p.closest(TR_SKIP)) return;
-  const v = n.nodeValue, t = trPhrase(v);
-  if (t!==v){ if (n.__en===undefined) n.__en = v; n.nodeValue = t; }
+  const v = n.__en!==undefined && n.nodeValue===n.__out ? n.__en : n.nodeValue, t = trText(v);
+  if (t!==n.nodeValue){ n.__en = v; n.nodeValue = n.__out = t; }
 }
 function trEl(el){
   if (el.closest(TR_SKIP) && el.tagName!=="TEXTAREA") return;
-  TR_ATTRS.forEach(a=>{ const v = el.getAttribute(a); if (!v) return; const t = trPhrase(v); if (t!==v){ (el.__enA = el.__enA||{})[a] = el.__enA[a] ?? v; el.setAttribute(a, t); } });
+  TR_ATTRS.forEach(a=>{ const v = el.getAttribute(a); if (!v) return; const src = el.__enA && a in el.__enA && el.__outA && el.__outA[a]===v ? el.__enA[a] : v, t = trText(src);
+    if (t!==v){ (el.__enA = el.__enA||{})[a] = src; (el.__outA = el.__outA||{})[a] = t; el.setAttribute(a, t); } });
 }
 function trTree(root){
   if (root.nodeType===3) return trNode(root);
@@ -2473,9 +2493,9 @@ let appliedLang = "en";
 function applyLang(){
   const l = lang(); if (l===appliedLang) return; appliedLang = l;
   document.documentElement.lang = l; document.documentElement.dir = l==="he" ? "rtl" : "ltr";
-  if (l==="he") trTree(document.body); else untrTree();
+  if (l==="he") trTree(document.body); else { untrTree(); if (nameOn()) trTree(document.body); }
 }
-new MutationObserver(ms=>{ if (appliedLang!=="he") return; ms.forEach(m=>m.addedNodes.forEach(trTree)); }).observe(document.body, {childList:true, subtree:true});
+new MutationObserver(ms=>{ if (appliedLang!=="he" && !nameOn()) return; ms.forEach(m=>m.addedNodes.forEach(trTree)); }).observe(document.body, {childList:true, subtree:true});
 
 function blankStudent(){
   return { id:"st-"+uid(), name:"", rating:"", ratingType:"FIDE", level:"", birthYear:"", contact:"", guardian:"", rate:state.settings.defaultRate||0, fideId:"", icfId:"", noId:false, fide:{}, icf:{},
@@ -2762,7 +2782,7 @@ function openLessons(s, keepId){
 // Every document a parent's app reads: the family, and for each child the same records a student sees plus money.
 function familyDocs(f){
   const out = {}, kids = (f.studentIds||[]).map(byId).filter(Boolean);
-  out.family = stampView({name:f.name, children:kids.map(k=>({id:k.id, name:k.name})), coachName:state.settings.coachName||"", weekStart:state.settings.weekStart||0});
+  out.family = stampView({name:f.name, children:kids.map(k=>({id:k.id, name:k.name})), coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0});
   kids.forEach(k=>{
     const parts = splitStudent(studentView(k));
     out["ch-"+k.id] = Object.assign(parts.main, {pay:payView(k), payReports:(k.payReports||[]).filter(r=>r.status==="pending" || daysBetween(r.decided||r.reported||today(), today())<=30)});
@@ -2777,7 +2797,7 @@ function studentView(s){
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
     worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[],
-    coachName:state.settings.coachName||"", weekStart:state.settings.weekStart||0,
+    coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0,
     freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56), s.id).free, taken:[]})); // other students' bookings just leave a gap
 }
 // The student's copy carries when the coach's app last wrote it.
@@ -2998,7 +3018,7 @@ function makeStudentStore(db, account){
     const mine = Object.values(inbox).filter(op=>!fam || op.sid===sid);
     mine.sort((a,b)=>(a.at||"")<(b.at||"")?-1:1).forEach(op=>applyOp(s, op, false));
     const head = fam || main;
-    Object.assign(state.settings, {coachName:head.coachName||"", weekStart:head.weekStart||0, currency:(main.pay && main.pay.currency)||""});
+    Object.assign(state.settings, {coachName:head.coachName||"", coachNameHe:head.coachNameHe||"", weekStart:head.weekStart||0, currency:(main.pay && main.pay.currency)||""});
     s.syncedAt = (fam && fam.syncedAt > (main.syncedAt||"") ? fam.syncedAt : main.syncedAt)||""; s.waiting = mine.length;
     s.waitingSince = mine.reduce((m,op)=>!m || (op.at && op.at<m) ? op.at : m, "");
     s.pay = main.pay || null;
@@ -4434,7 +4454,7 @@ function summaryText(s, x, withNotes, lng){
   if (withNotes && x.notes) out.push("", x.notes);
   if (hw.length) out.push("", he?"משימות:":"Assignments:", ...hw.map(a=>"• "+a.title+(a.due?(he?" (עד ":" (by ")+fd(a.due,short)+")":"")));
   if (next) out.push("", he ? "השיעור הבא: "+fd(next.date,long)+(next.time?" בשעה "+next.time:"")+"." : "Next lesson: "+fd(next.date,long)+(next.time?" at "+next.time:"")+".");
-  if (state.settings.coachName) out.push("", state.settings.coachName);
+  if (signName(lng)) out.push("", signName(lng));
   return out.join("\n");
 }
 // Pull a phone number (for WhatsApp, as an international number) and an email address out of the free-text contact field.
@@ -4471,7 +4491,7 @@ function shareMessage({title, sub, contact, text, subject, copied, startLang}){
 }
 const APP_LINK = ()=>WEB ? location.origin+location.pathname : (state.settings.appLink || "https://claude.ai/artifact/HdUATP5UzeZDyRtZfVJoe6");
 function inviteText(kind, s, code, lng){
-  const first = s.name.split(" ")[0], coach = state.settings.coachName||"", he = lng==="he";
+  const first = s.name.split(" ")[0], coach = signName(lng), he = lng==="he";
   const steps = WEB ? (he
     ? ["1. לפתוח את הקישור וליצור חשבון עם כתובת מייל וסיסמה (או להתחבר אם כבר יש חשבון):", APP_LINK(), "2. להזין את הקוד: "+code, "3. זהו — הלוח יופיע ברגע שאפתח את האפליקציה.", "", "טיפ: בטלפון אפשר להוסיף את האפליקציה למסך הבית דרך תפריט הדפדפן ← „הוספה למסך הבית”."]
     : ["1. Open this link and create an account with your email and a password (or sign in if you already have one):", APP_LINK(), "2. Enter this code: "+code, "3. That's it — the board appears as soon as I open the app.", "", "Tip: on your phone, add it to your home screen from the browser menu → “Add to Home Screen”."]) : he
@@ -4483,7 +4503,7 @@ function inviteText(kind, s, code, lng){
   return [intro, "", ...steps, ...(coach?["", coach]:[])].join("\n");
 }
 function reminderText(s, lng){
-  const l = ledger(s), first = s.name.split(" ")[0], he = lng==="he", coach = state.settings.coachName||"", pay = state.settings.payInfo||"";
+  const l = ledger(s), first = s.name.split(" ")[0], he = lng==="he", coach = signName(lng), pay = state.settings.payInfo||"";
   const amt = (state.settings.currency||"")+(Math.round(l.balance*100)/100).toLocaleString(he?"he-IL":"en");
   const d = new Date(today()+"T00:00").toLocaleDateString(he?"he-IL":undefined,{day:"numeric",month:"long"});
   const lines = he
@@ -4497,7 +4517,7 @@ function sendReminder(s){
 }
 // A ready message after deciding on a lesson, so the student or parent hears about it right away.
 function confirmText(kind, s, o, lng){
-  const he = lng==="he", first = s.name.split(" ")[0], coach = state.settings.coachName||"";
+  const he = lng==="he", first = s.name.split(" ")[0], coach = signName(lng);
   const day = (d,t)=>new Date(d+"T00:00").toLocaleDateString(he?"he-IL":undefined,{weekday:"long",day:"numeric",month:"long"})+(t?(he?" בשעה ":" at ")+t:"");
   const L = he ? {
       added:()=>"שלום! השיעור של "+first+" נקבע ל"+day(o.date,o.time)+". נתראה!",
@@ -6213,6 +6233,7 @@ function pSettings(v){
   v.innerHTML = '<div class="page-head"><div><h1>Settings</h1></div></div><div class="grid g2">'+
     panel("Coaching details", '<form id="setF" class="modal-body" style="padding:0">'+
       '<div class="field full"><label for="s1">Your name</label><input id="s1" name="coachName" value="'+esc(st.coachName)+'"></div>'+
+      '<div class="field full"><label for="s9">Your name in Hebrew</label><input id="s9" name="coachNameHe" dir="rtl" value="'+esc(st.coachNameHe||"")+'"><p class="small muted" style="margin:4px 0 0">Students and parents see your name instead of “coach”.</p></div>'+
       '<div class="field"><label for="s2">Currency symbol</label><input id="s2" name="currency" value="'+esc(st.currency)+'"></div>'+
       '<div class="field"><label for="s3">Default fee per session</label><input id="s3" name="defaultRate" type="number" min="0" step="any" value="'+esc(st.defaultRate)+'"></div>'+
       '<div class="field full"><label for="s4">Flag unpaid balances after (days)</label><input id="s4" name="overdueDays" type="number" min="1" value="'+esc(st.overdueDays)+'"></div>'+
@@ -6227,7 +6248,7 @@ function pSettings(v){
   $("#setF").onsubmit = e=>{ e.preventDefault(); const f = e.target.elements;
     // only fields changed in this form are saved, so edits made on another device meanwhile are kept
     const put = (k, v)=>{ if (String(st[k]??"")!==String(v)) st[k] = v; };
-    put("coachName", f.coachName.value.trim()); put("currency", f.currency.value.trim()); put("defaultRate", +f.defaultRate.value||0); put("weekStart", +f.weekStart.value); schedWeek = null;
+    put("coachName", f.coachName.value.trim()); put("coachNameHe", f.coachNameHe.value.trim()); put("currency", f.currency.value.trim()); put("defaultRate", +f.defaultRate.value||0); put("weekStart", +f.weekStart.value); schedWeek = null;
     put("overdueDays", Math.max(1,+f.overdueDays.value||30)); put("lang", f.lang.value); put("payInfo", f.payInfo.value.trim()); if (f.appLink.value.trim()!==APP_LINK()) put("appLink", f.appLink.value.trim());
     saveSettings(); render(); toast("Settings saved"); };
   $("#exp").onclick = downloadBackup;
@@ -6254,6 +6275,7 @@ function pSettings(v){
 /* ---------- Hebrew ---------- */
 const HE = {
   "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Your name in Hebrew":"השם שלך בעברית", "Students and parents see your name instead of “coach”.":"תלמידים והורים יראו את השם שלך במקום „המאמן”.",
   "This month:":"החודש:", "so far":"עד עכשיו",
   "Add club class":"הוספת חוג במועדון", "Edit club class":"עריכת חוג במועדון", "Club class":"חוג במועדון", "Club work":"עבודה במועדון", "Options":"אפשרויות",
   "e.g. Club juniors group":"למשל: קבוצת הצעירים במועדון", "e.g. the local chess club":"למשל: מועדון השחמט המקומי", "When":"מתי", "Every week":"כל שבוע", "One date only":"תאריך אחד בלבד",
