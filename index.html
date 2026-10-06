@@ -5301,7 +5301,7 @@ function tRepertoire(el, s){
     : '<p class="empty">No White repertoire yet. Start with the first move '+esc(s.name.split(" ")[0])+' plays, then add an answer to each defence.</p>';
   const blackHtml = black.length ? (groupRows(BLACK_AGAINST, black, x=>x.against, BLACK_CORE, k=>({color:"Black", against:k})) || '<p class="empty">No Black lines match this filter.</p>')
     : '<p class="empty">No Black repertoire yet.</p>'+groupRows(BLACK_AGAINST, [], x=>x.against, BLACK_CORE, k=>({color:"Black", against:k}));
-  el.innerHTML = groupNav(s,"repertoire")+'<p class="sub" style="margin:0 0 12px">'+[count("Studied")+" studied", count("Learning")+" learning", count("Developing")+" in development"+(devC||devS?" ("+[devC?devC+" by you":"", devS?devS+" by the student":""].filter(Boolean).join(", ")+")":""), count("Needs review")+(count("Needs review")===1?" needs":" need")+" review"].join(" · ")+'</p>'+openingsPanel(s)+
+  el.innerHTML = groupNav(s,"repertoire")+'<p class="sub" style="margin:0 0 12px">'+[count("Studied")+" studied", count("Learning")+" learning", count("Developing")+" in development"+(devC||devS?" ("+[devC?devC+" by you":"", devS?devS+" by the student":""].filter(Boolean).join(", ")+")":""), count("Needs review")+(count("Needs review")===1?" needs":" need")+" review"].join(" · ")+'</p>'+(STUDENT() ? "" : openingsPanel(s))+
     '<div class="rep-tools"><select id="repOpen" class="search" aria-label="Filter by opening"><option value="">All openings</option>'+Object.keys(fams).sort((a,b)=>a.localeCompare(b)).map(f=>'<option value="'+esc(f)+'"'+(repOpening===f?" selected":"")+'>'+esc(f)+' ('+fams[f]+')</option>').join("")+'</select>'+
       '<input id="repQ" class="search" type="search" placeholder="Search lines, moves, ECO, notes" value="'+esc(repQuery)+'" aria-label="Search repertoire">'+
       (narrowed?'<button class="btn small ghost" data-a="clearRep">Clear</button>':'')+'</div>'+
@@ -5309,7 +5309,8 @@ function tRepertoire(el, s){
     '<div class="seg" role="group" aria-label="Filter by status">'+Object.keys(F).map(k=>'<button type="button" class="'+(repFilter===k?"on":"")+'" data-a="rf" data-id="'+esc(k)+'">'+(k==="all"?"All":k)+' ('+count(k)+')</button>').join("")+'</div>'+
     '<div class="grid g2">'+
     '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece w"></span>White</h3>'+('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"White"}))+'">Add line</button>')+'</div>'+whiteHtml+'</section>'+
-    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece b"></span>Black</h3>'+('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"Black"}))+'">Add line</button>')+'</div>'+blackHtml+'</section></div>';
+    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece b"></span>Black</h3>'+('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"Black"}))+'">Add line</button>')+'</div>'+blackHtml+'</section></div>'+
+    (STUDENT() ? '<div style="margin-top:16px"></div>'+openingsPanel(s) : ''); // a student sees their own lines first
   bindActions(el,{
     rf:id=>{ repFilter = id; render(); },
     clearRep:()=>{ repOpening = ""; repQuery = ""; render(); },
