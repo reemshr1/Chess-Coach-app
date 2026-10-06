@@ -3432,7 +3432,7 @@ function renderNav(){
   const mine = me ? '<a href="#/student/'+me.id+'/overview"'+(meOn?' aria-current="page"':'')+'>'+ICONS.progress+'<span>My chess</span></a>' : "";
   $("#nav").innerHTML = html+mine; $("#bnav").innerHTML = html;
 }
-const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["assignments",b+"assignments","Assignments",ICONS.assign], ["work",b+"work","Practice",ICONS.practice], ["tournaments",b+"tournaments","Games",ICONS.games], ["progress","#/progress","Progress",ICONS.progress], ["schedule","#/schedule","Schedule",ICONS.schedule], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[])]; };
+const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["assignments",b+"assignments","Tasks",ICONS.assign], ["work",b+"work","Practice",ICONS.practice], ["tournaments",b+"tournaments","Games",ICONS.games], ["progress","#/progress","Progress",ICONS.progress], ["schedule","#/schedule","Schedule",ICONS.schedule], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[])]; };
 document.addEventListener("change", e=>{ if (e.target.id==="childPick" && store && store.pickChild) store.pickChild(e.target.value); });
 // The language button students have (the coach changes language in Settings).
 document.addEventListener("click", e=>{ const b = e.target.closest("[data-lang]"); if (!b) return;
@@ -3451,7 +3451,7 @@ function render(){
 }
 
 /* ---------- the student's pages ---------- */
-const STUDENT_TABS = {work:"Practice", fitness:"Practice", books:"Practice", tournaments:"Games", games:"Games", studied:"Games", repertoire:"Games", assignments:"Assignments"};
+const STUDENT_TABS = {work:"Practice", fitness:"Practice", books:"Practice", tournaments:"Games", games:"Games", studied:"Games", repertoire:"Games", assignments:"Tasks"};
 function renderStudent(v, r){
   const s = state.students[0];
   if (!s){ v.innerHTML = linkPage(store.me()); bindLink(); return; }
@@ -3597,13 +3597,14 @@ function pFamilyPay(v, s){
     '<div class="stats"><div class="stat"><div class="v num'+(p.balance>0.009?" money-owed":"")+'">'+(p.balance>0.009?m(p.balance):p.balance<-0.009?m(-p.balance):"✓")+'</div><div class="l">'+(p.balance>0.009?(p.overdue?p.age+" days overdue":"To pay"):p.balance<-0.009?"In credit":"Paid up")+'</div></div>'+
       '<div class="stat"><div class="v num">'+m(p.charged)+'</div><div class="l">Charged in total</div></div><div class="stat"><div class="v num">'+m(p.paid)+'</div><div class="l">Paid in total</div></div>'+
       '<div class="stat"><div class="v num">'+(p.lastPay?esc(fmtShort(p.lastPay.date)):"—")+'</div><div class="l">'+(p.lastPay?"Last payment · "+m(p.lastPay.amount):"No payments yet")+'</div></div></div>'+
-    (p.upcoming && p.upcoming.length ? panel("Coming up", '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Amount</th></tr></thead><tbody>'+
-      p.upcoming.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+(r.end&&r.end!==r.date?' – '+esc(fmtDate(r.end)):'')+'</td><td>'+esc(r.label)+'</td><td class="r num">'+m(r.amount)+'</td></tr>').join("")+'</tbody></table></div>'+
+    (p.upcoming && p.upcoming.length ? panel("Coming up", '<ul class="list stmt">'+
+      p.upcoming.map(r=>'<li><div class="main"><div class="title">'+esc(r.label)+'</div><div class="small muted">'+esc(fmtDate(r.date))+(r.end&&r.end!==r.date?' – '+esc(fmtDate(r.end)):'')+'</div></div><b class="num">'+m(r.amount)+'</b></li>').join("")+'</ul>'+
       '<p class="small muted" style="margin:8px 0 0">Not charged yet: these are added to the balance once the tournament is played.</p>') : '')+
     payReportsBox(s)+
     (p.howToPay?panel("How to pay", '<p class="pre" style="margin:0">'+esc(p.howToPay)+'</p>'):'')+
-    panel("Statement", p.rows.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Charge</th><th class="r">Paid</th></tr></thead><tbody>'+
-      p.rows.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+'</td><td>'+esc(r.label)+(r.sessionId ? ' '+lessonPayTag(s, r) : '')+'</td><td class="r num">'+(r.charge?m(r.charge):"")+'</td><td class="r num">'+(r.paid?m(r.paid):"")+'</td></tr>').join("")+'</tbody></table></div>'+
+    panel("Statement", p.rows.length ? '<ul class="list stmt">'+ // one small card per line, so it reads well on a phone
+      p.rows.map(r=>'<li><div class="main"><div class="title">'+esc(r.label)+'</div><div class="small muted" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+esc(fmtDate(r.date))+(r.sessionId ? ' '+lessonPayTag(s, r) : '')+'</div></div>'+
+        '<div style="text-align:end;white-space:nowrap">'+(r.charge?'<b class="num">'+m(r.charge)+'</b>':'')+(r.paid?'<div class="small" style="color:var(--ok)">Paid <b class="num">'+m(r.paid)+'</b></div>':'')+'</div></li>').join("")+'</ul>'+
       '<p class="small muted" style="margin:8px 0 0">The last two years. Lessons are charged once they have taken place; cancelled lessons aren\'t charged.</p>' : '<p class="empty">No charges or payments yet.</p>');
 }
 function pHome(v, s){
@@ -6331,7 +6332,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Tasks":"משימות",
   "To do":"לביצוע",
   "Fitness":"כושר", "This week":"השבוע", "Workouts":"אימוני כושר", "Workout":"אימון כושר", "Log a workout":"תיעוד אימון כושר", "Set weekly goal":"קביעת יעד שבועי", "Change weekly goal":"שינוי היעד השבועי",
   "Weekly fitness goal":"יעד כושר שבועי", "Workouts per week":"אימונים בשבוע", "0 means no goal":"0 = בלי יעד", "Weekly goal reached!":"היעד השבועי הושג!", "No weekly goal set yet.":"עדיין לא נקבע יעד שבועי.",
