@@ -206,6 +206,8 @@ tr:last-child td{border-bottom:0}
 
 /* Students */
 .search{padding:8px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);min-width:220px}
+.list-head{padding:14px 18px 6px;border-top:1px solid var(--line);background:var(--paper)}
+.list-head:first-child{border-top:0}
 .student-row{display:grid;grid-template-columns:minmax(0,2fr) 90px minmax(0,1.6fr) 120px;gap:16px;align-items:center;padding:14px 18px;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}
 .student-row:first-of-type{border-top:0}
 .student-row:hover{background:var(--paper)}
@@ -2803,6 +2805,7 @@ function studentView(s){
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
     worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0,
     coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0,
+    clubOnly:!!s.clubOnly, clubs:clubsOf(s).map(({rate, ...r})=>r),
     freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56), s.id).free, taken:[]})); // other students' bookings just leave a gap
 }
 // The student's copy carries when the coach's app last wrote it.
@@ -3023,7 +3026,7 @@ function makeStudentStore(db, account){
     const mine = Object.values(inbox).filter(op=>!fam || op.sid===sid);
     mine.sort((a,b)=>(a.at||"")<(b.at||"")?-1:1).forEach(op=>applyOp(s, op, false));
     const head = fam || main;
-    Object.assign(state.settings, {coachName:head.coachName||"", coachNameHe:head.coachNameHe||"", weekStart:head.weekStart||0, currency:(main.pay && main.pay.currency)||""});
+    Object.assign(state.settings, {club:main.clubs||[], coachName:head.coachName||"", coachNameHe:head.coachNameHe||"", weekStart:head.weekStart||0, currency:(main.pay && main.pay.currency)||""});
     s.syncedAt = (fam && fam.syncedAt > (main.syncedAt||"") ? fam.syncedAt : main.syncedAt)||""; s.waiting = mine.length;
     s.waitingSince = mine.reduce((m,op)=>!m || (op.at && op.at<m) ? op.at : m, "");
     s.pay = main.pay || null;
@@ -4186,14 +4189,20 @@ function pStudents(v){
   const draw = ()=>{
     const q = studentFilter.q.toLowerCase(), t = today();
     const list = sortBy(state.students,"name").sort((a,b)=>(b.self?1:0)-(a.self?1:0)).filter(s=>(studentFilter.show==="all"||(studentFilter.show==="active")===s.active) && s.name.toLowerCase().includes(q));
-    $("#slist").innerHTML = list.length ? list.map(s=>{
+    const row = s=>{
       const l = ledger(s); const next = sortBy(s.sessions.filter(x=>x.status==="planned"&&x.date>=t),"date")[0];
       const r = sortBy(s.ratings.filter(x=>(x.source||mainSource(s))===mainSource(s)),"date"); const delta = r.length>1 ? r[r.length-1].value - r[r.length-2].value : null;
       return '<a class="student-row" href="#/student/'+s.id+'"><div class="who"><span class="avatar">'+esc(initials(s.name))+'</span><div style="min-width:0"><div class="name">'+esc(s.name)+(s.self?' <span class="tag ok">Me</span>':'')+'</div><div class="small muted">'+esc(s.level||"")+(s.active?"":" · Archived")+'</div></div></div>'+
         '<div class="num"><span class="card-l small muted">Rating</span><div style="font-weight:600">'+esc(s.rating||"—")+'</div>'+(delta!==null?'<div class="small" style="color:'+(delta>=0?"var(--ok)":"var(--flag)")+'">'+(delta>=0?"+":"")+delta+'</div>':"")+'</div>'+
         '<div class="small hide-m">'+(next?"Next: "+esc(fmtDate(next.date,{weekday:"short",day:"numeric",month:"short"}))+(next.time?" "+esc(next.time):""):'<span class="muted">No session planned</span>')+'</div>'+
-        '<div style="text-align:end" class="num">'+(l.balance>0.009?'<span class="'+(l.overdue?"tag flag":"money-owed")+'">'+money(l.balance)+'</span>':'<span class="small muted">Paid up</span>')+'</div></a>';
-    }).join("") : '<p class="empty" style="padding:18px">No students match.</p>';
+        '<div style="text-align:end" class="num">'+(!hasMoney(s)?'<span class="tag">Club</span>':l.balance>0.009?'<span class="'+(l.overdue?"tag flag":"money-owed")+'">'+money(l.balance)+'</span>':'<span class="small muted">Paid up</span>')+'</div></a>';
+    };
+    // private students first, then one section per club group (a student in both appears in both)
+    const priv = list.filter(s=>!s.clubOnly), groups = clubRules().map(r=>({r, ss:list.filter(s=>(s.clubIds||[]).includes(r.id))})).filter(g=>g.ss.length);
+    const head = (t, n)=>'<div class="list-head"><b>'+esc(t)+'</b> <span class="muted small">'+n+' student'+(n===1?'':'s')+'</span></div>';
+    $("#slist").innerHTML = !list.length ? '<p class="empty" style="padding:18px">No students match.</p>'
+      : !groups.length ? priv.map(row).join("")
+      : (priv.length ? head("Private students", priv.filter(s=>!s.self).length)+priv.map(row).join("") : '')+groups.map(g=>head(g.r.name, g.ss.length)+g.ss.map(row).join("")).join("");
   };
   draw();
   $("#sq").oninput = e=>{ studentFilter.q = e.target.value; draw(); };
@@ -4225,7 +4234,11 @@ function editStudent(s){
       {name:"birthYear",label:"Birth year",type:"number",value:x.birthYear},
       {name:"contact",label:"Phone or email",value:x.contact},
       {name:"guardian",label:"Parent / guardian",value:x.guardian},
-      {name:"rate",label:"Fee per session ("+state.settings.currency+")",type:"number",value:x.rate,min:0,step:"any"},
+      ...(clubRules().length ? [
+        {name:"lessons",label:"Lessons",type:"select",options:[["private","Private lessons"],["club","Club classes only"]],value:x.clubOnly?"club":"private"},
+        {name:"clubId",label:"Club group",type:"select",options:[["","Not in a club group"], ...clubRules().map(r=>[r.id, r.name])],value:(x.clubIds||[])[0]||"",
+          hint:"Club students use the app to track practice, fitness and games, and see their class times"}] : []),
+      {name:"rate",label:"Fee per session ("+state.settings.currency+")",type:"number",value:x.rate,min:0,step:"any",show:v=>v.lessons!=="club"},
       {name:"active",label:"Status",type:"select",options:[["1","Active"],["0","Archived"]],value:x.active?"1":"0"},
       {name:"self",label:"Who is this?",type:"select",options:[["","A student I coach"],["1","Me — to follow my own chess"]],value:x.self?"1":"",
         hint:"“Me” leaves you out of lessons, payments, reminders and the student count, and adds “My chess” to the menu"},
@@ -4243,6 +4256,7 @@ function editStudent(s){
       if (fid && !/^\d{3,10}$/.test(fid)) return "The FIDE ID should be digits only, like 2807681.";
       if (iid && !/^\d{1,10}$/.test(iid)) return "The ICF ID should be digits only, like 20256.";
       if (d.self==="1" && state.students.some(y=>y.id!==x.id && y.self)) return "Another profile is already marked as you.";
+      if (d.lessons==="club" && !d.clubId) return "Choose the student's club group.";
       if (fid && state.students.some(y=>y.id!==x.id && y.fideId===fid)) return "Another student already has FIDE ID "+fid+".";
       if (iid && state.students.some(y=>y.id!==x.id && y.icfId===iid)) return "Another student already has ICF ID "+iid+".";
       const oldRating = x.rating, oldRate = +x.rate||0;
@@ -4255,6 +4269,7 @@ function editStudent(s){
       if (!isNew && (+x.rate||0)!==oldRate){ const t = today(), onOld = v=>v!==""&&v!=null&&+v===oldRate;
         (x.slots||[]).forEach(sl=>{ if (onOld(sl.fee)) sl.fee = x.rate; });
         x.sessions.forEach(ss=>{ if (ss.status==="planned" && ss.date>=t && onOld(ss.fee)){ ss.fee = x.rate; repriced++; } }); }
+      if ("lessons" in d){ x.clubOnly = d.lessons==="club"; const others = (x.clubIds||[]).filter(id=>id!==(x.clubIds||[])[0]); x.clubIds = d.clubId ? [d.clubId, ...others.filter(id=>id!==d.clubId)] : others; }
       if (isNew){ state.students.push(x); location.hash = "#/student/"+x.id; }
       saveStudent(x); render(); toast(isNew?"Student added":repriced?"Changes saved — new fee applied to "+repriced+" planned session"+(repriced===1?"":"s"):"Changes saved");
     }});
@@ -4281,7 +4296,7 @@ function pStudent(v, r){
     (s.fideId?'<a class="btn small" href="'+fideUrl(s.fideId)+'" target="_blank" rel="noopener">FIDE '+esc(s.fideId)+' ↗</a>':'')+
     (s.icfId?'<a class="btn small" href="'+icfUrl(s.icfId)+'" target="_blank" rel="noopener">ICF '+esc(s.icfId)+' ↗</a>':'')+
     '<button class="btn" id="stEdit">Edit profile</button></div>'+
-    '<nav class="tabs" aria-label="Student sections">'+TABS.filter(([k])=>!(s.self && k==="payments")).map(([k,lab])=>'<a href="#/student/'+s.id+'/'+k+'"'+(tabGroup(r.tab)===k?' aria-current="page"':"")+'>'+lab+'</a>').join("")+'</nav><div id="tab"></div>';
+    '<nav class="tabs" aria-label="Student sections">'+TABS.filter(([k])=>!((s.self || !hasMoney(s)) && k==="payments")).map(([k,lab])=>'<a href="#/student/'+s.id+'/'+k+'"'+(tabGroup(r.tab)===k?' aria-current="page"':"")+'>'+lab+'</a>').join("")+'</nav><div id="tab"></div>';
   $("#stEdit").onclick = ()=>editStudent(s);
   const T = {overview:tOverview, sessions:tSessions, work:tWork, fitness:tFitness, assignments:tAssignments, books:tBooks, games:tGames, studied:tStudied, repertoire:tRepertoire, tournaments:tTournaments, payments:tPayments};
   (T[r.tab]||tOverview)($("#tab"), s);
@@ -4354,7 +4369,7 @@ function tOverview(el, s){
       '<h3 class="subh">Coach notes '+(s.notesShared?'<span class="tag ok">Visible to student</span>':'<span class="tag">Private</span>')+'</h3>'+(s.notes?'<p class="pre" style="margin:0">'+esc(s.notes)+'</p>':'<p class="empty" style="padding:0">No notes yet.</p>')+
       (s.notes?'<button class="btn small ghost" data-a="shareNotes" style="margin-top:8px">'+(s.notesShared?"Make private":"Show to student")+'</button>':''),'<button class="btn small" data-a="edit">Edit</button>')+
     '</div>'+
-    (s.self ? '' : appPanel(s)+parentPanel(s))+
+    (s.self ? '' : appPanel(s)+(s.clubOnly ? '' : parentPanel(s)))+
     '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Details</h2></div><dl class="kv">'+
       '<dt>Sessions done</dt><dd class="num">'+done.length+' ('+hours.toFixed(1)+' h)</dd><dt>Last session</dt><dd>'+(last?esc(fmtDate(last.date))+' — '+esc(last.topics||""):"—")+'</dd>'+
       '<dt>Next tournament</dt><dd>'+(nextT?esc(nextT.name)+", "+esc(fmtShort(tourNext(nextT,t))):"—")+'</dd>'+
@@ -5544,7 +5559,8 @@ function editAssignment(a, sid, tplId){
   const fromLib = v=>!!v.tpl;
   openForm({title:isNew?"New assignment":"Edit assignment", submit:isNew?"Create assignment":"Save changes", fields:[
       ...(lib.length ? [{name:"tpl",label:"From library",type:"select",options:[["","— Write a new one —"], ...lib.map(t=>[t.id, t.title+(t.games.length?" ("+t.games.length+" game"+(t.games.length===1?"":"s")+")":"")])],value:tplId||"",full:true}] : []),
-      {name:"studentId",label:"Student",type:"select",options:sortBy(act,"name").map(s=>[s.id,s.name]),value:x.studentId,full:true},
+      {name:"studentId",label:"Student",type:"select",options:[...sortBy(act,"name").map(s=>[s.id,s.name]),
+        ...(isNew ? clubRules().map(r=>({r, n:act.filter(s=>s.active && (s.clubIds||[]).includes(r.id)).length})).filter(g=>g.n).map(g=>["club:"+g.r.id, "Whole group: "+g.r.name+" ("+g.n+")"]) : [])],value:x.studentId,full:true},
       {name:"title",label:"Title",value:x.title,full:true,placeholder:"e.g. 30 puzzles on pins, or Analyse your round 3 loss",show:v=>!fromLib(v)},
       {name:"type",label:"Type",type:"select",options:AS_TYPES,value:x.type,show:v=>!fromLib(v)},
       {name:"due",label:"Due",type:"date",value:x.due},
@@ -5555,6 +5571,11 @@ function editAssignment(a, sid, tplId){
       const t = d.tpl && asLib().find(y=>y.id===d.tpl); delete d.tpl;
       if (t){ Object.assign(d, {title:t.title, type:t.type, instructions:t.instructions}); x.games = JSON.parse(JSON.stringify(t.games||[])); }
       if (!d.title) return "Give the assignment a title.";
+      if (isNew && /^club:/.test(d.studentId)){ // one copy per student in the group, each reviewed on its own
+        const gid = d.studentId.slice(5), ss = act.filter(s=>s.active && (s.clubIds||[]).includes(gid)); if (!ss.length) return "Nobody is in that group yet.";
+        ss.forEach(st=>{ const y = Object.assign(JSON.parse(JSON.stringify(x)), d, {id:"as-"+uid(), studentId:st.id}); state.assignments.push(y); saveAssignment(y); });
+        location.hash = "#/assignments"; render(); toast("Assignment given to "+ss.length+" student"+(ss.length===1?"":"s")); return;
+      }
       Object.assign(x,d);
       if (isNew){ state.assignments.push(x); saveAssignment(x); location.hash = "#/assignment/"+x.id; toast("Assignment created"); }
       else { saveAssignment(x); render(); toast("Changes saved"); }
@@ -5763,6 +5784,9 @@ function freeRules(){ return state.settings.free||[]; }
 // settings.club holds {id, name, place, kind:"weekly"|"once", weekday, start, end, date, from, to, rate, skip:[dates]}.
 // They are only the coach's: they block the coach's time and count club hours, students never see them.
 const clubRules = ()=>state.settings.club||[];
+// Students in a club group: clubIds lists their groups; clubOnly means no private lessons (no fee, no parent app, no payments).
+const clubsOf = s=>clubRules().filter(r=>(s.clubIds||[]).includes(r.id));
+const hasMoney = s=>!s.clubOnly || s.sessions.some(x=>x.status!=="cancelled") || s.payments.length || s.charges.length;
 function clubOn(d){
   return clubRules().filter(r=>!(r.skip||[]).includes(d) && (r.kind==="once" ? r.date===d : +r.weekday===dow(d) && (!r.start || d>=r.start) && (!r.end || d<=r.end)))
     .map(r=>({r, a:toMin(r.from), b:toMin(r.to)})).filter(o=>o.a!==null && o.b!==null && o.b>o.a).sort((x,y)=>x.a-y.a);
@@ -6006,7 +6030,7 @@ function scheduleItems(from, to){
       for (let d=t.start<from?from:t.start; d<=e && d<=to; d=addDays(d,1)) items.push({kind:"tour", date:d, s, x:t, day:daysBetween(t.start,d)+1, days:n}); });
   });
   state.assignments.forEach(a=>{ const s = byId(a.studentId); if (s && s.active && a.due && a.due>=from && a.due<=to && a.status==="Assigned") items.push({kind:"due", date:a.due, s, x:a}); });
-  if (!STUDENT()) for (let d=from; d<=to; d=addDays(d,1)) clubOn(d).forEach(o=>items.push({kind:"club", date:d, x:{id:o.r.id+"|"+d, time:o.r.from, duration:o.b-o.a, name:o.r.name, place:o.r.place||""}}));
+  for (let d=from; d<=to; d=addDays(d,1)) clubOn(d).forEach(o=>items.push({kind:"club", date:d, x:{id:o.r.id+"|"+d, time:o.r.from, duration:o.b-o.a, name:o.r.name, place:o.r.place||""}}));
   // A student also sees their own training and the lessons they asked for.
   if (STUDENT()) state.students.forEach(s=>{
     (s.training||[]).forEach(x=>{ if (x.date>=from && x.date<=to) items.push({kind:"train", date:x.date, s, x}); });
@@ -6155,7 +6179,7 @@ const evLabel = i => {
   if (i.kind==="session" && needsAnswer(i.s, i.x)) return "Lesson · answer needed";
   return pc ? (pc.kind==="cancel" ? "Lesson · cancel requested" : "Lesson · move requested") : "Lesson";
 };
-const evAct = i => i.kind==="club" ? 'data-a="club" data-id="'+esc(i.x.id)+'"' : i.kind==="train" ? 'data-a="train" data-id="'+i.x.id+'"' : i.kind==="req" ? 'data-a="reqx" data-id="'+i.x.id+'"' : 'data-a="open" data-id="'+i.s.id+'|'+i.x.id+'"';
+const evAct = i => i.kind==="club" ? (STUDENT() ? '' : 'data-a="club" data-id="'+esc(i.x.id)+'"') : i.kind==="train" ? 'data-a="train" data-id="'+i.x.id+'"' : i.kind==="req" ? 'data-a="reqx" data-id="'+i.x.id+'"' : 'data-a="open" data-id="'+i.s.id+'|'+i.x.id+'"';
 const evCls = i => i.kind==="club" ? "club" : i.kind==="train" ? "train" : i.kind==="req" ? "req st-"+i.x.status : "st-"+i.x.status;
 // Free-time bands for the week grid: the coach sees their free hours, a student only what is still open.
 function freeBands(d){
@@ -6338,7 +6362,10 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Tasks":"משימות",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Private lessons":"שיעורים פרטיים", "Club classes only":"רק קבוצות במועדון", "Club group":"קבוצה במועדון", "Not in a club group":"לא בקבוצה במועדון", "Club":"מועדון",
+  "Club students use the app to track practice, fitness and games, and see their class times":"תלמידי המועדון משתמשים באפליקציה כדי לתעד תרגול, כושר ומשחקים ולראות את זמני הקבוצה",
+  "Choose the student's club group.":"יש לבחור את הקבוצה במועדון.", "Private students":"תלמידים פרטיים", "Nobody is in that group yet.":"עדיין אין אף אחד בקבוצה הזו.", "Tasks":"משימות",
   "To do":"לביצוע",
   "Fitness":"כושר", "This week":"השבוע", "Workouts":"אימוני כושר", "Workout":"אימון כושר", "Log a workout":"תיעוד אימון כושר", "Set weekly goal":"קביעת יעד שבועי", "Change weekly goal":"שינוי היעד השבועי",
   "Weekly fitness goal":"יעד כושר שבועי", "Workouts per week":"אימונים בשבוע", "0 means no goal":"0 = בלי יעד", "Weekly goal reached!":"היעד השבועי הושג!", "No weekly goal set yet.":"עדיין לא נקבע יעד שבועי.",
@@ -6827,7 +6854,7 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
   [/^Green weeks reached the goal of (\d+) workouts?\.$/, "בשבועות הירוקים הושג היעד של $1 אימונים."], [/^No weekly goal yet — set one so (.+) has something to aim for\.$/, "עדיין אין יעד שבועי — כדאי לקבוע אחד, כדי של־$1 יהיה למה לשאוף."], [/^of (\d+)$/, "מתוך $1"],
   [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
   [/^(\d+) attempts? in period$/, "$1 ניסיונות בתקופה"], [/^(\d+) attempts?$/, "$1 ניסיונות"], [/^best (\d+)$/, "שיא $1"], [/^avg ([\d.]+)$/, "ממוצע $1"], [/^score (\d+)$/, "תוצאה $1"],
