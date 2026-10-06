@@ -3414,7 +3414,7 @@ function renderNav(){
   const r = route();
   document.querySelectorAll("[data-lang]").forEach(b=>{ b.textContent = lang()==="he" ? "English" : "עברית"; });
   if (STUDENT()){
-    const s = state.students[0], cur = r.page==="student" ? ({games:"tournaments", studied:"work"}[r.tab]||r.tab) : r.page==="assignment" ? "assignments" : r.page==="schedule" ? "schedule" : r.page==="payments" && PARENT() ? "payments" : r.page==="progress" ? "progress" : "home";
+    const s = state.students[0], cur = r.page==="student" ? tabGroup(r.tab) : r.page==="assignment" ? "assignments" : r.page==="schedule" ? "schedule" : r.page==="payments" && PARENT() ? "payments" : r.page==="progress" ? "progress" : "home";
     // a family with more than one child picks whose board to show
     const fam = PARENT() && state.family, pick = $("#childPick");
     if (pick){ pick.hidden = !(fam && fam.children.length>1); if (fam) pick.innerHTML = fam.children.map(k=>'<option value="'+esc(k.id)+'"'+(k.id===fam.current?" selected":"")+'>'+esc(k.name)+'</option>').join(""); }
@@ -3432,7 +3432,7 @@ function renderNav(){
   const mine = me ? '<a href="#/student/'+me.id+'/overview"'+(meOn?' aria-current="page"':'')+'>'+ICONS.progress+'<span>My chess</span></a>' : "";
   $("#nav").innerHTML = html+mine; $("#bnav").innerHTML = html;
 }
-const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["progress","#/progress","Progress",ICONS.progress], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[]),["work",b+"work","Practice",ICONS.practice],["fitness",b+"fitness","Fitness",ICONS.fitness],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Assignments",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
+const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["assignments",b+"assignments","Assignments",ICONS.assign], ["work",b+"work","Practice",ICONS.practice], ["tournaments",b+"tournaments","Games",ICONS.games], ["progress","#/progress","Progress",ICONS.progress], ["schedule","#/schedule","Schedule",ICONS.schedule], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[])]; };
 document.addEventListener("change", e=>{ if (e.target.id==="childPick" && store && store.pickChild) store.pickChild(e.target.value); });
 // The language button students have (the coach changes language in Settings).
 document.addEventListener("click", e=>{ const b = e.target.closest("[data-lang]"); if (!b) return;
@@ -3451,7 +3451,7 @@ function render(){
 }
 
 /* ---------- the student's pages ---------- */
-const STUDENT_TABS = {work:"Practice", studied:"Practice", fitness:"Fitness", tournaments:"Games", games:"Games", assignments:"Assignments", books:"Reading", repertoire:"Openings"};
+const STUDENT_TABS = {work:"Practice", fitness:"Practice", books:"Practice", tournaments:"Games", games:"Games", studied:"Games", repertoire:"Games", assignments:"Assignments"};
 function renderStudent(v, r){
   const s = state.students[0];
   if (!s){ v.innerHTML = linkPage(store.me()); bindLink(); return; }
@@ -3496,6 +3496,7 @@ function freshness(s){
 }
 // Progress for a student or parent: rating, practice over time, lessons, assignments and puzzle bests.
 let progSource = "", progPeriod = 30;
+const progRecent = s=>sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,3);
 function pProgress(v, s){
   const t = today(), first = s.name.split(" ")[0];
   // rating
@@ -3531,6 +3532,9 @@ function pProgress(v, s){
       '<div class="seg" role="group" aria-label="Period" style="margin:0">'+periods.map(([n,l])=>'<button type="button" class="'+(progPeriod===n?"on":"")+'" data-a="pp" data-id="'+n+'">'+l+'</button>').join("")+'</div></div>'+
     '<div class="stats">'+tile(lessons.length, "Lessons ("+lessonH.toFixed(1)+" h)")+tile(Math.round(mins/60*10)/10+" h", "Practice")+tile(asDone, "Assignments done")+tile(games.length ? score+"/"+games.length : "—", "Score in games")+'</div>'+
     '<div class="grid g2">'+
+    panel("Goals", (s.goals?'<p class="pre" style="margin:0">'+esc(s.goals)+'</p>':'<p class="empty" style="padding:0">Your coach hasn\'t written goals yet.</p>')+
+      (s.notes?'<h3 class="subh">From your coach</h3><p class="pre" style="margin:0">'+esc(s.notes)+'</p>':''))+
+    panel("Recent lessons", progRecent(s).length ? '<ul class="list">'+progRecent(s).map(x=>'<li style="display:block"><div class="title">'+esc(fmtDate(x.date))+(x.topics?' — '+esc(x.topics):'')+'</div>'+(x.notes?'<div class="small pre">'+esc(x.notes)+'</div>':'')+'</li>').join("")+'</ul>' : '<p class="empty">No lessons yet.</p>')+
     panel("Rating", (sources.length>1?'<div class="seg" role="group" aria-label="Rating list">'+sources.map(x=>'<button type="button" class="'+(x===src?"on":"")+'" data-a="ps" data-id="'+esc(x)+'">'+esc(x)+'</button>').join("")+'</div>':"")+
       (pts.length ? ratingChart(pts)+'<p class="small muted" style="margin:8px 0 0">Now <b class="num">'+esc(now.value)+'</b>'+(diff!==null?' · '+(diff>=0?"+":"")+diff+' since '+esc(fmtShort(y1.date)):'')+'</p>' : '<p class="empty">No ratings yet.</p>'))+
     panel("Practice per week", '<div class="wbars" style="grid-template-columns:repeat(12,1fr)" role="img" aria-label="Practice minutes per week, last 12 weeks">'+weeks.map((w,i)=>'<div title="'+esc(fmtShort(w.a))+': '+w.m+' min">'+(w.m?'<span class="pct">'+w.m+'</span>':'')+'<span class="bar" style="height:'+Math.round(w.m/maxM*100)+'px;'+(i===11?'background:var(--green)':'')+'"></span><span class="wl">'+esc(new Date(w.a+"T00:00").toLocaleDateString(LOCALE(),{day:"numeric",month:"numeric"}))+'</span></div>').join("")+'</div>'+
@@ -3610,7 +3614,6 @@ function pHome(v, s){
   const week = s.worklog.filter(w=>w.date>=addDays(t,-6)).reduce((a,w)=>a+(+w.minutes||0),0);
   const tours = s.tournaments.filter(x=>tourAhead(x,t)).sort((a,b)=>tourNext(a,t)<tourNext(b,t)?-1:1).slice(0,3);
   const pend = (s.requests||[]).filter(r=>r.status==="pending");
-  const recent = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,3);
   const rt = sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===mainSource(s)),"date").pop();
   const hr = new Date().getHours(), greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
   v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+(PARENT() ? esc(first)+'’s board' : greet+', '+esc(first))+'</h1>'+freshness(s)+'</div><div class="row-actions"><button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
@@ -3638,10 +3641,6 @@ function pHome(v, s){
         pend.filter(r=>r.kind!=="cancel").map(r=>'<li><div class="main"><div class="title">'+(r.kind==="move"?"Move request":"Lesson request")+'</div><div class="small muted">'+esc(fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"}))+' · '+esc(r.time)+'</div></div><span class="tag warn">Waiting for your coach</span></li>').join("")+'</ul>'
       : '<p class="empty">Nothing planned yet.</p>', '<a class="btn small" href="#/schedule">Schedule</a>')+
     panel("Assignments", hw.length ? '<ul class="list">'+hw.map(a=>'<li><div class="main"><div class="title"><a href="#/assignment/'+a.id+'">'+esc(a.title)+'</a></div><div class="small muted">'+esc(a.type)+(a.due?' · due '+esc(fmtShort(a.due)):'')+'</div></div>'+(a.status==="Assigned"?'<button class="btn small" data-a="hwdone" data-id="'+a.id+'">Mark done</button>':'<span class="tag warn">Done · to review</span>')+'</li>').join("")+'</ul>' : '<p class="empty">No assignments right now.</p>')+
-    (s.freeSet ? panel("When your coach is free", (s.free||[]).length ? '<ul class="list">'+(s.free||[]).slice(0,5).map(f=>'<li><div class="main"><div class="title">'+esc(fmtDate(f.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(f.from)+'–'+esc(f.to)+'</div></div><button class="btn small" data-a="reqat" data-id="'+f.date+'|'+f.from+'">Request</button></li>').join("")+'</ul>' : '<p class="empty">No free time in the coming weeks.</p>', '<a class="btn small" href="#/schedule">Schedule</a>') : '')+
-    panel("Goals", (s.goals?'<p class="pre" style="margin:0">'+esc(s.goals)+'</p>':'<p class="empty" style="padding:0">Your coach hasn\'t written goals yet.</p>')+
-      (s.notes?'<h3 class="subh">From your coach</h3><p class="pre" style="margin:0">'+esc(s.notes)+'</p>':''))+
-    panel("Recent lessons", recent.length ? '<ul class="list">'+recent.map(x=>'<li style="display:block"><div class="title">'+esc(fmtDate(x.date))+(x.topics?' — '+esc(x.topics):'')+'</div>'+(x.notes?'<div class="small pre">'+esc(x.notes)+'</div>':'')+'</li>').join("")+'</ul>' : '<p class="empty">No lessons yet.</p>')+
     '</div>';
   bindActions(v,{ ans:id=>{ const [rid, c] = id.split("|"), r = (s.requests||[]).find(x=>x.id===rid); if (r) answerMove(s, r, c); },
     req:()=>requestLesson(s), log:()=>openPractice(s, null), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
@@ -4266,7 +4265,8 @@ const tabGroup = tab=>Object.keys(TAB_GROUPS).find(k=>TAB_GROUPS[k].includes(tab
 function groupNav(s, cur){
   const g = TAB_GROUPS[tabGroup(cur)]; if (!g) return "";
   const n = {games:studentGames(s.id).length, studied:studyGames(s.id).length};
-  const lab = {work:"Daily work", fitness:"Fitness", books:"Books", tournaments:"Tournaments", games:"Game history", studied:"Studied games", repertoire:"Repertoire"};
+  const lab = STUDENT() ? {work:"Daily practice", fitness:"Fitness", books:"Reading", tournaments:"Tournaments", games:"Game history", studied:"Studied games", repertoire:"Openings"}
+    : {work:"Daily work", fitness:"Fitness", books:"Books", tournaments:"Tournaments", games:"Game history", studied:"Studied games", repertoire:"Repertoire"};
   return subNav(g.map(k=>[k, "#/student/"+s.id+"/"+k, lab[k]+(n[k]?" ("+n[k]+")":"")]), cur);
 }
 function pStudent(v, r){
@@ -4692,7 +4692,7 @@ function tWork(el, s){
 // The physical side of training: workouts the student (or the coach) logs, against a weekly goal the coach sets.
 const FIT_KINDS = ["Running","Walking","Cycling","Swimming","Football","Basketball","Gym / strength","Yoga / stretching","Martial arts","Dance","Other sport"];
 const fitShown = {};
-function tFitness(el, s){ const nav = STUDENT() ? "" : groupNav(s, "fitness");
+function tFitness(el, s){ const nav = groupNav(s, "fitness");
   const t = today(), list = s.fitness||[], goal = +s.fitnessGoal||0, first = s.name.split(" ")[0];
   const weeks = []; for (let i=7;i>=0;i--){ const a = addDays(weekStartOf(t),-7*i), b = addDays(a,6), ws = list.filter(w=>w.date>=a && w.date<=b); weeks.push({a, n:ws.length, m:ws.reduce((x,w)=>x+(+w.minutes||0),0)}); }
   const now = weeks[7], maxN = Math.max(goal, ...weeks.map(w=>w.n), 1);
@@ -4893,7 +4893,7 @@ function tBooks(el, s){
       '</div></article>';
   };
   const section = (title, list, empty)=> list.length || empty ? '<h2 class="shelf-h">'+title+' <span class="muted small">'+list.length+'</span></h2>'+(list.length?'<div class="shelf">'+list.map(card).join("")+'</div>':'<p class="empty">'+empty+'</p>') : "";
-  el.innerHTML = (STUDENT()?"":groupNav(s,"books"))+'<div class="page-head" style="margin-bottom:8px"><p class="sub" style="margin:0">'+by("Reading").length+' reading now · '+finishedYear+' finished in '+year+' · '+recentPages+' pages in the last 4 weeks</p><button class="btn primary" data-a="add">Add book</button></div>'+
+  el.innerHTML = groupNav(s,"books")+'<div class="page-head" style="margin-bottom:8px"><p class="sub" style="margin:0">'+by("Reading").length+' reading now · '+finishedYear+' finished in '+year+' · '+recentPages+' pages in the last 4 weeks</p><button class="btn primary" data-a="add">Add book</button></div>'+
     (s.books.length ? section("Reading now", sortBy(by("Reading"),"lastRead",-1), "Nothing in progress.")+section("Up next", by("Want to read"))+section("Paused", by("Paused"))+section("Finished", sortBy(by("Finished"),"finished",-1))
       : '<section class="panel"><p class="empty" style="margin:0">No books yet. Add the books '+esc(s.name.split(" ")[0])+' is working through — then log reading here or from Daily work, and the current page, last-read date and pace update on their own.</p></section>');
   bindActions(el,{
@@ -4981,7 +4981,7 @@ function importGames(s, text){
 }
 let gameFilter = {status:"all", tid:""};
 function tabSwitch(s, cur){
-  if (!STUDENT()) return groupNav(s, cur);
+  return groupNav(s, cur);
   const n = studentGames(s.id).length;
   return '<div class="seg" role="tablist" style="margin-bottom:16px"><a role="tab" class="'+(cur==="tournaments"?"on":"")+'" href="#/student/'+s.id+'/tournaments">Tournaments</a><a role="tab" class="'+(cur==="games"?"on":"")+'" href="#/student/'+s.id+'/games">Game history'+(n?" ("+n+")":"")+'</a></div>';
 }
@@ -5052,7 +5052,7 @@ const studyGames = sid => state.games.filter(g=>g.studentId===sid && g.kind==="s
 function studyTitle(g){ return (g.white||"?")+" – "+(g.black||"?"); }
 function studyOption(g){ return studyTitle(g)+" "+(g.result||"")+(g.year?" · "+g.year:"")+(g.theme?" · "+g.theme:"")+" — "+(g.analysis||"Not analysed"); }
 function subNav(items, cur){ return '<div class="seg" role="tablist" style="margin-bottom:16px">'+items.map(([k,href,l])=>'<a role="tab" class="'+(cur===k?"on":"")+'" href="'+href+'">'+l+'</a>').join("")+'</div>'; }
-function workNav(s, cur){ if (!STUDENT()) return groupNav(s, cur); const n = studyGames(s.id).length; return subNav([["work","#/student/"+s.id+"/work","Practice"],["studied","#/student/"+s.id+"/studied","Studied games"+(n?" ("+n+")":"")]], cur); }
+function workNav(s, cur){ return groupNav(s, cur); const n = studyGames(s.id).length; return subNav([["work","#/student/"+s.id+"/work","Practice"],["studied","#/student/"+s.id+"/studied","Studied games"+(n?" ("+n+")":"")]], cur); }
 function editStudyGame(s, g){
   const isNew = !g; const x = g || {id:"gm-"+uid(), kind:"study", studentId:s.id, white:"", black:"", year:"", event:"", result:"1-0", opening:"", theme:"", source:"Book", analysis:"Not analysed", notes:"", pgn:"", added:today()};
   const mine = studyGames(s.id), uniq = a=>[...new Set(a.filter(Boolean))];
@@ -5301,7 +5301,7 @@ function tRepertoire(el, s){
     : '<p class="empty">No White repertoire yet. Start with the first move '+esc(s.name.split(" ")[0])+' plays, then add an answer to each defence.</p>';
   const blackHtml = black.length ? (groupRows(BLACK_AGAINST, black, x=>x.against, BLACK_CORE, k=>({color:"Black", against:k})) || '<p class="empty">No Black lines match this filter.</p>')
     : '<p class="empty">No Black repertoire yet.</p>'+groupRows(BLACK_AGAINST, [], x=>x.against, BLACK_CORE, k=>({color:"Black", against:k}));
-  el.innerHTML = (STUDENT()?"":groupNav(s,"repertoire"))+'<p class="sub" style="margin:0 0 12px">'+[count("Studied")+" studied", count("Learning")+" learning", count("Developing")+" in development"+(devC||devS?" ("+[devC?devC+" by you":"", devS?devS+" by the student":""].filter(Boolean).join(", ")+")":""), count("Needs review")+(count("Needs review")===1?" needs":" need")+" review"].join(" · ")+'</p>'+openingsPanel(s)+
+  el.innerHTML = groupNav(s,"repertoire")+'<p class="sub" style="margin:0 0 12px">'+[count("Studied")+" studied", count("Learning")+" learning", count("Developing")+" in development"+(devC||devS?" ("+[devC?devC+" by you":"", devS?devS+" by the student":""].filter(Boolean).join(", ")+")":""), count("Needs review")+(count("Needs review")===1?" needs":" need")+" review"].join(" · ")+'</p>'+openingsPanel(s)+
     '<div class="rep-tools"><select id="repOpen" class="search" aria-label="Filter by opening"><option value="">All openings</option>'+Object.keys(fams).sort((a,b)=>a.localeCompare(b)).map(f=>'<option value="'+esc(f)+'"'+(repOpening===f?" selected":"")+'>'+esc(f)+' ('+fams[f]+')</option>').join("")+'</select>'+
       '<input id="repQ" class="search" type="search" placeholder="Search lines, moves, ECO, notes" value="'+esc(repQuery)+'" aria-label="Search repertoire">'+
       (narrowed?'<button class="btn small ghost" data-a="clearRep">Clear</button>':'')+'</div>'+
