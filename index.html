@@ -2515,7 +2515,8 @@ function normalize(s){
 // A payment can be for one lesson (payment.sessionId); that lesson then counts as paid.
 const lessonFee = (s, x)=>+x.fee>0 ? +x.fee : (+s.rate||0);
 const paidFor = (s, x, skipId)=>s.payments.filter(p=>p.sessionId===x.id && p.id!==skipId).reduce((a,p)=>a+(+p.amount||0), 0);
-const lessonPaid = (s, x)=>{ const p = paidFor(s, x); return p>0 && p>=lessonFee(s, x)-0.009; };
+// A lesson is paid when a payment for it covers it, or when payments not tied to a lesson reach it (oldest charges first).
+const lessonPaid = (s, x)=>{ const p = paidFor(s, x); return (p>0 && p>=lessonFee(s, x)-0.009) || (x.status==="done" && ledger(s).settled.has(x.id)); };
 const lessonWhen = x=>fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"})+(x.time?" "+x.time:"");
 const payLabel = (s, p)=>{ const x = p.sessionId && s.sessions.find(y=>y.id===p.sessionId); return "Payment"+(p.method?" · "+p.method:"")+(x?" · for the lesson on "+lessonWhen(x):""); };
 function ledger(s){
@@ -2535,7 +2536,8 @@ function ledger(s){
   const age = oldestUnpaid ? daysBetween(oldestUnpaid, today()) : 0;
   const overdue = balance > 0.009 && age > (+state.settings.overdueDays||30);
   const lastPay = sortBy(s.payments,"date",-1)[0];
-  return { charges, charged, paid, balance, oldestUnpaid, age, overdue, lastPay };
+  const settled = new Set(charges.filter((c,i)=>c.sessionId && rem[i]<=0.009).map(c=>c.sessionId)); // lessons covered, by their own payment or the general pool
+  return { charges, charged, paid, balance, oldestUnpaid, age, overdue, lastPay, settled };
 }
 
 /* ---------- persistence ---------- */
@@ -5463,7 +5465,10 @@ function editPayment(s, x){
       sets:v=>{ const y = s.sessions.find(z=>z.id===v); return y ? {amount:left(y)} : {}; },
       hint:done.length||ahead.length ? "Choose the lesson to mark it as paid. Its price is filled in." : "No unpaid lessons right now."},
     {name:"date",label:"Date",type:"date",value:x?.date||today()},{name:"amount",label:"Amount ("+state.settings.currency+")",type:"number",value:x?.amount??(Math.max(0,Math.round(ledger(s).balance*100)/100)||s.rate),min:0,step:"any",required:true},
-    {name:"method",label:"Method",type:"select",options:["Bank transfer","Cash","Bit / PayBox","Credit card","PayPal","Other"],value:x?.method||"Bank transfer"},{name:"note",label:"Note",value:x?.note||"",placeholder:"e.g. Package of 4 sessions"}],"payment","Payment");
+    {name:"method",label:"Method",type:"select",options:["Bank transfer","Cash","Bit / PayBox","Credit card","PayPal","Other"],value:x?.method||"Bank transfer"},{name:"note",label:"Note",value:x?.note||"",placeholder:"e.g. Package of 4 sessions"}],"payment","Payment",
+    null, null, null,
+    // a deleted payment that came from a parent's report: the parent sees it as not received, so they can check with the coach
+    y=>{ (s.payReports||[]).forEach(r=>{ if (r.paymentId===y.id){ r.status = "declined"; r.decided = today(); } }); });
 }
 function tPayments(el, s){
   const l = ledger(s);
@@ -6244,10 +6249,11 @@ function pPayments(v){
     rows.map(({s,l})=>'<tr><td><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a></td><td class="r num">'+money(l.charged)+'</td><td class="r num">'+money(l.paid)+'</td><td class="r num'+(l.balance>0.009?" money-owed":"")+'">'+money(l.balance)+'</td><td class="small">'+(l.lastPay?esc(fmtDate(l.lastPay.date)):'<span class="muted">—</span>')+'</td><td>'+(l.overdue?'<span class="tag flag">'+l.age+' days overdue</span>':l.balance>0.009?'<span class="tag warn">Due</span>':l.balance<-0.009?'<span class="tag ok">In credit</span>':'<span class="tag ok">Paid up</span>')+'</td><td><button class="btn small" data-a="pay" data-id="'+s.id+'">Record</button></td></tr>').join("")+
     '</tbody></table></div></section>'+
     incomePanel()+
-    panel("Recent payments", allPays.length?'<ul class="list">'+allPays.slice(0,25).map(({s,p})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(p.date))+' · '+esc(p.method||"")+(p.note?" · "+esc(p.note):"")+'</div></div><span class="num" style="color:var(--ok);font-weight:600">'+money(p.amount)+'</span></li>').join("")+'</ul>':'<p class="empty">No payments recorded yet.</p>')+clubPayPanel();
+    panel("Recent payments", allPays.length?'<ul class="list">'+allPays.slice(0,25).map(({s,p})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(p.date))+' · '+esc(p.method||"")+(p.note?" · "+esc(p.note):"")+'</div></div><span class="num" style="color:var(--ok);font-weight:600">'+money(p.amount)+'</span><button class="btn small ghost" data-a="editPay" data-id="'+s.id+'|'+p.id+'">Edit</button></li>').join("")+'</ul>':'<p class="empty">No payments recorded yet.</p>')+clubPayPanel();
   $("#pRec").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
   $("#incYear").onchange = e=>{ incomeYear = e.target.value; render(); };
   bindActions(v,{ pay:id=>editPayment(byId(id),null),
+    editPay:id=>{ const [sid, pid] = id.split("|"), s = byId(sid), p = s && s.payments.find(x=>x.id===pid); if (p) editPayment(s, p); },
     csvPay:()=>{ const y = incomeData().year;
       const rows = []; state.students.forEach(s=>s.payments.forEach(p=>{ if ((p.date||"").slice(0,4)===y) rows.push([p.date, s.name, +p.amount||0, p.method||"", p.note||""]); }));
       rows.sort((a,b)=>a[0]<b[0]?-1:1);
