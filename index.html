@@ -4992,12 +4992,12 @@ function tGames(el, s){
   const L = {all:"All", open:"Not analysed", prog:"In analysis", done:"Reviewed"};
   const list = all.filter(F[gameFilter.status]).filter(g=>!gameFilter.tid || g.tournamentId===gameFilter.tid);
   const sc = scoreLine(all), sw = scoreLine(all.filter(g=>g.color!=="Black")), sb = scoreLine(all.filter(g=>g.color==="Black"));
-  const fmtS = x=>x.n ? '+'+x.w+' =' +x.d+' −'+x.l+' <span class="muted">('+x.pct+'%)</span>' : '—';
+  const wdl = x=>x.w+(x.w===1?" win":" wins")+", "+x.d+(x.d===1?" draw":" draws")+", "+x.l+(x.l===1?" loss":" losses")+" ("+x.pct+"%)";
   const statusTag = st=>'<span class="tag '+({"Reviewed with coach":"ok","Analysed by student":"warn","In progress":"board"}[st]||"")+'">'+esc(st||"Not analysed")+'</span>';
   const outTag = o=>o?'<span class="res-'+o+'">'+OUT_LABEL[o]+'</span>':'<span class="muted">—</span>';
   const trName = gameFilter.tid ? (s.tournaments.find(t=>t.id===gameFilter.tid)||{}).name : "";
   el.innerHTML = tabSwitch(s,"games")+
-    (all.length ? '<div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="stat"><div class="v num">'+all.length+'</div><div class="l">Games · '+fmtS(sc)+'</div></div><div class="stat"><div class="v num">'+(sw.n?sw.pct+"%":"—")+'</div><div class="l">With White · '+fmtS(sw)+'</div></div><div class="stat"><div class="v num">'+(sb.n?sb.pct+"%":"—")+'</div><div class="l">With Black · '+fmtS(sb)+'</div></div></div>' : "")+
+    (all.length ? '<p class="sub" style="margin:0 0 12px"><b>'+all.length+(all.length===1?' game':' games')+'</b> · <span>'+wdl(sc)+'</span>'+(sw.n?' · <span>White '+sw.pct+'%</span>':'')+(sb.n?' · <span>Black '+sb.pct+'%</span>':'')+'</p>' : "")+
     '<section class="panel"><div class="panel-head" style="flex-wrap:wrap"><div class="seg" role="group" aria-label="Analysis filter" style="margin:0">'+Object.keys(F).map(k=>'<button type="button" class="'+(gameFilter.status===k?"on":"")+'" data-a="gf" data-id="'+k+'">'+L[k]+' ('+all.filter(F[k]).filter(g=>!gameFilter.tid||g.tournamentId===gameFilter.tid).length+')</button>').join("")+'</div>'+
       '<div class="row-actions"><label class="btn small" for="gImport">Import PGN</label><input id="gImport" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain" multiple hidden><button class="btn small primary" data-a="addGame">Add game</button></div></div>'+
       (trName?'<p class="small" style="margin:0 0 8px">Showing games from <b>'+esc(trName)+'</b> · <button class="btn small ghost" data-a="clearT">Show all tournaments</button></p>':"")+
@@ -5503,7 +5503,7 @@ const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const MAX_DOC = 240000;
 function asTag(a){ const t = today();
   if (a.status==="Reviewed") return '<span class="tag ok">Reviewed</span>';
-  if (a.status==="Submitted") return '<span class="tag warn">Done · to review</span>';
+  if (a.status==="Submitted") return '<span class="tag warn">'+(STUDENT() ? "Waiting for your coach" : "Done · to review")+'</span>';
   if (a.due && a.due<t) return '<span class="tag flag">Overdue</span>';
   return '<span class="tag board">Assigned</span>'; }
 function asRow(a, showStudent){ const s = byId(a.studentId); const n = (a.games||[]).length;
@@ -5573,10 +5573,14 @@ function pAssignments(v){
 }
 function tAssignments(el, s){
   const list = asSort(state.assignments.filter(a=>a.studentId===s.id));
+  if (STUDENT()){ const todo = list.filter(a=>a.status==="Assigned"), done = list.filter(a=>a.status!=="Assigned");
+    const box = (title, xs, empty)=>'<section class="panel" style="padding:0;margin-bottom:16px"><div class="panel-head"><h2>'+title+'</h2></div>'+(xs.length ? xs.map(a=>'<div class="as-item">'+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">'+empty+'</p>')+'</section>';
+    el.innerHTML = box("To do", todo, PARENT() ? "All assignments are done." : "All tasks are done, nice job!")+(done.length ? box("Done", done, "") : "");
+  } else
   el.innerHTML = '<section class="panel" style="padding:0"><div class="panel-head"><h2>Assignments</h2>'+coachOnly('<button class="btn small primary" data-a="new">New assignment</button>')+'</div>'+
     (list.length ? list.map(a=>'<div class="as-item">'+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">'+(PARENT() ? 'All assignments are done.' : STUDENT() ? 'All tasks are done, nice job!' : 'No assignments yet. Add a task like “30 puzzles on pins”, or upload games in PGN for '+esc(s.name)+' to analyse.')+'</p>')+'</section>';
   bindActions(el,{ new:()=>editAssignment(null, s.id),
-    done:id=>{ const a = state.assignments.find(x=>x.id===id); a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — waiting for your review"); } });
+    done:id=>{ const a = state.assignments.find(x=>x.id===id); a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast(STUDENT() ? "Marked done — your coach will review it" : "Marked done — waiting for your review"); } });
 }
 
 function pgnHeaders(pgn){ const h = {}; pgn.replace(/\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g,(m,k,v)=>{ h[k]=v; return m; }); return h; }
@@ -6328,6 +6332,7 @@ function pSettings(v){
 /* ---------- Hebrew ---------- */
 const HE = {
   "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "To do":"לביצוע",
   "Fitness":"כושר", "This week":"השבוע", "Workouts":"אימוני כושר", "Workout":"אימון כושר", "Log a workout":"תיעוד אימון כושר", "Set weekly goal":"קביעת יעד שבועי", "Change weekly goal":"שינוי היעד השבועי",
   "Weekly fitness goal":"יעד כושר שבועי", "Workouts per week":"אימונים בשבוע", "0 means no goal":"0 = בלי יעד", "Weekly goal reached!":"היעד השבועי הושג!", "No weekly goal set yet.":"עדיין לא נקבע יעד שבועי.",
   "workouts this week":"אימונים השבוע", "No workouts logged yet.":"עדיין לא תועדו אימוני כושר.", "No workouts logged yet. Log one after each workout — running, football, swimming, anything active.":"עדיין לא תועדו אימוני כושר. אפשר לתעד אחרי כל אימון — ריצה, כדורגל, שחייה, כל פעילות.",
@@ -6823,6 +6828,7 @@ const HE_RX = [
   [/^(\d+) games? by other players$/, "$1 משחקים של שחקנים אחרים"], [/^([\d.]+) h of analysis logged$/, "$1 שעות ניתוח"], [/^themes: (.+)$/, "נושאים: $1"],
   [/^(\d+) sessions? (?:has a clash|have clashes) (this week|in these days|in the next 4 weeks)$/, (m,n,w)=>n+" שיעורים עם התנגשות "+({"this week":"השבוע","in these days":"בימים האלה","in the next 4 weeks":"ב־4 השבועות הקרובים"})[w]],
   [/^(\d{4}) total$/, "סה״כ $1"],
+  [/^(\d+) wins?, (\d+) draws?, (\d+) loss(?:es)? \((\d+)%\)$/, (m,w,d,l,p)=>[[w,"ניצחון אחד","ניצחונות"],[d,"תיקו אחד","תיקו"],[l,"הפסד אחד","הפסדים"]].map(([n,one,many])=>+n===1?one:n+" "+many).join(", ")+" ("+p+"%)"], [/^White (\d+)%$/, "לבן $1%"], [/^Black (\d+)%$/, "שחור $1%"],
   [/^(\d+) games?$/, (m,n)=>+n===1 ? "משחק אחד" : n+" משחקים"], [/^(\d+) results?$/, (m,n)=>+n===1 ? "תוצאה אחת" : n+" תוצאות"],
   [/^(\d+) days overdue$/, "באיחור של $1 ימים"],
   [/^A game (.+) played$/, "משחק של $1"], [/^(\S+) played$/, "הצבע של $1"],
