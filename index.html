@@ -330,6 +330,8 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .tstats .v{font-family:var(--display);font-size:1.3rem;font-weight:600}
 .tstats .l{font-size:.78rem;color:var(--muted)}
 @media (max-width:480px){.tstats{grid-template-columns:1fr 1fr}}
+.fit-meter{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:10px 0 6px}
+.fit-meter span{display:block;height:100%;background:var(--green)}
 .wbars{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;height:150px;align-items:end}
 .wbars > div{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0}
 .wbars .bar{width:70%;background:var(--sq-dark);border-radius:3px 3px 0 0;max-height:100px;flex:none}
@@ -2383,6 +2385,7 @@ const ICONS = {
   schedule:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   assign:'<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   practice:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/></svg>',
+  fitness:'<svg viewBox="0 0 24 24"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></svg>',
   games:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16"/><path d="M4 8h4v4H4zM12 12h4v4h-4zM8 4h4v4H8zM16 8h4v4h-4zM8 16h4v4H8zM16 16h4v4h-4z" fill="currentColor" stroke="none" opacity=".35"/></svg>',
   book:'<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5"/></svg>',
   tree:'<svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10M6 12c0-4 4-5 10-0"/></svg>',
@@ -2500,7 +2503,7 @@ new MutationObserver(ms=>{ if (appliedLang!=="he" && !nameOn()) return; ms.forEa
 function blankStudent(){
   return { id:"st-"+uid(), name:"", rating:"", ratingType:"FIDE", level:"", birthYear:"", contact:"", guardian:"", rate:state.settings.defaultRate||0, fideId:"", icfId:"", noId:false, fide:{}, icf:{},
     billing:"per session", goals:"", notes:"", active:true, createdAt:today(),
-    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], payments:[], charges:[], books:[], slots:[], training:[], requests:[] };
+    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], payments:[], charges:[], books:[], slots:[], training:[], requests:[], fitness:[], fitnessGoal:0 };
 }
 function normalize(s){
   const b = blankStudent();
@@ -2512,7 +2515,8 @@ function normalize(s){
 // A payment can be for one lesson (payment.sessionId); that lesson then counts as paid.
 const lessonFee = (s, x)=>+x.fee>0 ? +x.fee : (+s.rate||0);
 const paidFor = (s, x, skipId)=>s.payments.filter(p=>p.sessionId===x.id && p.id!==skipId).reduce((a,p)=>a+(+p.amount||0), 0);
-const lessonPaid = (s, x)=>{ const p = paidFor(s, x); return p>0 && p>=lessonFee(s, x)-0.009; };
+// A lesson is paid when a payment for it covers it, or when payments not tied to a lesson reach it (oldest charges first).
+const lessonPaid = (s, x)=>{ const p = paidFor(s, x); return (p>0 && p>=lessonFee(s, x)-0.009) || (x.status==="done" && ledger(s).settled.has(x.id)); };
 const lessonWhen = x=>fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"})+(x.time?" "+x.time:"");
 const payLabel = (s, p)=>{ const x = p.sessionId && s.sessions.find(y=>y.id===p.sessionId); return "Payment"+(p.method?" · "+p.method:"")+(x?" · for the lesson on "+lessonWhen(x):""); };
 function ledger(s){
@@ -2532,7 +2536,8 @@ function ledger(s){
   const age = oldestUnpaid ? daysBetween(oldestUnpaid, today()) : 0;
   const overdue = balance > 0.009 && age > (+state.settings.overdueDays||30);
   const lastPay = sortBy(s.payments,"date",-1)[0];
-  return { charges, charged, paid, balance, oldestUnpaid, age, overdue, lastPay };
+  const settled = new Set(charges.filter((c,i)=>c.sessionId && rem[i]<=0.009).map(c=>c.sessionId)); // lessons covered, by their own payment or the general pool
+  return { charges, charged, paid, balance, oldestUnpaid, age, overdue, lastPay, settled };
 }
 
 /* ---------- persistence ---------- */
@@ -2549,7 +2554,7 @@ function makeLocalStore(){
 // A database document holds at most 256 KB, and a student's logs keep growing. So a student is stored as a
 // main document (st-*) with everything from the last LOG_KEEP_DAYS days, plus one log document per year
 // (lg-<student id>-<year>) holding that year's older entries. In memory the student is always whole.
-const LOG_KEYS = ["worklog","sessions","payments","charges","ratings"];
+const LOG_KEYS = ["worklog","sessions","payments","charges","ratings","fitness"];
 const LOG_KEEP_DAYS = 90;
 const DOC_LIMIT = 250000;
 function splitStudent(s){
@@ -2756,7 +2761,7 @@ const STUDENT = ()=>ROLE!=="coach";
 const PARENT = ()=>ROLE==="parent";
 const coachOnly = html=>STUDENT() ? "" : html;
 const isShared = v=>v===true || v==="1"; // older saves stored the form's "0"/"1"
-const PORTAL_KEYS = ["worklog","tournaments","books","training","repertoire"]; // lists a student may add to and change
+const PORTAL_KEYS = ["worklog","tournaments","books","training","repertoire","fitness"]; // lists a student may add to and change
 /* families: a parent account follows one or more students */
 const families = ()=>state.settings.families||(state.settings.families=[]);
 const familyOf = x=>{ const sid = typeof x==="string" ? x : x && x.id; return families().find(f=>(f.studentIds||[]).includes(sid)); };
@@ -2796,7 +2801,7 @@ function studentView(s){
   return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
-    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[],
+    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0,
     coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0,
     freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56), s.id).free, taken:[]})); // other students' bookings just leave a gap
 }
@@ -2817,7 +2822,7 @@ function portalDocs(s){
 // only deletes what they added, and asks for lessons rather than booking them.
 function applyOp(s, op, coachSide){
   const t = op.type, it = op.item, mine = x=>x && x.by==="student", list = k=>(s[k] = s[k]||[]);
-  let m = /^(worklog|tournaments|books|training|repertoire)\.(upsert|delete)$/.exec(t);
+  let m = /^(worklog|tournaments|books|training|repertoire|fitness)\.(upsert|delete)$/.exec(t);
   if (m){
     const L = list(m[1]), i = L.findIndex(x=>x.id===(m[2]==="delete" ? op.id : it && it.id));
     if (m[2]==="delete"){ if (i>=0 && mine(L[i])) L.splice(i,1); return true; }
@@ -3411,7 +3416,7 @@ function renderNav(){
   const r = route();
   document.querySelectorAll("[data-lang]").forEach(b=>{ b.textContent = lang()==="he" ? "English" : "עברית"; });
   if (STUDENT()){
-    const s = state.students[0], cur = r.page==="student" ? ({games:"tournaments", studied:"work"}[r.tab]||r.tab) : r.page==="assignment" ? "assignments" : r.page==="schedule" ? "schedule" : r.page==="payments" && PARENT() ? "payments" : r.page==="progress" ? "progress" : "home";
+    const s = state.students[0], cur = r.page==="student" ? tabGroup(r.tab) : r.page==="assignment" ? "assignments" : r.page==="schedule" ? "schedule" : r.page==="payments" && PARENT() ? "payments" : r.page==="progress" ? "progress" : "home";
     // a family with more than one child picks whose board to show
     const fam = PARENT() && state.family, pick = $("#childPick");
     if (pick){ pick.hidden = !(fam && fam.children.length>1); if (fam) pick.innerHTML = fam.children.map(k=>'<option value="'+esc(k.id)+'"'+(k.id===fam.current?" selected":"")+'>'+esc(k.name)+'</option>').join(""); }
@@ -3429,7 +3434,7 @@ function renderNav(){
   const mine = me ? '<a href="#/student/'+me.id+'/overview"'+(meOn?' aria-current="page"':'')+'>'+ICONS.progress+'<span>My chess</span></a>' : "";
   $("#nav").innerHTML = html+mine; $("#bnav").innerHTML = html;
 }
-const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["progress","#/progress","Progress",ICONS.progress], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[]),["work",b+"work","Practice",ICONS.practice],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Assignments",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
+const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["assignments",b+"assignments","Tasks",ICONS.assign], ["work",b+"work","Practice",ICONS.practice], ["tournaments",b+"tournaments","Games",ICONS.games], ["progress","#/progress","Progress",ICONS.progress], ["schedule","#/schedule","Schedule",ICONS.schedule], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[])]; };
 document.addEventListener("change", e=>{ if (e.target.id==="childPick" && store && store.pickChild) store.pickChild(e.target.value); });
 // The language button students have (the coach changes language in Settings).
 document.addEventListener("click", e=>{ const b = e.target.closest("[data-lang]"); if (!b) return;
@@ -3448,7 +3453,7 @@ function render(){
 }
 
 /* ---------- the student's pages ---------- */
-const STUDENT_TABS = {work:"Practice", studied:"Practice", tournaments:"Games", games:"Games", assignments:"Assignments", books:"Reading", repertoire:"Openings"};
+const STUDENT_TABS = {work:"Practice", fitness:"Practice", books:"Practice", tournaments:"Games", games:"Games", studied:"Games", repertoire:"Games", assignments:"Tasks"};
 function renderStudent(v, r){
   const s = state.students[0];
   if (!s){ v.innerHTML = linkPage(store.me()); bindLink(); return; }
@@ -3456,7 +3461,7 @@ function renderStudent(v, r){
   if (PARENT() && r.page==="student" && r.id!==s.id && state.family && state.family.children.some(k=>k.id===r.id)){ store.pickChild(r.id); return; }
   if (r.page==="student" && r.id===s.id && STUDENT_TABS[r.tab]){
     v.innerHTML = '<div class="page-head"><div><h1>'+esc(STUDENT_TABS[r.tab])+'</h1></div></div><div id="tab"></div>';
-    ({work:tWork, studied:tStudied, tournaments:tTournaments, games:tGames, assignments:tAssignments, books:tBooks, repertoire:tRepertoire})[r.tab]($("#tab"), s);
+    ({work:tWork, fitness:tFitness, studied:tStudied, tournaments:tTournaments, games:tGames, assignments:tAssignments, books:tBooks, repertoire:tRepertoire})[r.tab]($("#tab"), s);
     return;
   }
   if (r.page==="assignment") return pAssignment(v, r);
@@ -3493,6 +3498,7 @@ function freshness(s){
 }
 // Progress for a student or parent: rating, practice over time, lessons, assignments and puzzle bests.
 let progSource = "", progPeriod = 30;
+const progRecent = s=>sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,3);
 function pProgress(v, s){
   const t = today(), first = s.name.split(" ")[0];
   // rating
@@ -3528,6 +3534,9 @@ function pProgress(v, s){
       '<div class="seg" role="group" aria-label="Period" style="margin:0">'+periods.map(([n,l])=>'<button type="button" class="'+(progPeriod===n?"on":"")+'" data-a="pp" data-id="'+n+'">'+l+'</button>').join("")+'</div></div>'+
     '<div class="stats">'+tile(lessons.length, "Lessons ("+lessonH.toFixed(1)+" h)")+tile(Math.round(mins/60*10)/10+" h", "Practice")+tile(asDone, "Assignments done")+tile(games.length ? score+"/"+games.length : "—", "Score in games")+'</div>'+
     '<div class="grid g2">'+
+    panel("Goals", (s.goals?'<p class="pre" style="margin:0">'+esc(s.goals)+'</p>':'<p class="empty" style="padding:0">Your coach hasn\'t written goals yet.</p>')+
+      (s.notes?'<h3 class="subh">From your coach</h3><p class="pre" style="margin:0">'+esc(s.notes)+'</p>':''))+
+    panel("Recent lessons", progRecent(s).length ? '<ul class="list">'+progRecent(s).map(x=>'<li style="display:block"><div class="title">'+esc(fmtDate(x.date))+(x.topics?' — '+esc(x.topics):'')+'</div>'+(x.notes?'<div class="small pre">'+esc(x.notes)+'</div>':'')+'</li>').join("")+'</ul>' : '<p class="empty">No lessons yet.</p>')+
     panel("Rating", (sources.length>1?'<div class="seg" role="group" aria-label="Rating list">'+sources.map(x=>'<button type="button" class="'+(x===src?"on":"")+'" data-a="ps" data-id="'+esc(x)+'">'+esc(x)+'</button>').join("")+'</div>':"")+
       (pts.length ? ratingChart(pts)+'<p class="small muted" style="margin:8px 0 0">Now <b class="num">'+esc(now.value)+'</b>'+(diff!==null?' · '+(diff>=0?"+":"")+diff+' since '+esc(fmtShort(y1.date)):'')+'</p>' : '<p class="empty">No ratings yet.</p>'))+
     panel("Practice per week", '<div class="wbars" style="grid-template-columns:repeat(12,1fr)" role="img" aria-label="Practice minutes per week, last 12 weeks">'+weeks.map((w,i)=>'<div title="'+esc(fmtShort(w.a))+': '+w.m+' min">'+(w.m?'<span class="pct">'+w.m+'</span>':'')+'<span class="bar" style="height:'+Math.round(w.m/maxM*100)+'px;'+(i===11?'background:var(--green)':'')+'"></span><span class="wl">'+esc(new Date(w.a+"T00:00").toLocaleDateString(LOCALE(),{day:"numeric",month:"numeric"}))+'</span></div>').join("")+'</div>'+
@@ -3590,13 +3599,14 @@ function pFamilyPay(v, s){
     '<div class="stats"><div class="stat"><div class="v num'+(p.balance>0.009?" money-owed":"")+'">'+(p.balance>0.009?m(p.balance):p.balance<-0.009?m(-p.balance):"✓")+'</div><div class="l">'+(p.balance>0.009?(p.overdue?p.age+" days overdue":"To pay"):p.balance<-0.009?"In credit":"Paid up")+'</div></div>'+
       '<div class="stat"><div class="v num">'+m(p.charged)+'</div><div class="l">Charged in total</div></div><div class="stat"><div class="v num">'+m(p.paid)+'</div><div class="l">Paid in total</div></div>'+
       '<div class="stat"><div class="v num">'+(p.lastPay?esc(fmtShort(p.lastPay.date)):"—")+'</div><div class="l">'+(p.lastPay?"Last payment · "+m(p.lastPay.amount):"No payments yet")+'</div></div></div>'+
-    (p.upcoming && p.upcoming.length ? panel("Coming up", '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Amount</th></tr></thead><tbody>'+
-      p.upcoming.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+(r.end&&r.end!==r.date?' – '+esc(fmtDate(r.end)):'')+'</td><td>'+esc(r.label)+'</td><td class="r num">'+m(r.amount)+'</td></tr>').join("")+'</tbody></table></div>'+
+    (p.upcoming && p.upcoming.length ? panel("Coming up", '<ul class="list stmt">'+
+      p.upcoming.map(r=>'<li><div class="main"><div class="title">'+esc(r.label)+'</div><div class="small muted">'+esc(fmtDate(r.date))+(r.end&&r.end!==r.date?' – '+esc(fmtDate(r.end)):'')+'</div></div><b class="num">'+m(r.amount)+'</b></li>').join("")+'</ul>'+
       '<p class="small muted" style="margin:8px 0 0">Not charged yet: these are added to the balance once the tournament is played.</p>') : '')+
     payReportsBox(s)+
     (p.howToPay?panel("How to pay", '<p class="pre" style="margin:0">'+esc(p.howToPay)+'</p>'):'')+
-    panel("Statement", p.rows.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Item</th><th class="r">Charge</th><th class="r">Paid</th></tr></thead><tbody>'+
-      p.rows.map(r=>'<tr><td class="small">'+esc(fmtDate(r.date))+'</td><td>'+esc(r.label)+(r.sessionId ? ' '+lessonPayTag(s, r) : '')+'</td><td class="r num">'+(r.charge?m(r.charge):"")+'</td><td class="r num">'+(r.paid?m(r.paid):"")+'</td></tr>').join("")+'</tbody></table></div>'+
+    panel("Statement", p.rows.length ? '<ul class="list stmt">'+ // one small card per line, so it reads well on a phone
+      p.rows.map(r=>'<li><div class="main"><div class="title">'+esc(r.label)+'</div><div class="small muted" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+esc(fmtDate(r.date))+(r.sessionId ? ' '+lessonPayTag(s, r) : '')+'</div></div>'+
+        '<div style="text-align:end;white-space:nowrap">'+(r.charge?'<b class="num">'+m(r.charge)+'</b>':'')+(r.paid?'<div class="small" style="color:var(--ok)">Paid <b class="num">'+m(r.paid)+'</b></div>':'')+'</div></li>').join("")+'</ul>'+
       '<p class="small muted" style="margin:8px 0 0">The last two years. Lessons are charged once they have taken place; cancelled lessons aren\'t charged.</p>' : '<p class="empty">No charges or payments yet.</p>');
 }
 function pHome(v, s){
@@ -3607,7 +3617,6 @@ function pHome(v, s){
   const week = s.worklog.filter(w=>w.date>=addDays(t,-6)).reduce((a,w)=>a+(+w.minutes||0),0);
   const tours = s.tournaments.filter(x=>tourAhead(x,t)).sort((a,b)=>tourNext(a,t)<tourNext(b,t)?-1:1).slice(0,3);
   const pend = (s.requests||[]).filter(r=>r.status==="pending");
-  const recent = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1).slice(0,3);
   const rt = sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===mainSource(s)),"date").pop();
   const hr = new Date().getHours(), greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
   v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+(PARENT() ? esc(first)+'’s board' : greet+', '+esc(first))+'</h1>'+freshness(s)+'</div><div class="row-actions"><button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
@@ -3635,10 +3644,6 @@ function pHome(v, s){
         pend.filter(r=>r.kind!=="cancel").map(r=>'<li><div class="main"><div class="title">'+(r.kind==="move"?"Move request":"Lesson request")+'</div><div class="small muted">'+esc(fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"}))+' · '+esc(r.time)+'</div></div><span class="tag warn">Waiting for your coach</span></li>').join("")+'</ul>'
       : '<p class="empty">Nothing planned yet.</p>', '<a class="btn small" href="#/schedule">Schedule</a>')+
     panel("Assignments", hw.length ? '<ul class="list">'+hw.map(a=>'<li><div class="main"><div class="title"><a href="#/assignment/'+a.id+'">'+esc(a.title)+'</a></div><div class="small muted">'+esc(a.type)+(a.due?' · due '+esc(fmtShort(a.due)):'')+'</div></div>'+(a.status==="Assigned"?'<button class="btn small" data-a="hwdone" data-id="'+a.id+'">Mark done</button>':'<span class="tag warn">Done · to review</span>')+'</li>').join("")+'</ul>' : '<p class="empty">No assignments right now.</p>')+
-    (s.freeSet ? panel("When your coach is free", (s.free||[]).length ? '<ul class="list">'+(s.free||[]).slice(0,5).map(f=>'<li><div class="main"><div class="title">'+esc(fmtDate(f.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(f.from)+'–'+esc(f.to)+'</div></div><button class="btn small" data-a="reqat" data-id="'+f.date+'|'+f.from+'">Request</button></li>').join("")+'</ul>' : '<p class="empty">No free time in the coming weeks.</p>', '<a class="btn small" href="#/schedule">Schedule</a>') : '')+
-    panel("Goals", (s.goals?'<p class="pre" style="margin:0">'+esc(s.goals)+'</p>':'<p class="empty" style="padding:0">Your coach hasn\'t written goals yet.</p>')+
-      (s.notes?'<h3 class="subh">From your coach</h3><p class="pre" style="margin:0">'+esc(s.notes)+'</p>':''))+
-    panel("Recent lessons", recent.length ? '<ul class="list">'+recent.map(x=>'<li style="display:block"><div class="title">'+esc(fmtDate(x.date))+(x.topics?' — '+esc(x.topics):'')+'</div>'+(x.notes?'<div class="small pre">'+esc(x.notes)+'</div>':'')+'</li>').join("")+'</ul>' : '<p class="empty">No lessons yet.</p>')+
     '</div>';
   bindActions(v,{ ans:id=>{ const [rid, c] = id.split("|"), r = (s.requests||[]).find(x=>x.id===rid); if (r) answerMove(s, r, c); },
     req:()=>requestLesson(s), log:()=>openPractice(s, null), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
@@ -3875,8 +3880,8 @@ function pDashboard(v){
   '<div class="grid g2">'+
   panel("Coming up this week", sessions.length ? '<ul class="list">'+sessions.map(({s,x})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+esc(x.topics||"No topic yet")+'</div></div><div style="text-align:end"><div class="small">'+esc(x.date===t?"Today":fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+'</div><div class="small muted">'+esc(x.time||"")+(x.duration?" · "+x.duration+" min":"")+'</div></div></li>').join("")+'</ul>' : '<p class="empty">No sessions planned for the next 7 days.</p>')+
   panel("Who owes you", owing.length ? '<ul class="list">'+owing.slice(0,8).map(({s,l})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a></div><div class="small muted">'+(l.lastPay?"Last paid "+esc(fmtShort(l.lastPay.date)):"No payments yet")+'</div></div><div style="text-align:end"><div class="money-owed num">'+money(l.balance)+'</div>'+(l.overdue?'<span class="tag flag">'+l.age+' days overdue</span>':'')+'<button class="btn small ghost" data-a="remind" data-id="'+s.id+'" style="margin-top:4px">Remind</button>'+'</div></li>').join("")+'</ul>' : '<p class="empty">Everyone is paid up.</p>')+
-  panel("Tournaments ahead", tours.length ? '<ul class="list">'+tourGroups.map(({x,ss})=>{ const d = daysBetween(t,tourNext(x,t)); return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+ss.map(s=>'<a href="#/student/'+s.id+'/tournaments">'+esc(s.name)+'</a>').join(", ")+(x.location?" · "+esc(x.location):"")+'</div></div><div style="text-align:end"><div class="small">'+esc(fmtShort(tourNext(x,t)))+'</div><span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span></div></li>'; }).join("")+'</ul>' : '<p class="empty">No tournaments in the next 60 days.</p>')+
-  panel("Assignments due", tasks.length ? '<ul class="list">'+tasks.map(({s,x})=>'<li><div class="main"><div class="title">'+esc(x.title)+'</div><div class="small muted"><a href="'+(x.href||'#/student/'+s.id+'/work')+'">'+esc(s.name)+'</a> · '+esc(x.category)+'</div></div>'+(x.review?'<span class="tag warn">Done · to review</span>':'<span class="tag '+(x.due<t?"flag":x.due===t?"warn":"")+'">'+(x.due<t?"Overdue":x.due===t?"Today":esc(fmtShort(x.due)))+'</span>')+'</li>').join("")+'</ul>' : '<p class="empty">Nothing due in the next 3 days.</p>')+
+  (!tours.length ? "" : panel("Tournaments ahead", tours.length ? '<ul class="list">'+tourGroups.map(({x,ss})=>{ const d = daysBetween(t,tourNext(x,t)); return '<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+ss.map(s=>'<a href="#/student/'+s.id+'/tournaments">'+esc(s.name)+'</a>').join(", ")+(x.location?" · "+esc(x.location):"")+'</div></div><div style="text-align:end"><div class="small">'+esc(fmtShort(tourNext(x,t)))+'</div><span class="tag '+(d<=7?"warn":"board")+'">'+(d<=0?"In progress":d===1?"Tomorrow":"In "+d+" days")+'</span></div></li>'; }).join("")+'</ul>' : '<p class="empty">No tournaments in the next 60 days.</p>'))+
+  (!tasks.length ? "" : panel("Assignments due", tasks.length ? '<ul class="list">'+tasks.map(({s,x})=>'<li><div class="main"><div class="title">'+esc(x.title)+'</div><div class="small muted"><a href="'+(x.href||'#/student/'+s.id+'/work')+'">'+esc(s.name)+'</a> · '+esc(x.category)+'</div></div>'+(x.review?'<span class="tag warn">Done · to review</span>':'<span class="tag '+(x.due<t?"flag":x.due===t?"warn":"")+'">'+(x.due<t?"Overdue":x.due===t?"Today":esc(fmtShort(x.due)))+'</span>')+'</li>').join("")+'</ul>' : '<p class="empty">Nothing due in the next 3 days.</p>'))+
   '</div>';
   $("#dSes").onclick = ()=>planSession();
   $("#dPay").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
@@ -3920,7 +3925,7 @@ function whyNotApplied(s, o){
   return "It didn't match anything current.";
 }
 const OP_LABEL = {"request":"a lesson request", "request.cancel":"a withdrawn request", "move.answer":"an answer about a lesson", "assignment.status":"an assignment marked done",
-  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
+  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "fitness.upsert":"a workout", "fitness.delete":"a deleted workout", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
 function issuesPanel(){
   const list = portal ? portal.issues() : []; if (!list.length) return "";
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--flag)"><div class="panel-head"><h2>Problems with the student and parent app</h2></div><ul class="list">'+
@@ -4256,7 +4261,17 @@ function editStudent(s){
 }
 
 /* ---------- student detail ---------- */
-const TABS = [["overview","Overview"],["sessions","Sessions"],["work","Daily work"],["assignments","Assignments"],["books","Books"],["repertoire","Repertoire"],["tournaments","Tournaments"],["payments","Payments"]];
+const TABS = [["overview","Overview"],["sessions","Lessons"],["work","Practice"],["tournaments","Games"],["assignments","Assignments"],["payments","Payments"]];
+// Related sections share one tab, with a row of sub-tabs: what the student does, and their games and preparation.
+const TAB_GROUPS = {work:["work","fitness","books"], tournaments:["tournaments","games","studied","repertoire"]};
+const tabGroup = tab=>Object.keys(TAB_GROUPS).find(k=>TAB_GROUPS[k].includes(tab)) || tab;
+function groupNav(s, cur){
+  const g = TAB_GROUPS[tabGroup(cur)]; if (!g) return "";
+  const n = {games:studentGames(s.id).length, studied:studyGames(s.id).length};
+  const lab = STUDENT() ? {work:"Daily practice", fitness:"Fitness", books:"Reading", tournaments:"Tournaments", games:"Game history", studied:"Studied games", repertoire:"Openings"}
+    : {work:"Daily work", fitness:"Fitness", books:"Books", tournaments:"Tournaments", games:"Game history", studied:"Studied games", repertoire:"Repertoire"};
+  return subNav(g.map(k=>[k, "#/student/"+s.id+"/"+k, lab[k]+(n[k]?" ("+n[k]+")":"")]), cur);
+}
 function pStudent(v, r){
   const s = byId(r.id);
   if (!s){ v.innerHTML = '<p class="empty">This student no longer exists. <a href="#/students">Back to students</a></p>'; return; }
@@ -4266,9 +4281,9 @@ function pStudent(v, r){
     (s.fideId?'<a class="btn small" href="'+fideUrl(s.fideId)+'" target="_blank" rel="noopener">FIDE '+esc(s.fideId)+' ↗</a>':'')+
     (s.icfId?'<a class="btn small" href="'+icfUrl(s.icfId)+'" target="_blank" rel="noopener">ICF '+esc(s.icfId)+' ↗</a>':'')+
     '<button class="btn" id="stEdit">Edit profile</button></div>'+
-    '<nav class="tabs" aria-label="Student sections">'+TABS.filter(([k])=>!(s.self && k==="payments")).map(([k,lab])=>'<a href="#/student/'+s.id+'/'+k+'"'+(r.tab===k||(k==="tournaments"&&r.tab==="games")||(k==="work"&&r.tab==="studied")?' aria-current="page"':"")+'>'+lab+'</a>').join("")+'</nav><div id="tab"></div>';
+    '<nav class="tabs" aria-label="Student sections">'+TABS.filter(([k])=>!(s.self && k==="payments")).map(([k,lab])=>'<a href="#/student/'+s.id+'/'+k+'"'+(tabGroup(r.tab)===k?' aria-current="page"':"")+'>'+lab+'</a>').join("")+'</nav><div id="tab"></div>';
   $("#stEdit").onclick = ()=>editStudent(s);
-  const T = {overview:tOverview, sessions:tSessions, work:tWork, assignments:tAssignments, books:tBooks, games:tGames, studied:tStudied, repertoire:tRepertoire, tournaments:tTournaments, payments:tPayments};
+  const T = {overview:tOverview, sessions:tSessions, work:tWork, fitness:tFitness, assignments:tAssignments, books:tBooks, games:tGames, studied:tStudied, repertoire:tRepertoire, tournaments:tTournaments, payments:tPayments};
   (T[r.tab]||tOverview)($("#tab"), s);
 }
 function bindActions(root, handlers){
@@ -4676,6 +4691,45 @@ function tWork(el, s){
   });
 }
 
+/* ---------- fitness ---------- */
+// The physical side of training: workouts the student (or the coach) logs, against a weekly goal the coach sets.
+const FIT_KINDS = ["Running","Walking","Cycling","Swimming","Football","Basketball","Gym / strength","Yoga / stretching","Martial arts","Dance","Other sport"];
+const fitShown = {};
+function tFitness(el, s){ const nav = groupNav(s, "fitness");
+  const t = today(), list = s.fitness||[], goal = +s.fitnessGoal||0, first = s.name.split(" ")[0];
+  const weeks = []; for (let i=7;i>=0;i--){ const a = addDays(weekStartOf(t),-7*i), b = addDays(a,6), ws = list.filter(w=>w.date>=a && w.date<=b); weeks.push({a, n:ws.length, m:ws.reduce((x,w)=>x+(+w.minutes||0),0)}); }
+  const now = weeks[7], maxN = Math.max(goal, ...weeks.map(w=>w.n), 1);
+  let streak = 0; if (goal) for (let i=now.n>=goal?7:6;i>=0 && weeks[i].n>=goal;i--) streak++;
+  const head = goal
+    ? '<p style="margin:0"><b class="num">'+now.n+' of '+goal+'</b> <span class="muted">workouts this week'+(now.m?' · '+now.m+' min':'')+'</span></p>'+
+      '<div class="fit-meter" role="img" aria-label="'+now.n+' of '+goal+' workouts this week"><span style="width:'+Math.min(100, now.n/goal*100)+'%"></span></div>'+
+      '<p class="small muted" style="margin:0">'+(now.n>=goal ? "Weekly goal reached!" : (goal-now.n)+" more to reach the weekly goal")+(streak>1?' · '+streak+' weeks in a row':'')+'</p>'
+    : '<p style="margin:0"><b class="num">'+now.n+'</b> <span class="muted">workouts this week'+(now.m?' · '+now.m+' min':'')+'</span></p><p class="small muted" style="margin:6px 0 0">'+(STUDENT() ? "No weekly goal set yet." : "No weekly goal yet — set one so "+esc(first)+" has something to aim for.")+'</p>';
+  const bars = '<div class="wbars" style="margin-top:16px" role="img" aria-label="Workouts per week, last 8 weeks">'+weeks.map((w,i)=>'<div title="'+esc(fmtShort(w.a))+': '+w.n+(w.m?' · '+w.m+' min':'')+'">'+(w.n?'<span class="pct">'+w.n+'</span>':'')+'<span class="bar" style="height:'+Math.round(w.n/maxN*100)+'px;'+(goal && w.n>=goal?'background:var(--green)':i===7?'opacity:.6':'')+'"></span><span class="wl">'+esc(new Date(w.a+"T00:00").toLocaleDateString(LOCALE(),{day:"numeric",month:"numeric"}))+'</span></div>').join("")+'</div>'+
+    (goal?'<p class="small muted" style="margin:6px 0 0">Green weeks reached the goal of '+goal+' workout'+(goal===1?'':'s')+'.</p>':'');
+  const shown = fitShown[s.id]||25, rows = sortBy(list,"date",-1);
+  el.innerHTML = nav+'<div class="grid g2">'+
+    panel("This week", head+bars+'<div class="row-actions" style="margin-top:14px">'+coachOnly('<button class="btn small" data-a="fitGoal">'+(goal?"Change weekly goal":"Set weekly goal")+'</button>')+'<button class="btn small primary" data-a="addFit">Log a workout</button></div>')+
+    panel("Workouts", rows.length ? '<ul class="list">'+rows.slice(0,shown).map(w=>'<li><div class="main"><div class="title">'+esc(w.activity||"Workout")+(w.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+'</div><div class="small muted">'+esc(fmtDate(w.date,{weekday:"short",day:"numeric",month:"short"}))+(w.minutes?' · '+esc(w.minutes)+' min':'')+'</div></div><button class="btn small ghost" data-a="editFit" data-id="'+w.id+'">Edit</button></li>').join("")+'</ul>'+
+      (rows.length>shown?'<div class="row-actions" style="margin-top:8px"><button class="btn small" data-a="more">Show 25 more</button></div>':'')
+      : '<p class="empty">'+(PARENT() ? "No workouts logged yet." : "No workouts logged yet. Log one after each workout — running, football, swimming, anything active.")+'</p>')+
+  '</div>';
+  bindActions(el,{
+    addFit:()=>editFitness(s, null),
+    editFit:id=>editFitness(s, list.find(x=>x.id===id)),
+    more:()=>{ fitShown[s.id] = shown+25; render(); },
+    fitGoal:()=>openForm({title:"Weekly fitness goal", submit:"Save", fields:[{name:"goal",label:"Workouts per week",type:"number",min:0,value:goal||3,hint:"0 means no goal"}],
+      onSubmit:d=>{ const n = Math.max(0, Math.round(+d.goal||0)); if (n>14) return "Choose up to 14 workouts a week."; s.fitnessGoal = n; saveStudent(s); render(); toast(n?"Weekly goal saved":"Weekly goal removed"); }})
+  });
+}
+function editFitness(s, x){
+  crud(s,"fitness",x,[
+    {name:"date",label:"Date",type:"date",value:x?.date||today()},
+    {name:"activity",label:"Activity",type:"select",options:FIT_KINDS,value:x?.activity||"Running"},
+    {name:"minutes",label:"Minutes",type:"number",min:1,value:x?.minutes??30}],
+  "workout","Workout", d=>!d.date ? "Choose a date." : d.date>today() ? "Log workouts that already happened." : !(+d.minutes>0) ? "Enter how many minutes." : null, d=>Object.assign(d, {minutes:+d.minutes}));
+}
+
 /* ---------- practice form (shared by Daily work and Books) ---------- */
 function bookLabel(b){ return b.title+(b.pages?" (p. "+(+b.page||0)+"/"+b.pages+")":(b.page?" (p. "+b.page+")":"")); }
 function openPractice(s, entry, preset){
@@ -4842,7 +4896,7 @@ function tBooks(el, s){
       '</div></article>';
   };
   const section = (title, list, empty)=> list.length || empty ? '<h2 class="shelf-h">'+title+' <span class="muted small">'+list.length+'</span></h2>'+(list.length?'<div class="shelf">'+list.map(card).join("")+'</div>':'<p class="empty">'+empty+'</p>') : "";
-  el.innerHTML = '<div class="page-head" style="margin-bottom:8px"><p class="sub" style="margin:0">'+by("Reading").length+' reading now · '+finishedYear+' finished in '+year+' · '+recentPages+' pages in the last 4 weeks</p><button class="btn primary" data-a="add">Add book</button></div>'+
+  el.innerHTML = groupNav(s,"books")+'<div class="page-head" style="margin-bottom:8px"><p class="sub" style="margin:0">'+by("Reading").length+' reading now · '+finishedYear+' finished in '+year+' · '+recentPages+' pages in the last 4 weeks</p><button class="btn primary" data-a="add">Add book</button></div>'+
     (s.books.length ? section("Reading now", sortBy(by("Reading"),"lastRead",-1), "Nothing in progress.")+section("Up next", by("Want to read"))+section("Paused", by("Paused"))+section("Finished", sortBy(by("Finished"),"finished",-1))
       : '<section class="panel"><p class="empty" style="margin:0">No books yet. Add the books '+esc(s.name.split(" ")[0])+' is working through — then log reading here or from Daily work, and the current page, last-read date and pace update on their own.</p></section>');
   bindActions(el,{
@@ -4930,6 +4984,7 @@ function importGames(s, text){
 }
 let gameFilter = {status:"all", tid:""};
 function tabSwitch(s, cur){
+  return groupNav(s, cur);
   const n = studentGames(s.id).length;
   return '<div class="seg" role="tablist" style="margin-bottom:16px"><a role="tab" class="'+(cur==="tournaments"?"on":"")+'" href="#/student/'+s.id+'/tournaments">Tournaments</a><a role="tab" class="'+(cur==="games"?"on":"")+'" href="#/student/'+s.id+'/games">Game history'+(n?" ("+n+")":"")+'</a></div>';
 }
@@ -4940,12 +4995,12 @@ function tGames(el, s){
   const L = {all:"All", open:"Not analysed", prog:"In analysis", done:"Reviewed"};
   const list = all.filter(F[gameFilter.status]).filter(g=>!gameFilter.tid || g.tournamentId===gameFilter.tid);
   const sc = scoreLine(all), sw = scoreLine(all.filter(g=>g.color!=="Black")), sb = scoreLine(all.filter(g=>g.color==="Black"));
-  const fmtS = x=>x.n ? '+'+x.w+' =' +x.d+' −'+x.l+' <span class="muted">('+x.pct+'%)</span>' : '—';
+  const wdl = x=>x.w+(x.w===1?" win":" wins")+", "+x.d+(x.d===1?" draw":" draws")+", "+x.l+(x.l===1?" loss":" losses")+" ("+x.pct+"%)";
   const statusTag = st=>'<span class="tag '+({"Reviewed with coach":"ok","Analysed by student":"warn","In progress":"board"}[st]||"")+'">'+esc(st||"Not analysed")+'</span>';
   const outTag = o=>o?'<span class="res-'+o+'">'+OUT_LABEL[o]+'</span>':'<span class="muted">—</span>';
   const trName = gameFilter.tid ? (s.tournaments.find(t=>t.id===gameFilter.tid)||{}).name : "";
   el.innerHTML = tabSwitch(s,"games")+
-    (all.length ? '<div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="stat"><div class="v num">'+all.length+'</div><div class="l">Games · '+fmtS(sc)+'</div></div><div class="stat"><div class="v num">'+(sw.n?sw.pct+"%":"—")+'</div><div class="l">With White · '+fmtS(sw)+'</div></div><div class="stat"><div class="v num">'+(sb.n?sb.pct+"%":"—")+'</div><div class="l">With Black · '+fmtS(sb)+'</div></div></div>' : "")+
+    (all.length ? '<p class="sub" style="margin:0 0 12px"><b>'+all.length+(all.length===1?' game':' games')+'</b> · <span>'+wdl(sc)+'</span>'+(sw.n?' · <span>White '+sw.pct+'%</span>':'')+(sb.n?' · <span>Black '+sb.pct+'%</span>':'')+'</p>' : "")+
     '<section class="panel"><div class="panel-head" style="flex-wrap:wrap"><div class="seg" role="group" aria-label="Analysis filter" style="margin:0">'+Object.keys(F).map(k=>'<button type="button" class="'+(gameFilter.status===k?"on":"")+'" data-a="gf" data-id="'+k+'">'+L[k]+' ('+all.filter(F[k]).filter(g=>!gameFilter.tid||g.tournamentId===gameFilter.tid).length+')</button>').join("")+'</div>'+
       '<div class="row-actions"><label class="btn small" for="gImport">Import PGN</label><input id="gImport" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain" multiple hidden><button class="btn small primary" data-a="addGame">Add game</button></div></div>'+
       (trName?'<p class="small" style="margin:0 0 8px">Showing games from <b>'+esc(trName)+'</b> · <button class="btn small ghost" data-a="clearT">Show all tournaments</button></p>':"")+
@@ -5000,7 +5055,7 @@ const studyGames = sid => state.games.filter(g=>g.studentId===sid && g.kind==="s
 function studyTitle(g){ return (g.white||"?")+" – "+(g.black||"?"); }
 function studyOption(g){ return studyTitle(g)+" "+(g.result||"")+(g.year?" · "+g.year:"")+(g.theme?" · "+g.theme:"")+" — "+(g.analysis||"Not analysed"); }
 function subNav(items, cur){ return '<div class="seg" role="tablist" style="margin-bottom:16px">'+items.map(([k,href,l])=>'<a role="tab" class="'+(cur===k?"on":"")+'" href="'+href+'">'+l+'</a>').join("")+'</div>'; }
-function workNav(s, cur){ const n = studyGames(s.id).length; return subNav([["work","#/student/"+s.id+"/work","Practice"],["studied","#/student/"+s.id+"/studied","Studied games"+(n?" ("+n+")":"")]], cur); }
+function workNav(s, cur){ return groupNav(s, cur); const n = studyGames(s.id).length; return subNav([["work","#/student/"+s.id+"/work","Practice"],["studied","#/student/"+s.id+"/studied","Studied games"+(n?" ("+n+")":"")]], cur); }
 function editStudyGame(s, g){
   const isNew = !g; const x = g || {id:"gm-"+uid(), kind:"study", studentId:s.id, white:"", black:"", year:"", event:"", result:"1-0", opening:"", theme:"", source:"Book", analysis:"Not analysed", notes:"", pgn:"", added:today()};
   const mine = studyGames(s.id), uniq = a=>[...new Set(a.filter(Boolean))];
@@ -5249,7 +5304,7 @@ function tRepertoire(el, s){
     : '<p class="empty">No White repertoire yet. Start with the first move '+esc(s.name.split(" ")[0])+' plays, then add an answer to each defence.</p>';
   const blackHtml = black.length ? (groupRows(BLACK_AGAINST, black, x=>x.against, BLACK_CORE, k=>({color:"Black", against:k})) || '<p class="empty">No Black lines match this filter.</p>')
     : '<p class="empty">No Black repertoire yet.</p>'+groupRows(BLACK_AGAINST, [], x=>x.against, BLACK_CORE, k=>({color:"Black", against:k}));
-  el.innerHTML = '<p class="sub" style="margin:0 0 12px">'+[count("Studied")+" studied", count("Learning")+" learning", count("Developing")+" in development"+(devC||devS?" ("+[devC?devC+" by you":"", devS?devS+" by the student":""].filter(Boolean).join(", ")+")":""), count("Needs review")+(count("Needs review")===1?" needs":" need")+" review"].join(" · ")+'</p>'+openingsPanel(s)+
+  el.innerHTML = groupNav(s,"repertoire")+'<p class="sub" style="margin:0 0 12px">'+[count("Studied")+" studied", count("Learning")+" learning", count("Developing")+" in development"+(devC||devS?" ("+[devC?devC+" by you":"", devS?devS+" by the student":""].filter(Boolean).join(", ")+")":""), count("Needs review")+(count("Needs review")===1?" needs":" need")+" review"].join(" · ")+'</p>'+(STUDENT() ? "" : openingsPanel(s))+
     '<div class="rep-tools"><select id="repOpen" class="search" aria-label="Filter by opening"><option value="">All openings</option>'+Object.keys(fams).sort((a,b)=>a.localeCompare(b)).map(f=>'<option value="'+esc(f)+'"'+(repOpening===f?" selected":"")+'>'+esc(f)+' ('+fams[f]+')</option>').join("")+'</select>'+
       '<input id="repQ" class="search" type="search" placeholder="Search lines, moves, ECO, notes" value="'+esc(repQuery)+'" aria-label="Search repertoire">'+
       (narrowed?'<button class="btn small ghost" data-a="clearRep">Clear</button>':'')+'</div>'+
@@ -5257,7 +5312,8 @@ function tRepertoire(el, s){
     '<div class="seg" role="group" aria-label="Filter by status">'+Object.keys(F).map(k=>'<button type="button" class="'+(repFilter===k?"on":"")+'" data-a="rf" data-id="'+esc(k)+'">'+(k==="all"?"All":k)+' ('+count(k)+')</button>').join("")+'</div>'+
     '<div class="grid g2">'+
     '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece w"></span>White</h3>'+('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"White"}))+'">Add line</button>')+'</div>'+whiteHtml+'</section>'+
-    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece b"></span>Black</h3>'+('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"Black"}))+'">Add line</button>')+'</div>'+blackHtml+'</section></div>';
+    '<section class="panel rep-col"><div class="panel-head"><h3><span class="piece b"></span>Black</h3>'+('<button class="btn small" data-a="addp" data-id="'+esc(JSON.stringify({color:"Black"}))+'">Add line</button>')+'</div>'+blackHtml+'</section></div>'+
+    (STUDENT() ? '<div style="margin-top:16px"></div>'+openingsPanel(s) : ''); // a student sees their own lines first
   bindActions(el,{
     rf:id=>{ repFilter = id; render(); },
     clearRep:()=>{ repOpening = ""; repQuery = ""; render(); },
@@ -5409,7 +5465,10 @@ function editPayment(s, x){
       sets:v=>{ const y = s.sessions.find(z=>z.id===v); return y ? {amount:left(y)} : {}; },
       hint:done.length||ahead.length ? "Choose the lesson to mark it as paid. Its price is filled in." : "No unpaid lessons right now."},
     {name:"date",label:"Date",type:"date",value:x?.date||today()},{name:"amount",label:"Amount ("+state.settings.currency+")",type:"number",value:x?.amount??(Math.max(0,Math.round(ledger(s).balance*100)/100)||s.rate),min:0,step:"any",required:true},
-    {name:"method",label:"Method",type:"select",options:["Bank transfer","Cash","Bit / PayBox","Credit card","PayPal","Other"],value:x?.method||"Bank transfer"},{name:"note",label:"Note",value:x?.note||"",placeholder:"e.g. Package of 4 sessions"}],"payment","Payment");
+    {name:"method",label:"Method",type:"select",options:["Bank transfer","Cash","Bit / PayBox","Credit card","PayPal","Other"],value:x?.method||"Bank transfer"},{name:"note",label:"Note",value:x?.note||"",placeholder:"e.g. Package of 4 sessions"}],"payment","Payment",
+    null, null, null,
+    // a deleted payment that came from a parent's report: the parent sees it as not received, so they can check with the coach
+    y=>{ (s.payReports||[]).forEach(r=>{ if (r.paymentId===y.id){ r.status = "declined"; r.decided = today(); } }); });
 }
 function tPayments(el, s){
   const l = ledger(s);
@@ -5450,7 +5509,7 @@ const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const MAX_DOC = 240000;
 function asTag(a){ const t = today();
   if (a.status==="Reviewed") return '<span class="tag ok">Reviewed</span>';
-  if (a.status==="Submitted") return '<span class="tag warn">Done · to review</span>';
+  if (a.status==="Submitted") return '<span class="tag warn">'+(STUDENT() ? "Waiting for your coach" : "Done · to review")+'</span>';
   if (a.due && a.due<t) return '<span class="tag flag">Overdue</span>';
   return '<span class="tag board">Assigned</span>'; }
 function asRow(a, showStudent){ const s = byId(a.studentId); const n = (a.games||[]).length;
@@ -5520,10 +5579,14 @@ function pAssignments(v){
 }
 function tAssignments(el, s){
   const list = asSort(state.assignments.filter(a=>a.studentId===s.id));
+  if (STUDENT()){ const todo = list.filter(a=>a.status==="Assigned"), done = list.filter(a=>a.status!=="Assigned");
+    const box = (title, xs, empty)=>'<section class="panel" style="padding:0;margin-bottom:16px"><div class="panel-head"><h2>'+title+'</h2></div>'+(xs.length ? xs.map(a=>'<div class="as-item">'+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">'+empty+'</p>')+'</section>';
+    el.innerHTML = box("To do", todo, PARENT() ? "All assignments are done." : "All tasks are done, nice job!")+(done.length ? box("Done", done, "") : "");
+  } else
   el.innerHTML = '<section class="panel" style="padding:0"><div class="panel-head"><h2>Assignments</h2>'+coachOnly('<button class="btn small primary" data-a="new">New assignment</button>')+'</div>'+
     (list.length ? list.map(a=>'<div class="as-item">'+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">'+(PARENT() ? 'All assignments are done.' : STUDENT() ? 'All tasks are done, nice job!' : 'No assignments yet. Add a task like “30 puzzles on pins”, or upload games in PGN for '+esc(s.name)+' to analyse.')+'</p>')+'</section>';
   bindActions(el,{ new:()=>editAssignment(null, s.id),
-    done:id=>{ const a = state.assignments.find(x=>x.id===id); a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — waiting for your review"); } });
+    done:id=>{ const a = state.assignments.find(x=>x.id===id); a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast(STUDENT() ? "Marked done — your coach will review it" : "Marked done — waiting for your review"); } });
 }
 
 function pgnHeaders(pgn){ const h = {}; pgn.replace(/\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g,(m,k,v)=>{ h[k]=v; return m; }); return h; }
@@ -6186,10 +6249,11 @@ function pPayments(v){
     rows.map(({s,l})=>'<tr><td><a href="#/student/'+s.id+'/payments">'+esc(s.name)+'</a></td><td class="r num">'+money(l.charged)+'</td><td class="r num">'+money(l.paid)+'</td><td class="r num'+(l.balance>0.009?" money-owed":"")+'">'+money(l.balance)+'</td><td class="small">'+(l.lastPay?esc(fmtDate(l.lastPay.date)):'<span class="muted">—</span>')+'</td><td>'+(l.overdue?'<span class="tag flag">'+l.age+' days overdue</span>':l.balance>0.009?'<span class="tag warn">Due</span>':l.balance<-0.009?'<span class="tag ok">In credit</span>':'<span class="tag ok">Paid up</span>')+'</td><td><button class="btn small" data-a="pay" data-id="'+s.id+'">Record</button></td></tr>').join("")+
     '</tbody></table></div></section>'+
     incomePanel()+
-    panel("Recent payments", allPays.length?'<ul class="list">'+allPays.slice(0,25).map(({s,p})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(p.date))+' · '+esc(p.method||"")+(p.note?" · "+esc(p.note):"")+'</div></div><span class="num" style="color:var(--ok);font-weight:600">'+money(p.amount)+'</span></li>').join("")+'</ul>':'<p class="empty">No payments recorded yet.</p>')+clubPayPanel();
+    panel("Recent payments", allPays.length?'<ul class="list">'+allPays.slice(0,25).map(({s,p})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(p.date))+' · '+esc(p.method||"")+(p.note?" · "+esc(p.note):"")+'</div></div><span class="num" style="color:var(--ok);font-weight:600">'+money(p.amount)+'</span><button class="btn small ghost" data-a="editPay" data-id="'+s.id+'|'+p.id+'">Edit</button></li>').join("")+'</ul>':'<p class="empty">No payments recorded yet.</p>')+clubPayPanel();
   $("#pRec").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
   $("#incYear").onchange = e=>{ incomeYear = e.target.value; render(); };
   bindActions(v,{ pay:id=>editPayment(byId(id),null),
+    editPay:id=>{ const [sid, pid] = id.split("|"), s = byId(sid), p = s && s.payments.find(x=>x.id===pid); if (p) editPayment(s, p); },
     csvPay:()=>{ const y = incomeData().year;
       const rows = []; state.students.forEach(s=>s.payments.forEach(p=>{ if ((p.date||"").slice(0,4)===y) rows.push([p.date, s.name, +p.amount||0, p.method||"", p.note||""]); }));
       rows.sort((a,b)=>a[0]<b[0]?-1:1);
@@ -6274,7 +6338,15 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Tasks":"משימות",
+  "To do":"לביצוע",
+  "Fitness":"כושר", "This week":"השבוע", "Workouts":"אימוני כושר", "Workout":"אימון כושר", "Log a workout":"תיעוד אימון כושר", "Set weekly goal":"קביעת יעד שבועי", "Change weekly goal":"שינוי היעד השבועי",
+  "Weekly fitness goal":"יעד כושר שבועי", "Workouts per week":"אימונים בשבוע", "0 means no goal":"0 = בלי יעד", "Weekly goal reached!":"היעד השבועי הושג!", "No weekly goal set yet.":"עדיין לא נקבע יעד שבועי.",
+  "workouts this week":"אימונים השבוע", "No workouts logged yet.":"עדיין לא תועדו אימוני כושר.", "No workouts logged yet. Log one after each workout — running, football, swimming, anything active.":"עדיין לא תועדו אימוני כושר. אפשר לתעד אחרי כל אימון — ריצה, כדורגל, שחייה, כל פעילות.",
+  "Activity":"פעילות", "Running":"ריצה", "Walking":"הליכה", "Cycling":"רכיבה על אופניים", "Swimming":"שחייה", "Football":"כדורגל", "Basketball":"כדורסל", "Gym / strength":"חדר כושר / כוח", "Yoga / stretching":"יוגה / מתיחות", "Martial arts":"אומנויות לחימה", "Dance":"ריקוד", "Other sport":"ספורט אחר",
+  "Add workout":"הוספת אימון כושר", "Edit workout":"עריכת אימון כושר", "Workout added":"אימון הכושר נוסף", "Workout updated":"אימון הכושר עודכן", "Workout deleted":"אימון הכושר נמחק", "Delete this workout?":"למחוק את אימון הכושר?",
+  "Log workouts that already happened.":"אפשר לתעד רק אימונים שכבר היו.", "Enter how many minutes.":"יש להזין כמה דקות.", "Choose up to 14 workouts a week.":"אפשר לבחור עד 14 אימונים בשבוע.", "Weekly goal saved":"היעד השבועי נשמר", "Weekly goal removed":"היעד השבועי הוסר",
+  "Workouts per week, last 8 weeks":"אימוני כושר בשבוע, 8 השבועות האחרונים", "a workout":"אימון כושר", "a deleted workout":"אימון כושר שנמחק",
   "Your name in Hebrew":"השם שלך בעברית", "Students and parents see your name instead of “coach”.":"תלמידים והורים יראו את השם שלך במקום „המאמן”.",
   "This month:":"החודש:", "so far":"עד עכשיו",
   "Add club class":"הוספת חוג במועדון", "Edit club class":"עריכת חוג במועדון", "Club class":"חוג במועדון", "Club work":"עבודה במועדון", "Options":"אפשרויות",
@@ -6686,7 +6758,7 @@ const HE_RX = [
   [/^Lessons \(([\d.]+) h\)$/, "שיעורים ($1 שע׳)"], [/^([\d.]+) h$/, "$1 שע׳"], [/^(.+)’s progress$/, "ההתקדמות של $1"],
   [/^Now (\d+)(?: · ([+-]?\d+) since (.+))?$/, (m,n,d,w)=>"עכשיו "+n+(d?" · "+d+" מאז "+w:"")],
   [/^About (\d+) min a week(?: · (\d+)-day streak)?$/, (m,a,st)=>"בערך "+a+" דק׳ בשבוע"+(st?" · רצף של "+st+" ימים":"")],
-  [/^Couldn't take in (.+?)(?: — (.+))?$/, (m,w,n)=>"לא ניתן לקלוט "+({"a lesson request":"בקשת שיעור","a withdrawn request":"ביטול בקשה","an answer about a lesson":"תשובה על שיעור","an assignment marked done":"משימה שסומנה כבוצעה","a practice entry":"רישום תרגול","a deleted practice entry":"מחיקת תרגול","a tournament":"טורניר","a book":"ספר","a training plan":"תוכנית אימון","a game":"משחק","a change":"שינוי"}[w]||w)+(n?" — "+n:"")],
+  [/^Couldn't take in (.+?)(?: — (.+))?$/, (m,w,n)=>"לא ניתן לקלוט "+({"a lesson request":"בקשת שיעור","a withdrawn request":"ביטול בקשה","an answer about a lesson":"תשובה על שיעור","an assignment marked done":"משימה שסומנה כבוצעה","a practice entry":"רישום תרגול","a deleted practice entry":"מחיקת תרגול","a tournament":"טורניר","a book":"ספר","a training plan":"תוכנית אימון","a game":"משחק","a workout":"אימון כושר","a deleted workout":"מחיקת אימון כושר","a change":"שינוי"}[w]||w)+(n?" — "+n:"")],
   [/^Sent (\d+) hours ago and not taken in yet\. .*$/, "נשלח לפני $1 שעות ועדיין לא נקלט. זה יקרה כשהמאמן יפתח את „עולים בדרגה” — אם זה נמשך, כדאי לספר למאמן."],
   [/^Invite message — (.+)$/, "הודעת הזמנה — $1"], [/^Payment reminder — (.+)$/, "תזכורת תשלום — $1"],
   [/^A polite reminder with the balance( and how to pay)?\. Edit it before sending\.$/, (m,h)=>"תזכורת מנומסת עם היתרה"+(h?" ואיך משלמים":"")+". אפשר לערוך לפני השליחה."],
@@ -6755,13 +6827,15 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^of (\d+)$/, "מתוך $1"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
+  [/^Green weeks reached the goal of (\d+) workouts?\.$/, "בשבועות הירוקים הושג היעד של $1 אימונים."], [/^No weekly goal yet — set one so (.+) has something to aim for\.$/, "עדיין אין יעד שבועי — כדאי לקבוע אחד, כדי של־$1 יהיה למה לשאוף."], [/^of (\d+)$/, "מתוך $1"],
   [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
   [/^(\d+) attempts? in period$/, "$1 ניסיונות בתקופה"], [/^(\d+) attempts?$/, "$1 ניסיונות"], [/^best (\d+)$/, "שיא $1"], [/^avg ([\d.]+)$/, "ממוצע $1"], [/^score (\d+)$/, "תוצאה $1"],
   [/^(\d+) entries$/, "$1 רישומים"], [/^started at (\d+), now (\d+) \((.+)\)$/, "התחיל ב־$1, עכשיו $2 ($3)"],
   [/^(\d+) games? by other players$/, "$1 משחקים של שחקנים אחרים"], [/^([\d.]+) h of analysis logged$/, "$1 שעות ניתוח"], [/^themes: (.+)$/, "נושאים: $1"],
   [/^(\d+) sessions? (?:has a clash|have clashes) (this week|in these days|in the next 4 weeks)$/, (m,n,w)=>n+" שיעורים עם התנגשות "+({"this week":"השבוע","in these days":"בימים האלה","in the next 4 weeks":"ב־4 השבועות הקרובים"})[w]],
   [/^(\d{4}) total$/, "סה״כ $1"],
+  [/^(\d+) wins?, (\d+) draws?, (\d+) loss(?:es)? \((\d+)%\)$/, (m,w,d,l,p)=>[[w,"ניצחון אחד","ניצחונות"],[d,"תיקו אחד","תיקו"],[l,"הפסד אחד","הפסדים"]].map(([n,one,many])=>+n===1?one:n+" "+many).join(", ")+" ("+p+"%)"], [/^White (\d+)%$/, "לבן $1%"], [/^Black (\d+)%$/, "שחור $1%"],
   [/^(\d+) games?$/, (m,n)=>+n===1 ? "משחק אחד" : n+" משחקים"], [/^(\d+) results?$/, (m,n)=>+n===1 ? "תוצאה אחת" : n+" תוצאות"],
   [/^(\d+) days overdue$/, "באיחור של $1 ימים"],
   [/^A game (.+) played$/, "משחק של $1"], [/^(\S+) played$/, "הצבע של $1"],
