@@ -330,6 +330,8 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .tstats .v{font-family:var(--display);font-size:1.3rem;font-weight:600}
 .tstats .l{font-size:.78rem;color:var(--muted)}
 @media (max-width:480px){.tstats{grid-template-columns:1fr 1fr}}
+.fit-meter{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:10px 0 6px}
+.fit-meter span{display:block;height:100%;background:var(--green)}
 .wbars{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;height:150px;align-items:end}
 .wbars > div{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0}
 .wbars .bar{width:70%;background:var(--sq-dark);border-radius:3px 3px 0 0;max-height:100px;flex:none}
@@ -2383,6 +2385,7 @@ const ICONS = {
   schedule:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   assign:'<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   practice:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/></svg>',
+  fitness:'<svg viewBox="0 0 24 24"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></svg>',
   games:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16"/><path d="M4 8h4v4H4zM12 12h4v4h-4zM8 4h4v4H8zM16 8h4v4h-4zM8 16h4v4H8zM16 16h4v4h-4z" fill="currentColor" stroke="none" opacity=".35"/></svg>',
   book:'<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5"/></svg>',
   tree:'<svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10M6 12c0-4 4-5 10-0"/></svg>',
@@ -2500,7 +2503,7 @@ new MutationObserver(ms=>{ if (appliedLang!=="he" && !nameOn()) return; ms.forEa
 function blankStudent(){
   return { id:"st-"+uid(), name:"", rating:"", ratingType:"FIDE", level:"", birthYear:"", contact:"", guardian:"", rate:state.settings.defaultRate||0, fideId:"", icfId:"", noId:false, fide:{}, icf:{},
     billing:"per session", goals:"", notes:"", active:true, createdAt:today(),
-    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], payments:[], charges:[], books:[], slots:[], training:[], requests:[] };
+    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], payments:[], charges:[], books:[], slots:[], training:[], requests:[], fitness:[], fitnessGoal:0 };
 }
 function normalize(s){
   const b = blankStudent();
@@ -2549,7 +2552,7 @@ function makeLocalStore(){
 // A database document holds at most 256 KB, and a student's logs keep growing. So a student is stored as a
 // main document (st-*) with everything from the last LOG_KEEP_DAYS days, plus one log document per year
 // (lg-<student id>-<year>) holding that year's older entries. In memory the student is always whole.
-const LOG_KEYS = ["worklog","sessions","payments","charges","ratings"];
+const LOG_KEYS = ["worklog","sessions","payments","charges","ratings","fitness"];
 const LOG_KEEP_DAYS = 90;
 const DOC_LIMIT = 250000;
 function splitStudent(s){
@@ -2756,7 +2759,7 @@ const STUDENT = ()=>ROLE!=="coach";
 const PARENT = ()=>ROLE==="parent";
 const coachOnly = html=>STUDENT() ? "" : html;
 const isShared = v=>v===true || v==="1"; // older saves stored the form's "0"/"1"
-const PORTAL_KEYS = ["worklog","tournaments","books","training","repertoire"]; // lists a student may add to and change
+const PORTAL_KEYS = ["worklog","tournaments","books","training","repertoire","fitness"]; // lists a student may add to and change
 /* families: a parent account follows one or more students */
 const families = ()=>state.settings.families||(state.settings.families=[]);
 const familyOf = x=>{ const sid = typeof x==="string" ? x : x && x.id; return families().find(f=>(f.studentIds||[]).includes(sid)); };
@@ -2796,7 +2799,7 @@ function studentView(s){
   return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
-    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[],
+    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0,
     coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0,
     freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56), s.id).free, taken:[]})); // other students' bookings just leave a gap
 }
@@ -2817,7 +2820,7 @@ function portalDocs(s){
 // only deletes what they added, and asks for lessons rather than booking them.
 function applyOp(s, op, coachSide){
   const t = op.type, it = op.item, mine = x=>x && x.by==="student", list = k=>(s[k] = s[k]||[]);
-  let m = /^(worklog|tournaments|books|training|repertoire)\.(upsert|delete)$/.exec(t);
+  let m = /^(worklog|tournaments|books|training|repertoire|fitness)\.(upsert|delete)$/.exec(t);
   if (m){
     const L = list(m[1]), i = L.findIndex(x=>x.id===(m[2]==="delete" ? op.id : it && it.id));
     if (m[2]==="delete"){ if (i>=0 && mine(L[i])) L.splice(i,1); return true; }
@@ -3429,7 +3432,7 @@ function renderNav(){
   const mine = me ? '<a href="#/student/'+me.id+'/overview"'+(meOn?' aria-current="page"':'')+'>'+ICONS.progress+'<span>My chess</span></a>' : "";
   $("#nav").innerHTML = html+mine; $("#bnav").innerHTML = html;
 }
-const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["progress","#/progress","Progress",ICONS.progress], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[]),["work",b+"work","Practice",ICONS.practice],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Assignments",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
+const studentNav = s=>{ const b = "#/student/"+s.id+"/"; return [["home","#/home","Home",ICONS.dash], ["progress","#/progress","Progress",ICONS.progress], ...(PARENT()?[["payments","#/payments","Payments",ICONS.pay]]:[]),["work",b+"work","Practice",ICONS.practice],["fitness",b+"fitness","Fitness",ICONS.fitness],["tournaments",b+"tournaments","Games",ICONS.games],["assignments",b+"assignments","Assignments",ICONS.assign],["books",b+"books","Reading",ICONS.book],["repertoire",b+"repertoire","Openings",ICONS.tree],["schedule","#/schedule","Schedule",ICONS.schedule]]; };
 document.addEventListener("change", e=>{ if (e.target.id==="childPick" && store && store.pickChild) store.pickChild(e.target.value); });
 // The language button students have (the coach changes language in Settings).
 document.addEventListener("click", e=>{ const b = e.target.closest("[data-lang]"); if (!b) return;
@@ -3448,7 +3451,7 @@ function render(){
 }
 
 /* ---------- the student's pages ---------- */
-const STUDENT_TABS = {work:"Practice", studied:"Practice", tournaments:"Games", games:"Games", assignments:"Assignments", books:"Reading", repertoire:"Openings"};
+const STUDENT_TABS = {work:"Practice", studied:"Practice", fitness:"Fitness", tournaments:"Games", games:"Games", assignments:"Assignments", books:"Reading", repertoire:"Openings"};
 function renderStudent(v, r){
   const s = state.students[0];
   if (!s){ v.innerHTML = linkPage(store.me()); bindLink(); return; }
@@ -3456,7 +3459,7 @@ function renderStudent(v, r){
   if (PARENT() && r.page==="student" && r.id!==s.id && state.family && state.family.children.some(k=>k.id===r.id)){ store.pickChild(r.id); return; }
   if (r.page==="student" && r.id===s.id && STUDENT_TABS[r.tab]){
     v.innerHTML = '<div class="page-head"><div><h1>'+esc(STUDENT_TABS[r.tab])+'</h1></div></div><div id="tab"></div>';
-    ({work:tWork, studied:tStudied, tournaments:tTournaments, games:tGames, assignments:tAssignments, books:tBooks, repertoire:tRepertoire})[r.tab]($("#tab"), s);
+    ({work:tWork, fitness:tFitness, studied:tStudied, tournaments:tTournaments, games:tGames, assignments:tAssignments, books:tBooks, repertoire:tRepertoire})[r.tab]($("#tab"), s);
     return;
   }
   if (r.page==="assignment") return pAssignment(v, r);
@@ -3920,7 +3923,7 @@ function whyNotApplied(s, o){
   return "It didn't match anything current.";
 }
 const OP_LABEL = {"request":"a lesson request", "request.cancel":"a withdrawn request", "move.answer":"an answer about a lesson", "assignment.status":"an assignment marked done",
-  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
+  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "fitness.upsert":"a workout", "fitness.delete":"a deleted workout", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
 function issuesPanel(){
   const list = portal ? portal.issues() : []; if (!list.length) return "";
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--flag)"><div class="panel-head"><h2>Problems with the student and parent app</h2></div><ul class="list">'+
@@ -4256,7 +4259,7 @@ function editStudent(s){
 }
 
 /* ---------- student detail ---------- */
-const TABS = [["overview","Overview"],["sessions","Sessions"],["work","Daily work"],["assignments","Assignments"],["books","Books"],["repertoire","Repertoire"],["tournaments","Tournaments"],["payments","Payments"]];
+const TABS = [["overview","Overview"],["sessions","Sessions"],["work","Daily work"],["fitness","Fitness"],["assignments","Assignments"],["books","Books"],["repertoire","Repertoire"],["tournaments","Tournaments"],["payments","Payments"]];
 function pStudent(v, r){
   const s = byId(r.id);
   if (!s){ v.innerHTML = '<p class="empty">This student no longer exists. <a href="#/students">Back to students</a></p>'; return; }
@@ -4268,7 +4271,7 @@ function pStudent(v, r){
     '<button class="btn" id="stEdit">Edit profile</button></div>'+
     '<nav class="tabs" aria-label="Student sections">'+TABS.filter(([k])=>!(s.self && k==="payments")).map(([k,lab])=>'<a href="#/student/'+s.id+'/'+k+'"'+(r.tab===k||(k==="tournaments"&&r.tab==="games")||(k==="work"&&r.tab==="studied")?' aria-current="page"':"")+'>'+lab+'</a>').join("")+'</nav><div id="tab"></div>';
   $("#stEdit").onclick = ()=>editStudent(s);
-  const T = {overview:tOverview, sessions:tSessions, work:tWork, assignments:tAssignments, books:tBooks, games:tGames, studied:tStudied, repertoire:tRepertoire, tournaments:tTournaments, payments:tPayments};
+  const T = {overview:tOverview, sessions:tSessions, work:tWork, fitness:tFitness, assignments:tAssignments, books:tBooks, games:tGames, studied:tStudied, repertoire:tRepertoire, tournaments:tTournaments, payments:tPayments};
   (T[r.tab]||tOverview)($("#tab"), s);
 }
 function bindActions(root, handlers){
@@ -4674,6 +4677,45 @@ function tWork(el, s){
     addLog:()=>openPractice(s, null),
     editLog:id=>openPractice(s, s.worklog.find(x=>x.id===id))
   });
+}
+
+/* ---------- fitness ---------- */
+// The physical side of training: workouts the student (or the coach) logs, against a weekly goal the coach sets.
+const FIT_KINDS = ["Running","Walking","Cycling","Swimming","Football","Basketball","Gym / strength","Yoga / stretching","Martial arts","Dance","Other sport"];
+const fitShown = {};
+function tFitness(el, s){
+  const t = today(), list = s.fitness||[], goal = +s.fitnessGoal||0, first = s.name.split(" ")[0];
+  const weeks = []; for (let i=7;i>=0;i--){ const a = addDays(weekStartOf(t),-7*i), b = addDays(a,6), ws = list.filter(w=>w.date>=a && w.date<=b); weeks.push({a, n:ws.length, m:ws.reduce((x,w)=>x+(+w.minutes||0),0)}); }
+  const now = weeks[7], maxN = Math.max(goal, ...weeks.map(w=>w.n), 1);
+  let streak = 0; if (goal) for (let i=now.n>=goal?7:6;i>=0 && weeks[i].n>=goal;i--) streak++;
+  const head = goal
+    ? '<p style="margin:0"><b class="num">'+now.n+' of '+goal+'</b> <span class="muted">workouts this week'+(now.m?' · '+now.m+' min':'')+'</span></p>'+
+      '<div class="fit-meter" role="img" aria-label="'+now.n+' of '+goal+' workouts this week"><span style="width:'+Math.min(100, now.n/goal*100)+'%"></span></div>'+
+      '<p class="small muted" style="margin:0">'+(now.n>=goal ? "Weekly goal reached!" : (goal-now.n)+" more to reach the weekly goal")+(streak>1?' · '+streak+' weeks in a row':'')+'</p>'
+    : '<p style="margin:0"><b class="num">'+now.n+'</b> <span class="muted">workouts this week'+(now.m?' · '+now.m+' min':'')+'</span></p><p class="small muted" style="margin:6px 0 0">'+(STUDENT() ? "No weekly goal set yet." : "No weekly goal yet — set one so "+esc(first)+" has something to aim for.")+'</p>';
+  const bars = '<div class="wbars" style="margin-top:16px" role="img" aria-label="Workouts per week, last 8 weeks">'+weeks.map((w,i)=>'<div title="'+esc(fmtShort(w.a))+': '+w.n+(w.m?' · '+w.m+' min':'')+'">'+(w.n?'<span class="pct">'+w.n+'</span>':'')+'<span class="bar" style="height:'+Math.round(w.n/maxN*100)+'px;'+(goal && w.n>=goal?'background:var(--green)':i===7?'opacity:.6':'')+'"></span><span class="wl">'+esc(new Date(w.a+"T00:00").toLocaleDateString(LOCALE(),{day:"numeric",month:"numeric"}))+'</span></div>').join("")+'</div>'+
+    (goal?'<p class="small muted" style="margin:6px 0 0">Green weeks reached the goal of '+goal+' workout'+(goal===1?'':'s')+'.</p>':'');
+  const shown = fitShown[s.id]||25, rows = sortBy(list,"date",-1);
+  el.innerHTML = '<div class="grid g2">'+
+    panel("This week", head+bars+'<div class="row-actions" style="margin-top:14px">'+coachOnly('<button class="btn small" data-a="fitGoal">'+(goal?"Change weekly goal":"Set weekly goal")+'</button>')+'<button class="btn small primary" data-a="addFit">Log a workout</button></div>')+
+    panel("Workouts", rows.length ? '<ul class="list">'+rows.slice(0,shown).map(w=>'<li><div class="main"><div class="title">'+esc(w.activity||"Workout")+(w.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+'</div><div class="small muted">'+esc(fmtDate(w.date,{weekday:"short",day:"numeric",month:"short"}))+(w.minutes?' · '+esc(w.minutes)+' min':'')+'</div></div><button class="btn small ghost" data-a="editFit" data-id="'+w.id+'">Edit</button></li>').join("")+'</ul>'+
+      (rows.length>shown?'<div class="row-actions" style="margin-top:8px"><button class="btn small" data-a="more">Show 25 more</button></div>':'')
+      : '<p class="empty">'+(PARENT() ? "No workouts logged yet." : "No workouts logged yet. Log one after each workout — running, football, swimming, anything active.")+'</p>')+
+  '</div>';
+  bindActions(el,{
+    addFit:()=>editFitness(s, null),
+    editFit:id=>editFitness(s, list.find(x=>x.id===id)),
+    more:()=>{ fitShown[s.id] = shown+25; render(); },
+    fitGoal:()=>openForm({title:"Weekly fitness goal", submit:"Save", fields:[{name:"goal",label:"Workouts per week",type:"number",min:0,value:goal||3,hint:"0 means no goal"}],
+      onSubmit:d=>{ const n = Math.max(0, Math.round(+d.goal||0)); if (n>14) return "Choose up to 14 workouts a week."; s.fitnessGoal = n; saveStudent(s); render(); toast(n?"Weekly goal saved":"Weekly goal removed"); }})
+  });
+}
+function editFitness(s, x){
+  crud(s,"fitness",x,[
+    {name:"date",label:"Date",type:"date",value:x?.date||today()},
+    {name:"activity",label:"Activity",type:"select",options:FIT_KINDS,value:x?.activity||"Running"},
+    {name:"minutes",label:"Minutes",type:"number",min:1,value:x?.minutes??30}],
+  "workout","Workout", d=>!d.date ? "Choose a date." : d.date>today() ? "Log workouts that already happened." : !(+d.minutes>0) ? "Enter how many minutes." : null, d=>Object.assign(d, {minutes:+d.minutes}));
 }
 
 /* ---------- practice form (shared by Daily work and Books) ---------- */
@@ -6275,6 +6317,13 @@ function pSettings(v){
 /* ---------- Hebrew ---------- */
 const HE = {
   "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Fitness":"כושר", "This week":"השבוע", "Workouts":"אימוני כושר", "Workout":"אימון כושר", "Log a workout":"תיעוד אימון כושר", "Set weekly goal":"קביעת יעד שבועי", "Change weekly goal":"שינוי היעד השבועי",
+  "Weekly fitness goal":"יעד כושר שבועי", "Workouts per week":"אימונים בשבוע", "0 means no goal":"0 = בלי יעד", "Weekly goal reached!":"היעד השבועי הושג!", "No weekly goal set yet.":"עדיין לא נקבע יעד שבועי.",
+  "workouts this week":"אימונים השבוע", "No workouts logged yet.":"עדיין לא תועדו אימוני כושר.", "No workouts logged yet. Log one after each workout — running, football, swimming, anything active.":"עדיין לא תועדו אימוני כושר. אפשר לתעד אחרי כל אימון — ריצה, כדורגל, שחייה, כל פעילות.",
+  "Activity":"פעילות", "Running":"ריצה", "Walking":"הליכה", "Cycling":"רכיבה על אופניים", "Swimming":"שחייה", "Football":"כדורגל", "Basketball":"כדורסל", "Gym / strength":"חדר כושר / כוח", "Yoga / stretching":"יוגה / מתיחות", "Martial arts":"אומנויות לחימה", "Dance":"ריקוד", "Other sport":"ספורט אחר",
+  "Add workout":"הוספת אימון כושר", "Edit workout":"עריכת אימון כושר", "Workout added":"אימון הכושר נוסף", "Workout updated":"אימון הכושר עודכן", "Workout deleted":"אימון הכושר נמחק", "Delete this workout?":"למחוק את אימון הכושר?",
+  "Log workouts that already happened.":"אפשר לתעד רק אימונים שכבר היו.", "Enter how many minutes.":"יש להזין כמה דקות.", "Choose up to 14 workouts a week.":"אפשר לבחור עד 14 אימונים בשבוע.", "Weekly goal saved":"היעד השבועי נשמר", "Weekly goal removed":"היעד השבועי הוסר",
+  "Workouts per week, last 8 weeks":"אימוני כושר בשבוע, 8 השבועות האחרונים", "a workout":"אימון כושר", "a deleted workout":"אימון כושר שנמחק",
   "Your name in Hebrew":"השם שלך בעברית", "Students and parents see your name instead of “coach”.":"תלמידים והורים יראו את השם שלך במקום „המאמן”.",
   "This month:":"החודש:", "so far":"עד עכשיו",
   "Add club class":"הוספת חוג במועדון", "Edit club class":"עריכת חוג במועדון", "Club class":"חוג במועדון", "Club work":"עבודה במועדון", "Options":"אפשרויות",
@@ -6686,7 +6735,7 @@ const HE_RX = [
   [/^Lessons \(([\d.]+) h\)$/, "שיעורים ($1 שע׳)"], [/^([\d.]+) h$/, "$1 שע׳"], [/^(.+)’s progress$/, "ההתקדמות של $1"],
   [/^Now (\d+)(?: · ([+-]?\d+) since (.+))?$/, (m,n,d,w)=>"עכשיו "+n+(d?" · "+d+" מאז "+w:"")],
   [/^About (\d+) min a week(?: · (\d+)-day streak)?$/, (m,a,st)=>"בערך "+a+" דק׳ בשבוע"+(st?" · רצף של "+st+" ימים":"")],
-  [/^Couldn't take in (.+?)(?: — (.+))?$/, (m,w,n)=>"לא ניתן לקלוט "+({"a lesson request":"בקשת שיעור","a withdrawn request":"ביטול בקשה","an answer about a lesson":"תשובה על שיעור","an assignment marked done":"משימה שסומנה כבוצעה","a practice entry":"רישום תרגול","a deleted practice entry":"מחיקת תרגול","a tournament":"טורניר","a book":"ספר","a training plan":"תוכנית אימון","a game":"משחק","a change":"שינוי"}[w]||w)+(n?" — "+n:"")],
+  [/^Couldn't take in (.+?)(?: — (.+))?$/, (m,w,n)=>"לא ניתן לקלוט "+({"a lesson request":"בקשת שיעור","a withdrawn request":"ביטול בקשה","an answer about a lesson":"תשובה על שיעור","an assignment marked done":"משימה שסומנה כבוצעה","a practice entry":"רישום תרגול","a deleted practice entry":"מחיקת תרגול","a tournament":"טורניר","a book":"ספר","a training plan":"תוכנית אימון","a game":"משחק","a workout":"אימון כושר","a deleted workout":"מחיקת אימון כושר","a change":"שינוי"}[w]||w)+(n?" — "+n:"")],
   [/^Sent (\d+) hours ago and not taken in yet\. .*$/, "נשלח לפני $1 שעות ועדיין לא נקלט. זה יקרה כשהמאמן יפתח את „עולים בדרגה” — אם זה נמשך, כדאי לספר למאמן."],
   [/^Invite message — (.+)$/, "הודעת הזמנה — $1"], [/^Payment reminder — (.+)$/, "תזכורת תשלום — $1"],
   [/^A polite reminder with the balance( and how to pay)?\. Edit it before sending\.$/, (m,h)=>"תזכורת מנומסת עם היתרה"+(h?" ואיך משלמים":"")+". אפשר לערוך לפני השליחה."],
@@ -6755,7 +6804,8 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^of (\d+)$/, "מתוך $1"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
+  [/^Green weeks reached the goal of (\d+) workouts?\.$/, "בשבועות הירוקים הושג היעד של $1 אימונים."], [/^No weekly goal yet — set one so (.+) has something to aim for\.$/, "עדיין אין יעד שבועי — כדאי לקבוע אחד, כדי של־$1 יהיה למה לשאוף."], [/^of (\d+)$/, "מתוך $1"],
   [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
   [/^(\d+) attempts? in period$/, "$1 ניסיונות בתקופה"], [/^(\d+) attempts?$/, "$1 ניסיונות"], [/^best (\d+)$/, "שיא $1"], [/^avg ([\d.]+)$/, "ממוצע $1"], [/^score (\d+)$/, "תוצאה $1"],
   [/^(\d+) entries$/, "$1 רישומים"], [/^started at (\d+), now (\d+) \((.+)\)$/, "התחיל ב־$1, עכשיו $2 ($3)"],
