@@ -123,7 +123,7 @@ kbd{font-family:var(--body);font-size:.75rem;border:1px solid var(--line);border
 .student-mode .btn.lang-btn{display:inline-flex}
 .student-mode .side-search,.student-mode .topbar a[href="#/search"]{display:none}
 /* a parent's board is view-only apart from lesson requests and changes */
-.parent-mode #view button[data-a]:not([data-a="req"]):not([data-a="reqat"]):not([data-a="les"]):not([data-a="open"]):not([data-a="ans"]):not([data-a="unreq"]):not([data-a="reqx"]):not([data-a="view"]):not([data-a="wk"]):not([data-a="more"]):not([data-a="all"]):not([data-a="src"]):not([data-a="gf"]):not([data-a="f"]):not([data-a="sf"]):not([data-a="rf"]):not([data-a="period"]):not([data-a="board"]):not([data-a="games"]):not([data-a="clearT"]):not([data-a="clearRep"]):not([data-a="dl"]):not([data-a="pp"]):not([data-a="ps"]){display:none}
+.parent-mode #view button[data-a]:not([data-a="req"]):not([data-a="reqat"]):not([data-a="les"]):not([data-a="open"]):not([data-a="ans"]):not([data-a="unreq"]):not([data-a="reqx"]):not([data-a="view"]):not([data-a="wk"]):not([data-a="more"]):not([data-a="all"]):not([data-a="src"]):not([data-a="gf"]):not([data-a="f"]):not([data-a="sf"]):not([data-a="rf"]):not([data-a="period"]):not([data-a="board"]):not([data-a="games"]):not([data-a="clearT"]):not([data-a="clearRep"]):not([data-a="dl"]):not([data-a="pp"]):not([data-a="ps"]):not([data-a="seenAll"]){display:none}
 .parent-mode #view label:has(input[type=file]),.parent-mode #view .dropzone{display:none}
 .link-box{display:inline-block;direction:ltr;font-weight:600;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 8px;word-break:break-all;user-select:all}
 .code-box{font-family:var(--display);font-size:1.6rem;font-weight:700;letter-spacing:.18em;background:var(--paper);border:1px dashed var(--line);border-radius:var(--r-sm);padding:6px 14px;display:inline-block;direction:ltr}
@@ -3068,6 +3068,7 @@ function makeStudentStore(db, account){
     },
     link(code){ me = Object.assign({}, me, {code:String(code).trim().toUpperCase(), lang:state.settings.lang||"en", linked:false, error:"", unlinked:false}); return root.set(me); },
     saveLang(){ me = Object.assign({}, me, {lang:state.settings.lang}); root.set(me).catch(()=>{}); },
+    markSeen(keys){ me = Object.assign({}, me, {seen:[...new Set([...(me.seen||[]), ...keys])].slice(-400)}); root.set(me).catch(()=>{}); },
     send,
     pickChild(id){ childId = id; try { localStorage.setItem("cb-child", id); } catch(e){} rebuild(); render(); },
     // What the student changed in the lists they may edit becomes inbox changes.
@@ -3428,7 +3429,8 @@ function renderNav(){
     // a family with more than one child picks whose board to show
     const fam = PARENT() && state.family, pick = $("#childPick");
     if (pick){ pick.hidden = !(fam && fam.children.length>1); if (fam) pick.innerHTML = fam.children.map(k=>'<option value="'+esc(k.id)+'"'+(k.id===fam.current?" selected":"")+'>'+esc(k.name)+'</option>').join(""); }
-    const html = s ? studentNav(s).map(([k,href,l,ic])=>'<a href="'+href+'"'+(cur===k?' aria-current="page"':"")+'>'+ic+'<span>'+l+'</span></a>').join("") : "";
+    const fresh = s ? unseenUpdates(s) : [], cnt = k=>fresh.filter(u=>updateArea(u)===k).length;
+    const html = s ? studentNav(s).map(([k,href,l,ic])=>'<a href="'+href+'"'+(cur===k?' aria-current="page"':"")+'>'+ic+'<span>'+l+'</span>'+(cnt(k) && cur!==k ? '<i class="nav-badge" aria-label="'+cnt(k)+' new">'+cnt(k)+'</i>' : '')+'</a>').join("") : "";
     $("#nav").innerHTML = html; $("#bnav").innerHTML = html; return;
   }
   const cur = r.page==="student" ? "students" : r.page==="assignment" ? "assignments" : r.page;
@@ -3472,6 +3474,10 @@ function renderStudent(v, r){
     ({work:tWork, fitness:tFitness, studied:tStudied, tournaments:tTournaments, games:tGames, assignments:tAssignments, books:tBooks, repertoire:tRepertoire})[r.tab]($("#tab"), s);
     return;
   }
+  const ups = studentUpdates(s);
+  if (r.page==="assignment") markSeen(ups.filter(u=>u.key.split(":")[1]===r.id && /^as:/.test(u.key)).map(u=>u.key));
+  if (r.page==="schedule") markSeen(ups.filter(u=>updateArea(u)==="schedule").map(u=>u.key));
+  if (r.page==="progress") markSeen(ups.filter(u=>updateArea(u)==="progress").map(u=>u.key));
   if (r.page==="assignment") return pAssignment(v, r);
   if (r.page==="schedule") return pSchedule(v);
   if (r.page==="payments" && PARENT()) return pFamilyPay(v, s);
@@ -3658,7 +3664,8 @@ function pHome(v, s){
     panel("Assignments", hw.length ? '<ul class="list">'+hw.map(a=>'<li><div class="main"><div class="title"><a href="#/assignment/'+a.id+'">'+esc(a.title)+'</a></div><div class="small muted">'+esc(a.type)+(a.due?' · due '+esc(fmtShort(a.due)):'')+'</div></div>'+(a.status==="Assigned"?'<button class="btn small" data-a="hwdone" data-id="'+a.id+'">Mark done</button>':'<span class="tag warn">Done · to review</span>')+'</li>').join("")+'</ul>' : '<p class="empty">No assignments right now.</p>')+
     '</div>';
   bindActions(v,{ ans:id=>{ const [rid, c] = id.split("|"), r = (s.requests||[]).find(x=>x.id===rid); if (r) answerMove(s, r, c); },
-    req:()=>requestLesson(s), log:()=>openPractice(s, null), sleep:id=>logSleep(s, id||today()), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
+    req:()=>requestLesson(s), log:()=>openPractice(s, null), sleep:id=>logSleep(s, id||today()),
+    seenAll:()=>{ markSeen(studentUpdates(s).map(u=>u.key)); render(); }, les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
     hwdone:id=>{ const a = state.assignments.find(x=>x.id===id); if (!a) return; a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — your coach will review it"); } });
 }
 // Start times (every 30 minutes) at which a lesson of `dur` minutes fits in the coach's open windows that day.
@@ -3674,27 +3681,42 @@ function studentUpdates(s){
   (s.requests||[]).forEach(r=>{ if (!r.decided || r.decided<from) return;
     const x = s.sessions.find(y=>y.id===r.sessionId) || r;
     if (r.status==="approved"){
-      if (r.kind==="cancel") out.push({date:r.decided, kind:"ok", text:"The lesson on "+day(r.was.date)+" was cancelled, as asked", href:"#/schedule"});
-      else if (r.kind==="move") out.push({date:r.decided, kind:"ok", text:"The lesson moved to "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"});
-      else out.push({date:r.decided, kind:"ok", text:"Your coach approved the lesson on "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); }
-    else if (r.status==="declined") out.push({date:r.decided, kind:"flag", text:r.kind==="cancel" ? "The request to cancel the lesson on "+day(r.was.date)+" was declined — the lesson stays"
+      if (r.kind==="cancel") out.push({key:"req:"+r.id, date:r.decided, kind:"ok", text:"The lesson on "+day(r.was.date)+" was cancelled, as asked", href:"#/schedule"});
+      else if (r.kind==="move") out.push({key:"req:"+r.id, date:r.decided, kind:"ok", text:"The lesson moved to "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"});
+      else out.push({key:"req:"+r.id, date:r.decided, kind:"ok", text:"Your coach approved the lesson on "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); }
+    else if (r.status==="declined") out.push({key:"req:"+r.id+":"+(r.answer||(r.needsAnswer?"ask":"no")), date:r.decided, kind:"flag", text:r.kind==="cancel" ? "The request to cancel the lesson on "+day(r.was.date)+" was declined — the lesson stays"
       : r.kind==="move" ? (r.needsAnswer ? "Your coach can't meet at the new time — choose what to do with the lesson on "+day(r.was.date)
           : r.answer==="cancel" ? "The lesson on "+day(r.was.date)+" was cancelled" : r.answer==="keep" ? "The lesson on "+day(r.was.date)+" stays as planned" : "Your coach couldn't meet at the new time for the lesson on "+day(r.was.date)) : "The request for "+day(r.date)+" "+r.time+" was declined — try another time", href:"#/schedule"}); });
   state.assignments.forEach(a=>{
-    if (a.assigned && a.assigned>=from && a.status==="Assigned") out.push({date:a.assigned, kind:"board", text:"New assignment: "+a.title+(a.due?" (due "+fmtShort(a.due)+")":""), href:"#/assignment/"+a.id});
-    if (a.status==="Reviewed" && a.reviewedOn && a.reviewedOn>=from) out.push({date:a.reviewedOn, kind:"ok", text:(a.feedback?"New feedback on ":"Reviewed: ")+a.title, href:"#/assignment/"+a.id}); });
+    if (a.assigned && a.assigned>=from && a.status==="Assigned") out.push({key:"as:"+a.id, date:a.assigned, kind:"board", text:"New assignment: "+a.title+(a.due?" (due "+fmtShort(a.due)+")":""), href:"#/assignment/"+a.id});
+    if (a.status==="Reviewed" && a.reviewedOn && a.reviewedOn>=from) out.push({key:"as:"+a.id+":rev", date:a.reviewedOn, kind:"ok", text:(a.feedback?"New feedback on ":"Reviewed: ")+a.title, href:"#/assignment/"+a.id}); });
   const fromReq = new Set((s.requests||[]).map(r=>r.sessionId).filter(Boolean));
-  s.sessions.forEach(x=>{ if (x.added && x.added>=from && x.status==="planned" && x.date>=t && !fromReq.has(x.id)) out.push({date:x.added, kind:"board", text:"Lesson planned for "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); });
-  return out.sort((a,b)=>a.date<b.date?1:-1).slice(0,8);
+  s.sessions.forEach(x=>{ if (x.added && x.added>=from && x.status==="planned" && x.date>=t && !fromReq.has(x.id)) out.push({key:"ses:"+x.id, date:x.added, kind:"board", text:"Lesson planned for "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); });
+  s.sessions.forEach(x=>{ if (x.status==="done" && x.notes && x.date>=from) out.push({key:"notes:"+x.id, date:x.date, kind:"board", text:"Notes from your lesson on "+day(x.date), href:"#/progress"}); });
+  return out.sort((a,b)=>a.date<b.date?1:-1);
 }
-let lastSeenUpdates = null; // read once per visit, so this visit's new items stay marked
+// What a student or parent has already seen: kept on their account (so it follows them across devices),
+// with this browser as a fallback. An update stays "New" until they open it or mark all as read.
+const seenKey = ()=>"cb-seen-"+((webUser && webUser.id) || "local"); // one per account, even on a shared tablet
+function seenSet(){
+  const out = new Set((store && store.me && (store.me()||{}).seen) || []);
+  try { JSON.parse(localStorage.getItem(seenKey())||"[]").forEach(k=>out.add(k)); } catch(e){}
+  return out;
+}
+function markSeen(keys){
+  const have = seenSet(), add = keys.filter(k=>!have.has(k)); if (!add.length) return;
+  try { localStorage.setItem(seenKey(), JSON.stringify([...have, ...add].slice(-400))); } catch(e){}
+  if (store && store.markSeen) store.markSeen(add);
+}
+const unseenUpdates = s=>{ const seen = seenSet(); return studentUpdates(s).filter(u=>!seen.has(u.key)); };
+// Which menu item an update belongs to, for the count on the menu.
+const updateArea = u=>/^as:/.test(u.key) ? "assignments" : /^notes:/.test(u.key) ? "progress" : "schedule";
 function updatesPanel(s){
-  const ups = studentUpdates(s); if (!ups.length) return "";
-  const key = "cb-seen-"+s.id;
-  if (lastSeenUpdates===null){ try { lastSeenUpdates = localStorage.getItem(key)||""; localStorage.setItem(key, today()); } catch(e){ lastSeenUpdates = ""; } }
-  return panel("Updates", '<ul class="list">'+ups.map(u=>'<li><div class="main"><div class="title"><a href="'+u.href+'">'+esc(u.text)+'</a></div><div class="small muted">'+esc(fmtDate(u.date,{weekday:"short",day:"numeric",month:"short"}))+'</div></div>'+(u.date>=lastSeenUpdates && lastSeenUpdates?'<span class="tag '+u.kind+'">New</span>':'')+'</li>').join("")+'</ul>');
-}
-const pendingChange = (s, x)=>(s.requests||[]).find(r=>r.status==="pending" && r.sessionId===x.id);
+  const ups = studentUpdates(s).slice(0,8); if (!ups.length) return "";
+  const seen = seenSet(), fresh = ups.filter(u=>!seen.has(u.key));
+  return panel("Updates", '<ul class="list">'+ups.map(u=>'<li><div class="main"><div class="title"><a href="'+u.href+'" data-seen="'+esc(u.key)+'">'+esc(u.text)+'</a></div><div class="small muted">'+esc(fmtDate(u.date,{weekday:"short",day:"numeric",month:"short"}))+'</div></div>'+(seen.has(u.key)?'':'<span class="tag '+u.kind+'">New</span>')+'</li>').join("")+'</ul>',
+    fresh.length ? '<button class="btn small" data-a="seenAll">Mark all as read</button>' : '');
+}const pendingChange = (s, x)=>(s.requests||[]).find(r=>r.status==="pending" && r.sessionId===x.id);
 // A move the coach declined, waiting for the student to say what to do with the lesson.
 const needsAnswer = (s, x)=>(s.requests||[]).find(r=>r.needsAnswer && r.sessionId===x.id && x.status==="planned" && x.date>=today());
 function answerMove(s, r, choice){
@@ -5684,7 +5706,8 @@ function pAssignments(v){
 function tAssignments(el, s){
   const list = asSort(state.assignments.filter(a=>a.studentId===s.id));
   if (STUDENT()){ const todo = list.filter(a=>a.status==="Assigned"), done = list.filter(a=>a.status!=="Assigned");
-    const box = (title, xs, empty)=>'<section class="panel" style="padding:0;margin-bottom:16px"><div class="panel-head"><h2>'+title+'</h2></div>'+(xs.length ? xs.map(a=>'<div class="as-item">'+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">'+empty+'</p>')+'</section>';
+    const seen = seenSet(), fresh = new Set(studentUpdates(s).filter(u=>/^as:/.test(u.key) && !seen.has(u.key)).map(u=>u.key.split(":")[1]));
+    const box = (title, xs, empty)=>'<section class="panel" style="padding:0;margin-bottom:16px"><div class="panel-head"><h2>'+title+'</h2></div>'+(xs.length ? xs.map(a=>'<div class="as-item">'+(fresh.has(a.id)?'<span class="tag board new-tag">New</span>':'')+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">'+empty+'</p>')+'</section>';
     el.innerHTML = box("To do", todo, PARENT() ? "All assignments are done." : "All tasks are done, nice job!")+(done.length ? box("Done", done, "") : "");
   } else
   el.innerHTML = '<section class="panel" style="padding:0"><div class="panel-head"><h2>Assignments</h2>'+coachOnly('<button class="btn small primary" data-a="new">New assignment</button>')+'</div>'+
@@ -6446,7 +6469,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Mark all as read":"סימון הכול כנקרא",
   "Group workout challenge (per month)":"אתגר אימונים קבוצתי (לחודש)", "Optional — a shared monthly target for the whole group's workouts. Students see only the group total.":"לא חובה — יעד חודשי משותף לאימוני כל הקבוצה. התלמידים רואים רק את סך הקבוצה.",
   "Quick log for today:":"תיעוד מהיר להיום:", "Which sport":"איזה ספורט", "e.g. Climbing":"למשל טיפוס", "group workouts this month":"אימונים קבוצתיים החודש", "The group reached the target!":"הקבוצה הגיעה ליעד!",
   "Sleep before tournaments":"שינה לפני טורנירים", "Add sleep":"הוספת שינה", "Log sleep":"תיעוד שינה", "Sleep":"שינה", "Night before":"הלילה שלפני", "Hours of sleep":"שעות שינה", "Enter the hours slept, e.g. 7.5.":"יש להזין כמה שעות ישנו, למשל 7.5.", "Sleep saved":"השינה נשמרה",
@@ -6945,7 +6968,7 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^Notes from your lesson on (.+)$/, "הערות מהשיעור ב־$1"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
   [/^Logged: (.+)$/, "תועד: $1"], [/^🔥 (\d+) weeks in a row reaching the fitness goal$/, "🔥 $1 שבועות ברצף ביעד הכושר"], [/^Points scored after 8 h or more:$/, "נקודות אחרי 8 שעות שינה ומעלה:"], [/^after less:$/, "אחרי פחות:"], [/^([\d.]+) h$/, "$1 ש׳"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^(\d+) of (\d+) pages read$/, "$1 מתוך $2 עמודים נקראו"], [/^(\d+) pages read$/, "$1 עמודים נקראו"], [/^p\. ([\d–, ]+)$/, "עמ׳ $1"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
   [/^Green weeks reached the goal of (\d+) workouts?\.$/, "בשבועות הירוקים הושג היעד של $1 אימונים."], [/^No weekly goal yet — set one so (.+) has something to aim for\.$/, "עדיין אין יעד שבועי — כדאי לקבוע אחד, כדי של־$1 יהיה למה לשאוף."], [/^of (\d+)$/, "מתוך $1"],
   [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
