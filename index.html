@@ -2364,7 +2364,7 @@ function personalBest(s, site, ex, beforeEntry){
 }
 function practiceResult(w){
   const out = [];
-  if (w.page!==""&&w.page!=null&&w.page!==undefined&&(w.bookId||w.bookTitle)) out.push("to p. "+w.page);
+  if (w.page!==""&&w.page!=null&&w.page!==undefined&&(w.bookId||w.bookTitle)) out.push(hasFrom(w) ? "p. "+w.pageFrom+"–"+w.page : "to p. "+w.page);
   if (w.cbFile){ if (w.cbSection) out.push(w.cbSection); if (w.cbCount!==""&&w.cbCount!=null) out.push(w.cbCount+" positions"); }
   if (w.what==="Game analysis" && w.gameId){ const g = state.games.find(x=>x.id===w.gameId); const s = g && byId(g.studentId); if (g && g.kind==="study"){ if (g.event) out.push(g.event); if (g.theme) out.push(g.theme); }
     else if (g){ const ev = gameEvent(g,s); if (ev) out.push(ev+(g.round?" R"+g.round:"")); if (g.date) out.push("played "+fmtShort(g.date)); } if (w.gStatus) out.push(w.gStatus); }
@@ -2833,7 +2833,7 @@ function applyOp(s, op, coachSide){
     const fromS = m[1]==="tournaments" ? (({assist, assistDays, assistFee, assistReason, ...y})=>y)(it) : it; // the assistance price is the coach's
     const item = Object.assign({}, i>=0 ? L[i] : {}, fromS, i>=0 ? {} : {by:"student"});
     if (m[1]==="repertoire" && i>=0) item.studentEdited = (op.at||"").slice(0,10) || today(); // so the coach can see the student changed it
-    if (m[1]==="worklog" && item.bookId && item.page!=="" && item.page!=null && pageOrderError(s, (s.books||[]).find(b=>b.id===item.bookId), item.date, +item.page, item.id)) item.page = "";
+    if (m[1]==="worklog" && item.bookId && item.page!=="" && item.page!=null && (item.pageFrom==="" || item.pageFrom==null) && pageOrderError(s, (s.books||[]).find(b=>b.id===item.bookId), item.date, +item.page, item.id)) item.page = "";
     if (i>=0) L[i] = item; else L.push(item);
     if (coachSide && m[1]==="worklog"){
       if (item.bookId) syncBook(s, s.books.find(b=>b.id===item.bookId), item);
@@ -3547,7 +3547,7 @@ function pProgress(v, s){
     panel("What the practice went on", whatList.length ? '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin:4px 0 12px">'+whatList.map(([k,m],i)=>'<span title="'+esc(k)+'" style="width:'+(m/whatTot*100)+'%;background:'+COL[i%COL.length]+'"></span>').join("")+'</div><ul class="list">'+
       whatList.map(([k,m],i)=>'<li><span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+COL[i%COL.length]+';margin-inline-end:8px"></i>'+esc(k)+'</span><span class="num">'+Math.round(m/whatTot*100)+'% · '+m+' min</span></li>').join("")+'</ul>' : '<p class="empty">No practice logged in this period.</p>')+
     panel("Assignments and reading", '<dl class="kv"><dt>Done in this period</dt><dd class="num">'+asDone+'</dd><dt>Still open</dt><dd class="num">'+asOpen+'</dd><dt>Books finished</dt><dd class="num">'+booksDone+'</dd>'+
-      (s.books.some(b=>b.status==="Reading")?'<dt>Reading now</dt><dd>'+s.books.filter(b=>b.status==="Reading").map(b=>esc(b.title)+(b.pages?' · '+Math.round((+b.page||0)/b.pages*100)+'%':'')).join('<br>')+'</dd>':'')+'</dl>')+
+      (s.books.some(b=>b.status==="Reading")?'<dt>Reading now</dt><dd>'+s.books.filter(b=>b.status==="Reading").map(b=>esc(b.title)+(b.pages?' · '+bookPct(s,b)+'%':'')).join('<br>')+'</dd>':'')+'</dl>')+
     panel("Tactics & puzzles", tacticsStats(s, progPeriod))+
     '</div>';
   bindActions(v,{ pp:id=>{ progPeriod = +id; render(); }, ps:id=>{ progSource = id; render(); } });
@@ -4375,7 +4375,7 @@ function tOverview(el, s){
     '<section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Details</h2></div><dl class="kv">'+
       '<dt>Sessions done</dt><dd class="num">'+done.length+' ('+hours.toFixed(1)+' h)</dd><dt>Last session</dt><dd>'+(last?esc(fmtDate(last.date))+' — '+esc(last.topics||""):"—")+'</dd>'+
       '<dt>Next tournament</dt><dd>'+(nextT?esc(nextT.name)+", "+esc(fmtShort(tourNext(nextT,t))):"—")+'</dd>'+
-      (s.books.some(b=>b.status==="Reading")?'<dt>Reading</dt><dd>'+s.books.filter(b=>b.status==="Reading").map(b=>'<i>'+esc(b.title)+'</i>'+(b.pages?' · p. '+(+b.page||0)+'/'+b.pages:'')).join('<br>')+'</dd>':'')+
+      (s.books.some(b=>b.status==="Reading")?'<dt>Reading</dt><dd>'+s.books.filter(b=>b.status==="Reading").map(b=>'<i>'+esc(b.title)+'</i>'+(b.pages?' · '+bookPct(s,b)+'%':'')).join('<br>')+'</dd>':'')+
       '<dt>Contact</dt><dd>'+esc(s.contact||"—")+(s.guardian?" · "+esc(s.guardian):"")+'</dd></dl></section>'+
   (pts.length? '<details class="panel fold" style="margin-top:16px"><summary><h2>'+esc(src)+' rating entries ('+pts.length+')</h2></summary><ul class="list" style="margin-top:8px">'+sortBy(pts,"date",-1).map(p=>'<li><span>'+esc(fmtDate(p.date))+' <span class="tag">'+esc(srcOf(p))+'</span></span><span class="row-actions"><b class="num">'+esc(p.value)+'</b><button class="btn ghost small danger" data-a="delRating" data-id="'+p.id+'" aria-label="Delete rating">Remove</button></span></li>').join("")+'</ul></details>':"");
   bindActions(el,{
@@ -4710,7 +4710,7 @@ function tWork(el, s){
 
 /* ---------- fitness ---------- */
 // The physical side of training: workouts the student (or the coach) logs, against a weekly goal the coach sets.
-const FIT_KINDS = ["Running","Walking","Cycling","Swimming","Football","Basketball","Gym / strength","Yoga / stretching","Martial arts","Dance","Other sport"];
+const FIT_KINDS = ["Running","Walking","Cycling","Swimming","Football","Basketball","Gym / strength","Yoga / stretching","Martial arts","Dance","Ping pong","Other sport"];
 const fitShown = {};
 function tFitness(el, s){ const nav = groupNav(s, "fitness");
   const t = today(), list = s.fitness||[], goal = +s.fitnessGoal||0, first = s.name.split(" ")[0];
@@ -4782,7 +4782,8 @@ function openPractice(s, entry, preset){
     {name:"gameId",label:"Which game",type:"select",options:gameOpts,value:x?.gameId||"",full:true,show:isGame},
     {name:"gStatus",label:"Analysis status after this session",type:"select",options:ANALYSIS_STATUS.slice(1),value:x?.gStatus||"In progress",full:true,show:isGame},
     {name:"bookId",label:"Book",type:"select",options:bookOpts,value:x?.bookId||"",full:true,show:showBook},
-    {name:"page",label:"Page reached",type:"number",value:x?.page??"",min:0,show:v=>showBook(v)&&!!v.bookId,hint:"The page they stopped on"},
+    {name:"pageFrom",label:"From page",type:"number",value:x?.pageFrom??"",min:1,show:v=>showBook(v)&&!!v.bookId,hint:"Only for a part of the book, e.g. one chapter. Leave empty to continue from the last stop."},
+    {name:"page",label:"To page",type:"number",value:x?.page??"",min:0,show:v=>showBook(v)&&!!v.bookId,hint:"The page they stopped on"},
     {name:"attempted",label:"Puzzles attempted",type:"number",value:x?.attempted??x?.count??"",min:0,show:counted,hint:"Everything they tried, right or wrong. From a book: leave both empty if they only read."},
     {name:"correct",label:"Solved correctly",type:"number",value:x?.correct??"",min:0,show:counted},
     {name:"prating",label:"Puzzle rating after",type:"number",value:x?.prating??"",min:0,show:v=>isTac(v)&&kindOf(v)==="rated",hint:"As shown on the site at the end of the session"},
@@ -4792,8 +4793,10 @@ function openPractice(s, entry, preset){
     if ((d.what==="Tactics" && d.site==="Book / workbook") || (SOURCE_CATS.includes(d.what) && d.src==="Book")){ if (!d.bookId) return "Add this book in the Books tab first, then log the session."; }
     if (SOURCE_CATS.includes(d.what) && d.src==="ChessBase file" && !d.cbFile) return "Enter the name of the ChessBase file.";
     if (d.what==="Game analysis" && !d.gameId) return d.gWhose==="other" ? "Pick the game. If it isn't listed, add it in Daily work → Studied games first." : "Pick the game. If it isn't listed, add it in Tournaments → Game history first.";
+    if (d.bookId && d.pageFrom!=="" && d.page==="") return "Enter the page they read to.";
     if (d.bookId && d.page!==""){ const b = s.books.find(y=>y.id===d.bookId); if (b && b.pages && +d.page > +b.pages) return "Page "+d.page+" is past the end of the book ("+b.pages+" pages).";
-      const err = pageOrderError(s, b, d.date||t, +d.page, entry && entry.id); if (err) return err; }
+      if (d.pageFrom!==""){ if (+d.pageFrom<1 || +d.pageFrom>+d.page) return "From page should be between 1 and the To page."; }
+      else { const err = pageOrderError(s, b, d.date||t, +d.page, entry && entry.id); if (err) return err; } }
     if (d.what!=="Tactics") return;
     const k = exKind(d.site, d.exercise);
     if (k==="score") return parseScores(d.scores).length ? undefined : "Enter the score of each attempt, e.g. 24, 31, 27.";
@@ -4805,7 +4808,7 @@ function openPractice(s, entry, preset){
   const clean = d=>{ d.count = "";
     if (d.what==="Tactics" && exKind(d.site,d.exercise)==="score"){ d.scores = parseScores(d.scores); d.score = Math.max(...d.scores); d.attempted = ""; d.correct = ""; }
     else { d.scores = []; d.score = ""; }
-    if (!d.bookId) d.page = "";
+    if (!d.bookId){ d.page = ""; d.pageFrom = ""; } else if (d.pageFrom!=="") d.pageFrom = +d.pageFrom;
     if (d.what!=="Game analysis"){ d.gameId = ""; d.gStatus = ""; d.gWhose = ""; }
     return d; };
   const after = (w, isNew)=>{
@@ -4833,7 +4836,7 @@ function pageRange(s, b, date, skipId){
 function pageOrderError(s, b, date, page, skipId){
   if (!b) return;
   const r = pageRange(s, b, date, skipId);
-  if (page<r.lo) return "Page "+page+" is before page "+r.lo+(r.loDate?", already reached on "+fmtDate(r.loDate):", where this book is already")+". Enter the page reached in this session.";
+  if (page<r.lo) return "Page "+page+" is before page "+r.lo+(r.loDate?", already reached on "+fmtDate(r.loDate):", where this book is already")+". Enter the page reached in this session, or fill in From page if they read a different part of the book.";
   if (page>r.hi) return "Page "+page+" is after page "+r.hi+", logged later on "+fmtDate(r.hiDate)+". Check the date or the page.";
 }
 // Keep a book's current page, last-read date and status in step with the practice log.
@@ -4842,7 +4845,7 @@ function syncBook(s, b, w){
   if (w.page!=="" && w.page!=null && (!b.lastRead || w.date>=b.lastRead)) b.page = +w.page;
   if (!b.lastRead || w.date>b.lastRead) b.lastRead = w.date;
   if (b.status==="Want to read" || b.status==="Paused"){ b.status = "Reading"; if (!b.started) b.started = w.date; }
-  if (b.pages && +b.page>=+b.pages && b.status!=="Finished"){ b.status = "Finished"; b.finished = w.date; setTimeout(()=>toast(s.name.split(" ")[0]+" finished “"+b.title+"”"),60); }
+  if (b.pages && bookPages(s, b).read>=+b.pages && b.status!=="Finished"){ b.status = "Finished"; b.finished = w.date; setTimeout(()=>toast(s.name.split(" ")[0]+" finished “"+b.title+"”"),60); }
 }
 
 /* ---------- books ---------- */
@@ -4850,18 +4853,31 @@ const BOOK_TOPICS = ["Tactics","Endgames","Openings","Strategy","Calculation","P
 const BOOK_STATUS = ["Reading","Want to read","Paused","Finished"];
 const TOPIC_COLOR = {Tactics:"#5B7A44",Endgames:"#3F6B7A",Openings:"#8A5A2B",Strategy:"#6A4C7E",Calculation:"#A0453A",Psychology:"#2F7A6A","Games collection":"#44505A",Biography:"#9A7B22",Other:"#7A7F74"};
 const TOPIC_TO_WHAT = {Tactics:"Tactics",Endgames:"Endgames",Openings:"Openings",Strategy:"Strategy",Calculation:"Calculation"};
+const hasFrom = w=>w.pageFrom!=="" && w.pageFrom!=null;
+// The pages of a book actually read. A session is either "up to page N" (from the last stop) or a part of the book,
+// "pages A–B" (e.g. one chapter). Pages read twice count once, so reading only chapter 3 doesn't count chapters 1 and 2.
+function bookPages(s, b){
+  const logs = sortBy(s.worklog.filter(w=>w.bookId===b.id && w.page!=="" && w.page!=null),"date"), per = new Map();
+  if (!logs.some(hasFrom)){ let prev = +b.startPage||0; logs.forEach(w=>{ per.set(w.id, Math.max(0, +w.page-prev)); prev = +w.page; }); return {read:+b.page||0, per, parts:false}; }
+  const ranges = +b.startPage>0 ? [[1, +b.startPage]] : []; let prev = +b.startPage||0;
+  logs.forEach(w=>{ const to = +w.page, from = hasFrom(w) ? +w.pageFrom : prev+1; per.set(w.id, Math.max(0, to-from+1)); if (to>=from) ranges.push([from, to]); prev = to; });
+  ranges.sort((x,y)=>x[0]-y[0]); let read = 0, end = 0;
+  ranges.forEach(([a,z])=>{ if (z>end){ read += z-Math.max(a, end+1)+1; end = z; } });
+  return {read, per, parts:true};
+}
+const bookPct = (s, b)=>+b.pages ? Math.min(100, Math.round(bookPages(s,b).read/b.pages*100)) : 0;
 function bookData(s, b){
   const t = today(), from = addDays(t,-27);
-  const logs = sortBy(s.worklog.filter(w=>w.bookId===b.id),"date");
-  let prev = +b.startPage||0, recent = 0; const hist = [];
-  logs.forEach(w=>{ let read = null; if (w.page!==""&&w.page!=null){ read = Math.max(0, +w.page - prev); prev = +w.page; if (w.date>=from) recent += read; } hist.push({w, read}); });
-  const pages = +b.pages||0, page = +b.page||0;
+  const logs = sortBy(s.worklog.filter(w=>w.bookId===b.id),"date"), bp = bookPages(s, b);
+  let recent = 0; const hist = [];
+  logs.forEach(w=>{ const read = bp.per.has(w.id) ? bp.per.get(w.id) : null; if (read && w.date>=from) recent += read; hist.push({w, read}); });
+  const pages = +b.pages||0, page = bp.read;
   const pct = pages ? Math.min(100, Math.round(page/pages*100)) : null;
   const perWeek = recent/4;
   const eta = pages && perWeek>0 && page<pages ? Math.ceil((pages-page)/perWeek) : null;
   const since = b.lastRead ? daysBetween(b.lastRead, t) : null;
   const minutes = logs.reduce((a,w)=>a+(+w.minutes||0),0);
-  return {logs, hist:hist.reverse(), pct, perWeek, eta, since, minutes, recent};
+  return {logs, hist:hist.reverse(), pct, perWeek, eta, since, minutes, recent, read:bp.read, parts:bp.parts};
 }
 function editBook(s, b){
   const isNew = !b; const x = b || {id:uid(), title:"", author:"", topic:"Tactics", pages:"", page:0, startPage:0, status:"Reading", started:today(), finished:"", lastRead:"", notes:""};
@@ -4905,10 +4921,11 @@ function tBooks(el, s){
       '<div class="book-head"><div style="min-width:0"><h3>'+esc(b.title)+'</h3><div class="small muted">'+[esc(b.author), esc(b.topic)].filter(Boolean).join(" · ")+'</div></div>'+
       (stale?'<span class="tag warn">Not opened in '+d.since+' days</span>':"")+'</div>'+
       '<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+(d.pct||0)+'"><span style="width:'+(d.pct||0)+'%"></span></div>'+
-      '<div class="small"><b class="num">p. '+(+b.page||0)+'</b>'+(b.pages?' <span class="muted">of '+b.pages+' · '+d.pct+'%</span>':'')+'</div>'+
+      (d.parts ? '<div class="small"><b class="num">'+d.read+'</b> <span class="muted">'+(b.pages?'of '+b.pages+' pages read · '+d.pct+'%':'pages read')+' · last stop p. '+(+b.page||0)+'</span></div>'
+        : '<div class="small"><b class="num">p. '+(+b.page||0)+'</b>'+(b.pages?' <span class="muted">of '+b.pages+' · '+d.pct+'%</span>':'')+'</div>')+
       '<div class="small muted" style="margin-top:2px">'+meta.map(esc).join(" · ")+'</div>'+
       (b.notes?'<div class="small" style="margin-top:6px">'+esc(b.notes)+'</div>':"")+
-      (d.hist.length?'<details class="bhist"><summary class="small">Reading history ('+d.hist.length+')</summary><ul class="list">'+d.hist.map(({w,read})=>'<li><div class="main small"><b>'+esc(fmtDate(w.date))+'</b>'+(w.page!==""&&w.page!=null?' · to p. '+esc(w.page)+(read?' <span class="muted">(+'+read+')</span>':''):'')+(w.minutes?' · '+esc(w.minutes)+' min':'')+(+w.attempted>0?' · '+(+w.correct||0)+'/'+w.attempted+' correct':'')+(w.note?'<div class="muted">'+esc(w.note)+'</div>':'')+'</div><button class="btn small ghost" data-a="editLog" data-id="'+w.id+'">Edit</button></li>').join("")+'</ul></details>':"")+
+      (d.hist.length?'<details class="bhist"><summary class="small">Reading history ('+d.hist.length+')</summary><ul class="list">'+d.hist.map(({w,read})=>'<li><div class="main small"><b>'+esc(fmtDate(w.date))+'</b>'+(w.page!==""&&w.page!=null?(hasFrom(w)?' · p. '+esc(w.pageFrom)+'–'+esc(w.page):' · to p. '+esc(w.page))+(read?' <span class="muted">(+'+read+')</span>':''):'')+(w.minutes?' · '+esc(w.minutes)+' min':'')+(+w.attempted>0?' · '+(+w.correct||0)+'/'+w.attempted+' correct':'')+(w.note?'<div class="muted">'+esc(w.note)+'</div>':'')+'</div><button class="btn small ghost" data-a="editLog" data-id="'+w.id+'">Edit</button></li>').join("")+'</ul></details>':"")+
       '<div class="row-actions" style="margin-top:10px">'+(b.status!=="Finished"?'<button class="btn small primary" data-a="read" data-id="'+b.id+'">Log reading</button>':"")+'<button class="btn small" data-a="edit" data-id="'+b.id+'">Edit</button></div>'+
       '</div></article>';
   };
@@ -6365,6 +6382,8 @@ function pSettings(v){
 /* ---------- Hebrew ---------- */
 const HE = {
   "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Ping pong":"פינג פונג", "From page":"מעמוד", "To page":"עד עמוד", "Only for a part of the book, e.g. one chapter. Leave empty to continue from the last stop.":"רק לחלק מהספר, למשל פרק אחד. להשאיר ריק כדי להמשיך מהמקום שבו עצרו.",
+  "Enter the page they read to.":"יש להזין עד איזה עמוד קראו.", "From page should be between 1 and the To page.":"\"מעמוד\" צריך להיות בין 1 לבין \"עד עמוד\".",
   "Private lessons":"שיעורים פרטיים", "Club classes only":"רק קבוצות במועדון", "Club group":"קבוצה במועדון", "Not in a club group":"לא בקבוצה במועדון", "Club":"מועדון",
   "Club students use the app to track practice, fitness and games, and see their class times":"תלמידי המועדון משתמשים באפליקציה כדי לתעד תרגול, כושר ומשחקים ולראות את זמני הקבוצה",
   "Choose the student's club group.":"יש לבחור את הקבוצה במועדון.", "Private students":"תלמידים פרטיים", "Nobody is in that group yet.":"עדיין אין אף אחד בקבוצה הזו.", "Tasks":"משימות",
@@ -6856,7 +6875,7 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
   [/^Green weeks reached the goal of (\d+) workouts?\.$/, "בשבועות הירוקים הושג היעד של $1 אימונים."], [/^No weekly goal yet — set one so (.+) has something to aim for\.$/, "עדיין אין יעד שבועי — כדאי לקבוע אחד, כדי של־$1 יהיה למה לשאוף."], [/^of (\d+)$/, "מתוך $1"],
   [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
   [/^(\d+) attempts? in period$/, "$1 ניסיונות בתקופה"], [/^(\d+) attempts?$/, "$1 ניסיונות"], [/^best (\d+)$/, "שיא $1"], [/^avg ([\d.]+)$/, "ממוצע $1"], [/^score (\d+)$/, "תוצאה $1"],
