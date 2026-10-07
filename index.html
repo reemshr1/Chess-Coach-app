@@ -332,6 +332,8 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .tstats .v{font-family:var(--display);font-size:1.3rem;font-weight:600}
 .tstats .l{font-size:.78rem;color:var(--muted)}
 @media (max-width:480px){.tstats{grid-template-columns:1fr 1fr}}
+.quick-fit{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px}
+.streak-badge{display:inline-block;margin:0 0 14px;padding:6px 12px;border-radius:999px;background:var(--warn-bg);color:var(--warn);font-weight:600;font-size:.9rem}
 .fit-meter{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:10px 0 6px}
 .fit-meter span{display:block;height:100%;background:var(--green)}
 .wbars{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;height:150px;align-items:end}
@@ -2508,7 +2510,7 @@ new MutationObserver(ms=>{ if (appliedLang!=="he" && !nameOn()) return; ms.forEa
 function blankStudent(){
   return { id:"st-"+uid(), name:"", rating:"", ratingType:"FIDE", level:"", birthYear:"", contact:"", guardian:"", rate:state.settings.defaultRate||0, fideId:"", icfId:"", noId:false, fide:{}, icf:{},
     billing:"per session", goals:"", notes:"", active:true, createdAt:today(),
-    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], payments:[], charges:[], books:[], slots:[], training:[], requests:[], fitness:[], fitnessGoal:0 };
+    ratings:[], sessions:[], tasks:[], worklog:[], repertoire:[], tournaments:[], payments:[], charges:[], books:[], slots:[], training:[], requests:[], fitness:[], fitnessGoal:0, sleep:[] };
 }
 function normalize(s){
   const b = blankStudent();
@@ -2559,7 +2561,7 @@ function makeLocalStore(){
 // A database document holds at most 256 KB, and a student's logs keep growing. So a student is stored as a
 // main document (st-*) with everything from the last LOG_KEEP_DAYS days, plus one log document per year
 // (lg-<student id>-<year>) holding that year's older entries. In memory the student is always whole.
-const LOG_KEYS = ["worklog","sessions","payments","charges","ratings","fitness"];
+const LOG_KEYS = ["worklog","sessions","payments","charges","ratings","fitness","sleep"];
 const LOG_KEEP_DAYS = 90;
 const DOC_LIMIT = 250000;
 function splitStudent(s){
@@ -2766,7 +2768,7 @@ const STUDENT = ()=>ROLE!=="coach";
 const PARENT = ()=>ROLE==="parent";
 const coachOnly = html=>STUDENT() ? "" : html;
 const isShared = v=>v===true || v==="1"; // older saves stored the form's "0"/"1"
-const PORTAL_KEYS = ["worklog","tournaments","books","training","repertoire","fitness"]; // lists a student may add to and change
+const PORTAL_KEYS = ["worklog","tournaments","books","training","repertoire","fitness","sleep"]; // lists a student may add to and change
 /* families: a parent account follows one or more students */
 const families = ()=>state.settings.families||(state.settings.families=[]);
 const familyOf = x=>{ const sid = typeof x==="string" ? x : x && x.id; return families().find(f=>(f.studentIds||[]).includes(sid)); };
@@ -2806,9 +2808,9 @@ function studentView(s){
   return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
-    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0,
+    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0, sleep:s.sleep||[],
     coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0,
-    clubOnly:!!s.clubOnly, clubs:clubsOf(s).map(({rate, ...r})=>r),
+    clubOnly:!!s.clubOnly, clubs:clubsOf(s).map(({rate, ...r})=>Object.assign(r, {challenge:groupChallenge(r, s)})),
     freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56), s.id).free, taken:[]})); // other students' bookings just leave a gap
 }
 // The student's copy carries when the coach's app last wrote it.
@@ -2828,7 +2830,7 @@ function portalDocs(s){
 // only deletes what they added, and asks for lessons rather than booking them.
 function applyOp(s, op, coachSide){
   const t = op.type, it = op.item, mine = x=>x && x.by==="student", list = k=>(s[k] = s[k]||[]);
-  let m = /^(worklog|tournaments|books|training|repertoire|fitness)\.(upsert|delete)$/.exec(t);
+  let m = /^(worklog|tournaments|books|training|repertoire|fitness|sleep)\.(upsert|delete)$/.exec(t);
   if (m){
     const L = list(m[1]), i = L.findIndex(x=>x.id===(m[2]==="delete" ? op.id : it && it.id));
     if (m[2]==="delete"){ if (i>=0 && mine(L[i])) L.splice(i,1); return true; }
@@ -3632,6 +3634,8 @@ function pHome(v, s){
       '<div class="stat"><div class="v num">'+week+'</div><div class="l">Practice minutes this week</div></div>'+
       '<div class="stat"><div class="v num">'+(rt?esc(rt.value):"—")+'</div><div class="l">'+(rt?esc(rt.source||mainSource(s))+" rating":"Rating")+'</div></div></div>'+
     answerBox(s)+
+    (fitStreak(s)>1 ? '<p class="streak-badge">🔥 '+fitStreak(s)+' weeks in a row reaching the fitness goal</p>' : '')+
+    (!PARENT() && sleepRows(s).some(o=>o.d===t && !o.sl) ? '<section class="panel" style="margin-bottom:16px;border-color:var(--sq-dark);display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:0"><b>Tournament today</b><div class="small muted">How many hours did you sleep last night?</div></div><button class="btn small" data-a="sleep" data-id="'+t+'">Add sleep</button></section>' : '')+
     lessonSoon(s)+
     '<div class="grid g2">'+
     (PARENT() && s.pay ? panel("Balance", (()=>{ const p = s.pay, m = n=>(p.currency||"")+(Math.round(n*100)/100).toLocaleString(LOCALE());
@@ -3654,7 +3658,7 @@ function pHome(v, s){
     panel("Assignments", hw.length ? '<ul class="list">'+hw.map(a=>'<li><div class="main"><div class="title"><a href="#/assignment/'+a.id+'">'+esc(a.title)+'</a></div><div class="small muted">'+esc(a.type)+(a.due?' · due '+esc(fmtShort(a.due)):'')+'</div></div>'+(a.status==="Assigned"?'<button class="btn small" data-a="hwdone" data-id="'+a.id+'">Mark done</button>':'<span class="tag warn">Done · to review</span>')+'</li>').join("")+'</ul>' : '<p class="empty">No assignments right now.</p>')+
     '</div>';
   bindActions(v,{ ans:id=>{ const [rid, c] = id.split("|"), r = (s.requests||[]).find(x=>x.id===rid); if (r) answerMove(s, r, c); },
-    req:()=>requestLesson(s), log:()=>openPractice(s, null), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
+    req:()=>requestLesson(s), log:()=>openPractice(s, null), sleep:id=>logSleep(s, id||today()), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
     hwdone:id=>{ const a = state.assignments.find(x=>x.id===id); if (!a) return; a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — your coach will review it"); } });
 }
 // Start times (every 30 minutes) at which a lesson of `dur` minutes fits in the coach's open windows that day.
@@ -3933,7 +3937,7 @@ function whyNotApplied(s, o){
   return "It didn't match anything current.";
 }
 const OP_LABEL = {"request":"a lesson request", "request.cancel":"a withdrawn request", "move.answer":"an answer about a lesson", "assignment.status":"an assignment marked done",
-  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "fitness.upsert":"a workout", "fitness.delete":"a deleted workout", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
+  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "fitness.upsert":"a workout", "fitness.delete":"a deleted workout", "sleep.upsert":"a night's sleep", "sleep.delete":"a deleted night's sleep", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
 function issuesPanel(){
   const list = portal ? portal.issues() : []; if (!list.length) return "";
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--flag)"><div class="panel-head"><h2>Problems with the student and parent app</h2></div><ul class="list">'+
@@ -4204,10 +4208,10 @@ function pStudents(v){
     };
     // private students first, then one section per club group (a student in both appears in both)
     const priv = list.filter(s=>!s.clubOnly), groups = clubRules().map(r=>({r, ss:list.filter(s=>(s.clubIds||[]).includes(r.id))})).filter(g=>g.ss.length);
-    const head = (t, n)=>'<div class="list-head"><b>'+esc(t)+'</b> <span class="muted small">'+n+' student'+(n===1?'':'s')+'</span></div>';
+    const head = (t, n, c)=>'<div class="list-head"><b>'+esc(t)+'</b> <span class="muted small">'+n+' student'+(n===1?'':'s')+'</span>'+(c?' <span class="small muted"> · <span>'+c.done+' of '+c.target+' group workouts this month</span></span>':'')+'</div>';
     $("#slist").innerHTML = !list.length ? '<p class="empty" style="padding:18px">No students match.</p>'
       : !groups.length ? priv.map(row).join("")
-      : (priv.length ? head("Private students", priv.filter(s=>!s.self).length)+priv.map(row).join("") : '')+groups.map(g=>head(g.r.name, g.ss.length)+g.ss.map(row).join("")).join("");
+      : (priv.length ? head("Private students", priv.filter(s=>!s.self).length)+priv.map(row).join("") : '')+groups.map(g=>head(g.r.name, g.ss.length, groupChallenge(g.r))+g.ss.map(row).join("")).join("");
   };
   draw();
   $("#sq").oninput = e=>{ studentFilter.q = e.target.value; draw(); };
@@ -4715,11 +4719,50 @@ function tWork(el, s){
 // The physical side of training: workouts the student (or the coach) logs, against a weekly goal the coach sets.
 const FIT_KINDS = ["Running","Walking","Cycling","Swimming","Football","Basketball","Gym / strength","Yoga / stretching","Martial arts","Dance","Ping pong","Other sport"];
 const fitShown = {};
+const fitName = w=>w.activity==="Other sport" && w.other ? w.other : (w.activity||"Workout");
+// Weeks in a row reaching the weekly goal (this week counts once it's reached).
+function fitStreak(s){
+  const goal = +s.fitnessGoal||0; if (!goal) return 0;
+  const ws = weekStartOf(today()), list = s.fitness||[], n = i=>{ const a = addDays(ws,-7*i), b = addDays(a,6); return list.filter(w=>w.date>=a && w.date<=b).length; };
+  let k = 0; for (let i = n(0)>=goal ? 0 : 1; i<104 && n(i)>=goal; i++) k++; return k;
+}
+// A club group's shared monthly workout target. The coach's app counts the whole group; a student's app gets
+// that count from the coach (plus its own workouts logged since), and never sees anyone else's workouts.
+function groupChallenge(r, s){
+  if (!+r.fitTarget) return null;
+  const month = today().slice(0,7), mine = st=>(st.fitness||[]).filter(w=>(w.date||"").slice(0,7)===month).length;
+  if (STUDENT()){ const c = r.challenge; if (!c) return null; const base = c.month===month ? c.done - c.mine : 0; return {month, target:+r.fitTarget, done:base + mine(s), mine:mine(s)}; }
+  const done = state.students.filter(st=>st.active && (st.clubIds||[]).includes(r.id)).reduce((a,st)=>a+mine(st), 0);
+  return {month, target:+r.fitTarget, done, mine:s ? mine(s) : 0};
+}
+// Every tournament day so far, with the sleep logged for it and the score that day.
+const tourDates = x=>playDates(x) || (x.start ? Array.from({length:tourDays(x)}, (_,i)=>addDays(x.start,i)) : []);
+function sleepRows(s){
+  const t = today(), rows = [];
+  (s.tournaments||[]).forEach(x=>tourDates(x).forEach(d=>{ if (d>t) return;
+    const gs = studentGames(s.id).filter(g=>g.date===d), pts = gs.reduce((a,g)=>a+({W:1,D:.5}[outcomeOf(g)]||0), 0);
+    rows.push({d, x, sl:(s.sleep||[]).find(z=>z.date===d), n:gs.length, pts}); }));
+  return sortBy(rows,"d",-1);
+}
+function logSleep(s, date){
+  const x = (s.sleep||[]).find(z=>z.date===date);
+  openForm({title:"Sleep", submit:"Save", fields:[{name:"date",label:"Night before",type:"date",value:date||today()},{name:"hours",label:"Hours of sleep",type:"number",min:0,step:"0.5",value:x?.hours??8}],
+    onSubmit:d=>{ const h = +d.hours; if (!d.date) return "Choose a date."; if (!(h>0 && h<=16)) return "Enter the hours slept, e.g. 7.5.";
+      s.sleep = s.sleep||[]; const y = s.sleep.find(z=>z.date===d.date);
+      if (y) y.hours = h; else s.sleep.push(Object.assign({id:uid(), date:d.date, hours:h}, STUDENT() ? {by:"student"} : {}));
+      saveStudent(s); render(); toast("Sleep saved"); }});
+}
 function tFitness(el, s){ const nav = groupNav(s, "fitness");
   const t = today(), list = s.fitness||[], goal = +s.fitnessGoal||0, first = s.name.split(" ")[0];
   const weeks = []; for (let i=7;i>=0;i--){ const a = addDays(weekStartOf(t),-7*i), b = addDays(a,6), ws = list.filter(w=>w.date>=a && w.date<=b); weeks.push({a, n:ws.length, m:ws.reduce((x,w)=>x+(+w.minutes||0),0)}); }
   const now = weeks[7], maxN = Math.max(goal, ...weeks.map(w=>w.n), 1);
-  let streak = 0; if (goal) for (let i=now.n>=goal?7:6;i>=0 && weeks[i].n>=goal;i--) streak++;
+  const streak = fitStreak(s);
+  // quick log: their most frequent workouts lately, one tap each
+  const freq = {}; sortBy(list.filter(w=>w.date>=addDays(t,-60)),"date",-1).forEach(w=>{ const k = JSON.stringify([w.activity, w.other||"", +w.minutes||0]); freq[k] = (freq[k]||0)+1; });
+  const quick = Object.keys(freq).sort((a,b)=>freq[b]-freq[a]).slice(0,3).map(k=>JSON.parse(k));
+  const chal = (STUDENT() ? clubRules() : clubsOf(s)).map(r=>({r, c:groupChallenge(r, s)})).filter(o=>o.c);
+  const sleeps = sleepRows(s), slept = sleeps.filter(o=>o.sl && o.n), well = slept.filter(o=>o.sl.hours>=8), less = slept.filter(o=>o.sl.hours<8);
+  const pct = xs=>Math.round(xs.reduce((a,o)=>a+o.pts,0)/xs.reduce((a,o)=>a+o.n,0)*100);
   const head = goal
     ? '<p style="margin:0"><b class="num">'+now.n+' of '+goal+'</b> <span class="muted">workouts this week'+(now.m?' · '+now.m+' min':'')+'</span></p>'+
       '<div class="fit-meter" role="img" aria-label="'+now.n+' of '+goal+' workouts this week"><span style="width:'+Math.min(100, now.n/goal*100)+'%"></span></div>'+
@@ -4729,13 +4772,26 @@ function tFitness(el, s){ const nav = groupNav(s, "fitness");
     (goal?'<p class="small muted" style="margin:6px 0 0">Green weeks reached the goal of '+goal+' workout'+(goal===1?'':'s')+'.</p>':'');
   const shown = fitShown[s.id]||25, rows = sortBy(list,"date",-1);
   el.innerHTML = nav+'<div class="grid g2">'+
-    panel("This week", head+bars+'<div class="row-actions" style="margin-top:14px">'+coachOnly('<button class="btn small" data-a="fitGoal">'+(goal?"Change weekly goal":"Set weekly goal")+'</button>')+'<button class="btn small primary" data-a="addFit">Log a workout</button></div>')+
-    panel("Workouts", rows.length ? '<ul class="list">'+rows.slice(0,shown).map(w=>'<li><div class="main"><div class="title">'+esc(w.activity||"Workout")+(w.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+'</div><div class="small muted">'+esc(fmtDate(w.date,{weekday:"short",day:"numeric",month:"short"}))+(w.minutes?' · '+esc(w.minutes)+' min':'')+'</div></div><button class="btn small ghost" data-a="editFit" data-id="'+w.id+'">Edit</button></li>').join("")+'</ul>'+
+    panel("This week", head+bars+
+      (quick.length ? '<div class="quick-fit"><span class="small muted">Quick log for today:</span> '+quick.map((q,i)=>'<button class="btn small" data-a="quickFit" data-id="'+i+'">'+esc(fitName({activity:q[0], other:q[1]}))+(q[2]?' · '+q[2]+' min':'')+'</button>').join("")+'</div>' : '')+
+      '<div class="row-actions" style="margin-top:14px">'+coachOnly('<button class="btn small" data-a="fitGoal">'+(goal?"Change weekly goal":"Set weekly goal")+'</button>')+'<button class="btn small primary" data-a="addFit">Log a workout</button></div>')+
+    panel("Workouts", rows.length ? '<ul class="list">'+rows.slice(0,shown).map(w=>'<li><div class="main"><div class="title">'+esc(fitName(w))+(w.by==="student"&&!STUDENT()?' <span class="tag">by student</span>':'')+'</div><div class="small muted">'+esc(fmtDate(w.date,{weekday:"short",day:"numeric",month:"short"}))+(w.minutes?' · '+esc(w.minutes)+' min':'')+'</div></div><button class="btn small ghost" data-a="editFit" data-id="'+w.id+'">Edit</button></li>').join("")+'</ul>'+
       (rows.length>shown?'<div class="row-actions" style="margin-top:8px"><button class="btn small" data-a="more">Show 25 more</button></div>':'')
       : '<p class="empty">'+(PARENT() ? "No workouts logged yet." : "No workouts logged yet. Log one after each workout — running, football, swimming, anything active.")+'</p>')+
+    chal.map(({r,c})=>panel(r.name+" challenge", '<p style="margin:0"><b class="num">'+c.done+' of '+c.target+'</b> <span class="muted">group workouts this month</span></p>'+
+      '<div class="fit-meter" role="img" aria-label="'+c.done+' of '+c.target+' group workouts this month"><span style="width:'+Math.min(100, c.done/c.target*100)+'%"></span></div>'+
+      '<p class="small muted" style="margin:0">'+(c.done>=c.target ? "The group reached the target!" : (STUDENT() ? (PARENT() ? first+" added " : "You added ")+c.mine+" this month" : (c.target-c.done)+" to go"))+'</p>')).join("")+
+    ((sleeps.length || (s.sleep||[]).length) ? panel("Sleep before tournaments", (sleeps.length ? '<ul class="list">'+sleeps.slice(0,10).map(o=>'<li><div class="main"><div class="title">'+esc(o.x.name)+'</div><div class="small muted">'+esc(fmtDate(o.d,{weekday:"short",day:"numeric",month:"short"}))+(o.n?' · <span>'+fmtPts(o.pts)+'/'+o.n+'</span>':'')+'</div></div>'+
+        (o.sl ? '<span class="tag'+(o.sl.hours>=8?' ok':o.sl.hours<7?' warn':'')+'">'+o.sl.hours+' h</span>' : '<button class="btn small ghost" data-a="sleep" data-id="'+o.d+'">Add sleep</button>')+'</li>').join("")+'</ul>' : '<p class="empty">No tournament days yet.</p>')+
+      (well.length && less.length ? '<p class="small" style="margin:10px 0 0"><span>Points scored after 8 h or more:</span> <b class="num">'+pct(well)+'%</b> · <span>after less:</span> <b class="num">'+pct(less)+'%</b></p>' : '<p class="small muted" style="margin:10px 0 0">Long games need energy — log the hours slept the night before each tournament day.</p>'),
+      '<button class="btn small" data-a="sleep" data-id="">Log sleep</button>') : '')+
   '</div>';
   bindActions(el,{
     addFit:()=>editFitness(s, null),
+    quickFit:id=>{ const q = quick[+id]; if (!q) return; s.fitness = s.fitness||[];
+      s.fitness.push(Object.assign({id:uid(), date:t, activity:q[0], minutes:q[2]||30}, q[1] ? {other:q[1]} : {}, STUDENT() ? {by:"student"} : {}));
+      saveStudent(s); render(); toast("Logged: "+fitName({activity:q[0], other:q[1]})+(q[2]?", "+q[2]+" min":"")); },
+    sleep:id=>logSleep(s, id||today()),
     editFit:id=>editFitness(s, list.find(x=>x.id===id)),
     more:()=>{ fitShown[s.id] = shown+25; render(); },
     fitGoal:()=>openForm({title:"Weekly fitness goal", submit:"Save", fields:[{name:"goal",label:"Workouts per week",type:"number",min:0,value:goal||3,hint:"0 means no goal"}],
@@ -4746,8 +4802,9 @@ function editFitness(s, x){
   crud(s,"fitness",x,[
     {name:"date",label:"Date",type:"date",value:x?.date||today()},
     {name:"activity",label:"Activity",type:"select",options:FIT_KINDS,value:x?.activity||"Running"},
+    {name:"other",label:"Which sport",value:x?.other||"",placeholder:"e.g. Climbing",show:v=>v.activity==="Other sport"},
     {name:"minutes",label:"Minutes",type:"number",min:1,value:x?.minutes??30}],
-  "workout","Workout", d=>!d.date ? "Choose a date." : d.date>today() ? "Log workouts that already happened." : !(+d.minutes>0) ? "Enter how many minutes." : null, d=>Object.assign(d, {minutes:+d.minutes}));
+  "workout","Workout", d=>!d.date ? "Choose a date." : d.date>today() ? "Log workouts that already happened." : !(+d.minutes>0) ? "Enter how many minutes." : null, d=>Object.assign(d, {minutes:+d.minutes, other:d.activity==="Other sport" ? (d.other||"").trim() : ""}));
 }
 
 /* ---------- practice form (shared by Daily work and Books) ---------- */
@@ -6093,6 +6150,7 @@ function editClub(r){
       {name:"from",label:"From",type:"time",value:x.from},
       {name:"to",label:"Until",type:"time",value:x.to},
       {name:"rate",label:"Hourly rate ("+state.settings.currency+")",type:"number",min:0,step:"any",value:x.rate??"",hint:"What the club pays you per hour"},
+      {name:"fitTarget",label:"Group workout challenge (per month)",type:"number",min:0,value:x.fitTarget??"",hint:"Optional — a shared monthly target for the whole group's workouts. Students see only the group total."},
       ...(cancelled.length?[{name:"restore",label:"Cancelled dates",type:"select",options:[["","Keep them cancelled: "+cancelled.map(d=>fmtDate(d,{day:"numeric",month:"short"})).join(", ")],["1","Bring them all back"]],value:"",full:true}]:[])],
     danger: isNew ? null : {label:"Delete", onClick:()=>confirmBox("Delete “"+x.name+"”?", "It will be removed from your schedule and club hours, including past ones.", "Delete", ()=>{ state.settings.club = clubRules().filter(y=>y.id!==x.id); saveSettings(); render(); toast("Club class deleted"); })},
     onSubmit:d=>{
@@ -6100,7 +6158,7 @@ function editClub(r){
       if (!d.date) return "Choose a date.";
       if (toMin(d.from)===null || toMin(d.to)===null || toMin(d.to)<=toMin(d.from)) return "The end time must be after the start time.";
       if (d.kind==="weekly" && d.end && d.end<d.date) return "The last class is before the first.";
-      const y = {id:x.id, name:d.name.trim(), place:d.place.trim(), kind:d.kind, from:d.from, to:d.to, rate:d.rate===""?"":+d.rate, skip:d.restore==="1" ? (x.skip||[]).filter(z=>z<today()) : (x.skip||[])};
+      const y = {id:x.id, name:d.name.trim(), place:d.place.trim(), kind:d.kind, from:d.from, to:d.to, rate:d.rate===""?"":+d.rate, fitTarget:+d.fitTarget>0 ? Math.round(+d.fitTarget) : "", skip:d.restore==="1" ? (x.skip||[]).filter(z=>z<today()) : (x.skip||[])};
       if (d.kind==="weekly") Object.assign(y, {weekday:dow(d.date), start:d.date, end:d.end}); else y.date = d.date;
       const L = clubRules().filter(z=>z.id!==x.id); L.push(y); state.settings.club = L;
       clubOpen = true; saveSettings(); render(); toast(isNew?"Club class added":"Club class updated");
@@ -6388,7 +6446,12 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "p.":"עמ׳",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Group workout challenge (per month)":"אתגר אימונים קבוצתי (לחודש)", "Optional — a shared monthly target for the whole group's workouts. Students see only the group total.":"לא חובה — יעד חודשי משותף לאימוני כל הקבוצה. התלמידים רואים רק את סך הקבוצה.",
+  "Quick log for today:":"תיעוד מהיר להיום:", "Which sport":"איזה ספורט", "e.g. Climbing":"למשל טיפוס", "group workouts this month":"אימונים קבוצתיים החודש", "The group reached the target!":"הקבוצה הגיעה ליעד!",
+  "Sleep before tournaments":"שינה לפני טורנירים", "Add sleep":"הוספת שינה", "Log sleep":"תיעוד שינה", "Sleep":"שינה", "Night before":"הלילה שלפני", "Hours of sleep":"שעות שינה", "Enter the hours slept, e.g. 7.5.":"יש להזין כמה שעות ישנו, למשל 7.5.", "Sleep saved":"השינה נשמרה",
+  "No tournament days yet.":"עדיין אין ימי טורניר.", "Long games need energy — log the hours slept the night before each tournament day.":"משחקים ארוכים דורשים אנרגיה — כדאי לתעד כמה שעות ישנו בלילה שלפני כל יום טורניר.",
+  "Tournament today":"טורניר היום", "How many hours did you sleep last night?":"כמה שעות ישנת בלילה?", "a night's sleep":"לילה של שינה", "a deleted night's sleep":"מחיקת לילה של שינה", "p.":"עמ׳",
   "Ping pong":"פינג פונג", "From page":"מעמוד", "To page":"עד עמוד", "Only for a part of the book, e.g. one chapter. Leave empty to continue from the last stop.":"רק לחלק מהספר, למשל פרק אחד. להשאיר ריק כדי להמשיך מהמקום שבו עצרו.",
   "Enter the page they read to.":"יש להזין עד איזה עמוד קראו.", "From page should be between 1 and the To page.":"\"מעמוד\" צריך להיות בין 1 לבין \"עד עמוד\".",
   "Private lessons":"שיעורים פרטיים", "Club classes only":"רק קבוצות במועדון", "Club group":"קבוצה במועדון", "Not in a club group":"לא בקבוצה במועדון", "Club":"מועדון",
@@ -6882,7 +6945,8 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^(\d+) of (\d+) pages read$/, "$1 מתוך $2 עמודים נקראו"], [/^(\d+) pages read$/, "$1 עמודים נקראו"], [/^p\. ([\d–, ]+)$/, "עמ׳ $1"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
+  [/^Logged: (.+)$/, "תועד: $1"], [/^🔥 (\d+) weeks in a row reaching the fitness goal$/, "🔥 $1 שבועות ברצף ביעד הכושר"], [/^Points scored after 8 h or more:$/, "נקודות אחרי 8 שעות שינה ומעלה:"], [/^after less:$/, "אחרי פחות:"], [/^([\d.]+) h$/, "$1 ש׳"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^(\d+) of (\d+) pages read$/, "$1 מתוך $2 עמודים נקראו"], [/^(\d+) pages read$/, "$1 עמודים נקראו"], [/^p\. ([\d–, ]+)$/, "עמ׳ $1"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
   [/^Green weeks reached the goal of (\d+) workouts?\.$/, "בשבועות הירוקים הושג היעד של $1 אימונים."], [/^No weekly goal yet — set one so (.+) has something to aim for\.$/, "עדיין אין יעד שבועי — כדאי לקבוע אחד, כדי של־$1 יהיה למה לשאוף."], [/^of (\d+)$/, "מתוך $1"],
   [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
   [/^(\d+) attempts? in period$/, "$1 ניסיונות בתקופה"], [/^(\d+) attempts?$/, "$1 ניסיונות"], [/^best (\d+)$/, "שיא $1"], [/^avg ([\d.]+)$/, "ממוצע $1"], [/^score (\d+)$/, "תוצאה $1"],
