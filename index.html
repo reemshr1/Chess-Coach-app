@@ -3620,6 +3620,7 @@ function pHome(v, s){
   const week = s.worklog.filter(w=>w.date>=addDays(t,-6)).reduce((a,w)=>a+(+w.minutes||0),0);
   const tours = s.tournaments.filter(x=>tourAhead(x,t)).sort((a,b)=>tourNext(a,t)<tourNext(b,t)?-1:1).slice(0,3);
   const pend = (s.requests||[]).filter(r=>r.status==="pending");
+  const clubs = []; for (let d=t; d<=addDays(t,7) && clubs.length<2; d=addDays(d,1)) clubOn(d).forEach(o=>clubs.push({d, o})); // their club classes this coming week
   const rt = sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===mainSource(s)),"date").pop();
   const hr = new Date().getHours(), greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
   v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+(PARENT() ? esc(first)+'’s board' : greet+', '+esc(first))+'</h1>'+freshness(s)+'</div><div class="row-actions"><button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
@@ -3640,9 +3641,10 @@ function pHome(v, s){
       '<div class="row-actions">'+(pendingReports(s).length ? ''
         : (s.pay.balance>0.009 || (s.pay.open||[]).some(x=>!x.upcoming)) ? '<button type="button" class="btn small" id="iPaid">I\'ve paid</button>' : '')+'<a class="btn small" href="#/payments">Statement</a></div>') : '')+
     updatesPanel(s)+
-    panel("Coming up", (lessons.length||tours.length||pend.length) ? '<ul class="list">'+
+    panel("Coming up", (lessons.length||tours.length||pend.length||clubs.length) ? '<ul class="list">'+
         lessons.map(x=>{ const pc = pendingChange(s, x); return '<li><div class="main"><div class="title">Lesson'+(needsAnswer(s, x)?' <span class="tag warn">Answer needed</span>':'')+(pc?' <span class="tag warn">'+(pc.kind==="cancel"?"Cancel requested":"Move requested")+'</span>':'')+'</div><div class="small muted">'+[x.format, x.duration?x.duration+" min":"", x.topics].filter(Boolean).map(esc).join(" · ")+'</div>'+
           (changeable(x)?'<button class="btn small ghost" data-a="les" data-id="'+x.id+'" style="margin-top:4px;padding:2px 8px">'+(needsAnswer(s, x)?"Answer":pc?"Withdraw request":"Can\'t make it?")+'</button>':'')+'</div><div style="text-align:end" class="small">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+(x.time?'<div class="muted">'+esc(x.time)+'</div>':'')+'</div></li>'; }).join("")+
+        clubs.map(({d,o})=>'<li><div class="main"><div class="title">'+esc(o.r.name)+'</div><div class="small muted">'+[o.r.place, "Club class"].filter(Boolean).map(esc).join(" · ")+'</div></div><div style="text-align:end" class="small">'+esc(fmtDate(d,{weekday:"short",day:"numeric",month:"short"}))+'<br>'+esc(o.r.from)+'</div></li>').join("")+
         tours.map(x=>'<li><div class="main"><div class="title">'+esc(x.name)+'</div><div class="small muted">'+[x.location, x.format].filter(Boolean).map(esc).join(" · ")+'</div></div><span class="tag board">'+esc(fmtShort(tourNext(x,t)))+'</span></li>').join("")+
         pend.filter(r=>r.kind!=="cancel").map(r=>'<li><div class="main"><div class="title">'+(r.kind==="move"?"Move request":"Lesson request")+'</div><div class="small muted">'+esc(fmtDate(r.date,{weekday:"short",day:"numeric",month:"short"}))+' · '+esc(r.time)+'</div></div><span class="tag warn">Waiting for your coach</span></li>').join("")+'</ul>'
       : '<p class="empty">Nothing planned yet.</p>', '<a class="btn small" href="#/schedule">Schedule</a>')+
