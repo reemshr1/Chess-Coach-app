@@ -361,6 +361,9 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .book h3{font-size:1rem;overflow-wrap:anywhere}
 .prog{height:8px;border-radius:4px;background:repeating-linear-gradient(90deg,var(--paper) 0 8px,var(--line) 8px 16px);overflow:hidden;margin-bottom:6px}
 .prog span{display:block;height:100%;background:var(--sq-dark);border-radius:4px}
+.prog.parts{position:relative;height:10px}
+.prog.parts span{position:absolute;top:0;border-radius:2px}
+.prog-scale{display:flex;justify-content:space-between;margin:-4px 0 4px;font-size:.7rem}
 .bhist{margin-top:8px}
 .bhist summary{cursor:pointer;color:var(--accent);font-weight:500}
 .bhist .list li{padding:6px 0}
@@ -4858,12 +4861,13 @@ const hasFrom = w=>w.pageFrom!=="" && w.pageFrom!=null;
 // "pages A–B" (e.g. one chapter). Pages read twice count once, so reading only chapter 3 doesn't count chapters 1 and 2.
 function bookPages(s, b){
   const logs = sortBy(s.worklog.filter(w=>w.bookId===b.id && w.page!=="" && w.page!=null),"date"), per = new Map();
-  if (!logs.some(hasFrom)){ let prev = +b.startPage||0; logs.forEach(w=>{ per.set(w.id, Math.max(0, +w.page-prev)); prev = +w.page; }); return {read:+b.page||0, per, parts:false}; }
+  if (!logs.some(hasFrom)){ let prev = +b.startPage||0; logs.forEach(w=>{ per.set(w.id, Math.max(0, +w.page-prev)); prev = +w.page; }); return {read:+b.page||0, per, parts:false, spans:+b.page>0 ? [[1, +b.page]] : []}; }
   const ranges = +b.startPage>0 ? [[1, +b.startPage]] : []; let prev = +b.startPage||0;
   logs.forEach(w=>{ const to = +w.page, from = hasFrom(w) ? +w.pageFrom : prev+1; per.set(w.id, Math.max(0, to-from+1)); if (to>=from) ranges.push([from, to]); prev = to; });
-  ranges.sort((x,y)=>x[0]-y[0]); let read = 0, end = 0;
-  ranges.forEach(([a,z])=>{ if (z>end){ read += z-Math.max(a, end+1)+1; end = z; } });
-  return {read, per, parts:true};
+  ranges.sort((x,y)=>x[0]-y[0]); let read = 0, end = 0; const spans = [];
+  ranges.forEach(([a,z])=>{ if (z<=end) return; const st = Math.max(a, end+1); read += z-st+1;
+    if (spans.length && st===end+1) spans[spans.length-1][1] = z; else spans.push([st, z]); end = z; });
+  return {read, per, parts:true, spans};
 }
 const bookPct = (s, b)=>+b.pages ? Math.min(100, Math.round(bookPages(s,b).read/b.pages*100)) : 0;
 function bookData(s, b){
@@ -4877,7 +4881,7 @@ function bookData(s, b){
   const eta = pages && perWeek>0 && page<pages ? Math.ceil((pages-page)/perWeek) : null;
   const since = b.lastRead ? daysBetween(b.lastRead, t) : null;
   const minutes = logs.reduce((a,w)=>a+(+w.minutes||0),0);
-  return {logs, hist:hist.reverse(), pct, perWeek, eta, since, minutes, recent, read:bp.read, parts:bp.parts};
+  return {logs, hist:hist.reverse(), pct, perWeek, eta, since, minutes, recent, read:bp.read, parts:bp.parts, spans:bp.spans};
 }
 function editBook(s, b){
   const isNew = !b; const x = b || {id:uid(), title:"", author:"", topic:"Tactics", pages:"", page:0, startPage:0, status:"Reading", started:today(), finished:"", lastRead:"", notes:""};
@@ -4920,8 +4924,11 @@ function tBooks(el, s){
     return '<article class="book'+(b.status==="Finished"?" fin":"")+'"><div class="spine" style="background:'+(TOPIC_COLOR[b.topic]||"#7A7F74")+'" aria-hidden="true"></div><div class="book-main">'+
       '<div class="book-head"><div style="min-width:0"><h3>'+esc(b.title)+'</h3><div class="small muted">'+[esc(b.author), esc(b.topic)].filter(Boolean).join(" · ")+'</div></div>'+
       (stale?'<span class="tag warn">Not opened in '+d.since+' days</span>':"")+'</div>'+
-      '<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+(d.pct||0)+'"><span style="width:'+(d.pct||0)+'%"></span></div>'+
-      (d.parts ? '<div class="small"><b class="num">'+d.read+'</b> <span class="muted">'+(b.pages?'of '+b.pages+' pages read · '+d.pct+'%':'pages read')+' · last stop p. '+(+b.page||0)+'</span></div>'
+      (d.parts && b.pages
+        ? '<div class="prog parts" role="img" aria-label="'+esc(d.read+" of "+b.pages+" pages read")+'">'+d.spans.map(([a,z])=>'<span title="p. '+a+'–'+z+'" style="inset-inline-start:'+((a-1)/b.pages*100)+'%;width:'+(Math.max(0.6,(Math.min(z,b.pages)-a+1)/b.pages*100))+'%"></span>').join("")+'</div>'+
+          '<div class="prog-scale small muted"><span>1</span><span>'+b.pages+'</span></div>'
+        : '<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+(d.pct||0)+'"><span style="width:'+(d.pct||0)+'%"></span></div>')+
+      (d.parts ? '<div class="small"><b><span>p.</span> <bdi dir="ltr" class="num">'+d.spans.map(([a,z])=>a===z?a:a+'–'+z).join(", ")+'</bdi></b></div><div class="small muted">'+(b.pages?d.read+' of '+b.pages+' pages read · '+d.pct+'%':d.read+' pages read')+'</div>'
         : '<div class="small"><b class="num">p. '+(+b.page||0)+'</b>'+(b.pages?' <span class="muted">of '+b.pages+' · '+d.pct+'%</span>':'')+'</div>')+
       '<div class="small muted" style="margin-top:2px">'+meta.map(esc).join(" · ")+'</div>'+
       (b.notes?'<div class="small" style="margin-top:6px">'+esc(b.notes)+'</div>':"")+
@@ -6381,7 +6388,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "p.":"עמ׳",
   "Ping pong":"פינג פונג", "From page":"מעמוד", "To page":"עד עמוד", "Only for a part of the book, e.g. one chapter. Leave empty to continue from the last stop.":"רק לחלק מהספר, למשל פרק אחד. להשאיר ריק כדי להמשיך מהמקום שבו עצרו.",
   "Enter the page they read to.":"יש להזין עד איזה עמוד קראו.", "From page should be between 1 and the To page.":"\"מעמוד\" צריך להיות בין 1 לבין \"עד עמוד\".",
   "Private lessons":"שיעורים פרטיים", "Club classes only":"רק קבוצות במועדון", "Club group":"קבוצה במועדון", "Not in a club group":"לא בקבוצה במועדון", "Club":"מועדון",
@@ -6875,7 +6882,7 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^(\d+) of (\d+) pages read$/, "$1 מתוך $2 עמודים נקראו"], [/^(\d+) pages read$/, "$1 עמודים נקראו"], [/^p\. ([\d–, ]+)$/, "עמ׳ $1"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
   [/^Green weeks reached the goal of (\d+) workouts?\.$/, "בשבועות הירוקים הושג היעד של $1 אימונים."], [/^No weekly goal yet — set one so (.+) has something to aim for\.$/, "עדיין אין יעד שבועי — כדאי לקבוע אחד, כדי של־$1 יהיה למה לשאוף."], [/^of (\d+)$/, "מתוך $1"],
   [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
   [/^(\d+) attempts? in period$/, "$1 ניסיונות בתקופה"], [/^(\d+) attempts?$/, "$1 ניסיונות"], [/^best (\d+)$/, "שיא $1"], [/^avg ([\d.]+)$/, "ממוצע $1"], [/^score (\d+)$/, "תוצאה $1"],
