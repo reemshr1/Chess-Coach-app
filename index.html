@@ -339,7 +339,7 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .m-rook{background:linear-gradient(135deg,#FFE27A,#C9950F);color:#5A3E00}.m-queen{background:linear-gradient(135deg,#E2CCFA,#8550C6)}.m-king{background:linear-gradient(135deg,#3C6BC0,#16326B);color:#FFD54F}
 .streak-badge.m-pawn-bg{background:#F6EBDA;color:#5C3B19}.streak-badge.m-knight-bg{background:#F7E1D0;color:#7A4520}.streak-badge.m-bishop-bg{background:#ECEFF2;color:#36414C}
 .streak-badge.m-rook-bg{background:#FFF0B8;color:#6E5100}.streak-badge.m-queen-bg{background:#EFE3FC;color:#5B2E96}.streak-badge.m-king-bg{background:#DCE6F7;color:#16326B}
-.medal-warn{background:var(--flag-bg)!important;color:var(--flag)!important}
+.medal-warn-txt{color:var(--flag);margin-inline-start:6px;padding-inline-start:8px;border-inline-start:1px solid currentColor}
 .medal-row{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.medal-row .streak-badge{margin:0;display:inline-flex;align-items:center;gap:6px}
 .medal-track{padding:10px 0;border-top:1px solid var(--line)}.medal-track:first-child{border-top:0;padding-top:0}
 .medal-shelf{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px;text-align:center}
@@ -4845,8 +4845,8 @@ const medal = (i, cls)=>'<span class="medal m-'+MEDALS[i-1][0]+(cls?" "+cls:"")+
 function streakLine(s){
   const st = streaksOf(s), out = [];
   Object.keys(STREAKS).forEach(k=>{ const o = st[k], d = STREAKS[k]; if (!o) return; const i = k==="practice" ? o.level : tierOf(d.steps, o.now); if (!i) return;
-    out.push('<span class="streak-badge medal-line m-'+MEDALS[i-1][0]+'-bg" title="'+MEDALS[i-1][1]+'">'+medal(i)+' <span>'+o.now+'-'+d.unit+' '+(k==="practice"?"practice":"fitness")+' streak</span></span>'); });
-  if (st.practice.risk && !PARENT()) out.push('<span class="streak-badge medal-warn">⚠ <span>Practice today to keep your streak</span></span>');
+    const warn = k==="practice" && o.risk && !PARENT() ? '<span class="medal-warn-txt">⚠ <span>Practice today to keep your streak</span></span>' : '';
+    out.push('<span class="streak-badge medal-line m-'+MEDALS[i-1][0]+'-bg" title="'+MEDALS[i-1][1]+'">'+medal(i)+' <span>'+o.now+'-'+d.unit+' '+(k==="practice"?"practice":"fitness")+' streak</span>'+warn+'</span>'); });
   return out.length ? '<div class="medal-row">'+out.join("")+'</div>' : '';
 }
 function medalsPanel(s){
