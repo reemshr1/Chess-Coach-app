@@ -3730,13 +3730,16 @@ function markSeen(keys){
   try { localStorage.setItem(seenKey(), JSON.stringify([...have, ...add].slice(-400))); } catch(e){}
   if (store && store.markSeen) store.markSeen(add);
 }
-const unseenUpdates = s=>{ const seen = seenSet(); return studentUpdates(s).filter(u=>!seen.has(u.key)); };
+// "New" is only for the last 2 days; older updates stay listed without the tag.
+const NEW_DAYS = 2;
+const isNew = (u, seen)=>!seen.has(u.key) && u.date>=addDays(today(), -NEW_DAYS);
+const unseenUpdates = s=>{ const seen = seenSet(); return studentUpdates(s).filter(u=>isNew(u, seen)); };
 // Which menu item an update belongs to, for the count on the menu.
 const updateArea = u=>/^as:/.test(u.key) ? "assignments" : /^notes:/.test(u.key) ? "progress" : "schedule";
 function updatesPanel(s){
   const ups = studentUpdates(s).slice(0,8); if (!ups.length) return "";
-  const seen = seenSet(), fresh = ups.filter(u=>!seen.has(u.key));
-  return panel("Updates", '<ul class="list">'+ups.map(u=>'<li><div class="main"><div class="title"><a href="'+u.href+'" data-seen="'+esc(u.key)+'">'+esc(u.text)+'</a></div><div class="small muted">'+esc(fmtDate(u.date,{weekday:"short",day:"numeric",month:"short"}))+'</div></div>'+(seen.has(u.key)?'':'<span class="tag '+u.kind+'">New</span>')+'</li>').join("")+'</ul>',
+  const seen = seenSet(), fresh = ups.filter(u=>isNew(u, seen));
+  return panel("Updates", '<ul class="list">'+ups.map(u=>'<li><div class="main"><div class="title"><a href="'+u.href+'" data-seen="'+esc(u.key)+'">'+esc(u.text)+'</a></div><div class="small muted">'+esc(fmtDate(u.date,{weekday:"short",day:"numeric",month:"short"}))+'</div></div>'+(isNew(u, seen)?'<span class="tag '+u.kind+'">New</span>':'')+'</li>').join("")+'</ul>',
     fresh.length ? '<button class="btn small" data-a="seenAll">Mark all as read</button>' : '');
 }const pendingChange = (s, x)=>(s.requests||[]).find(r=>r.status==="pending" && r.sessionId===x.id);
 // A move the coach declined, waiting for the student to say what to do with the lesson.
@@ -5822,7 +5825,7 @@ function pAssignments(v){
 function tAssignments(el, s){
   const list = asSort(state.assignments.filter(a=>a.studentId===s.id));
   if (STUDENT()){ const todo = list.filter(a=>a.status==="Assigned"), done = list.filter(a=>a.status!=="Assigned");
-    const seen = seenSet(), fresh = new Set(studentUpdates(s).filter(u=>/^as:/.test(u.key) && !seen.has(u.key)).map(u=>u.key.split(":")[1]));
+    const seen = seenSet(), fresh = new Set(studentUpdates(s).filter(u=>/^as:/.test(u.key) && isNew(u, seen)).map(u=>u.key.split(":")[1]));
     const box = (title, xs, empty)=>'<section class="panel" style="padding:0;margin-bottom:16px"><div class="panel-head"><h2>'+title+'</h2></div>'+(xs.length ? xs.map(a=>'<div class="as-item">'+(fresh.has(a.id)?'<span class="tag board new-tag">New</span>':'')+asRow(a,false)+(a.status==="Assigned"?'<button class="btn small" data-a="done" data-id="'+a.id+'">Mark done</button>':'')+'</div>').join("") : '<p class="empty" style="padding:4px 18px 18px">'+empty+'</p>')+'</section>';
     el.innerHTML = box("To do", todo, PARENT() ? "All assignments are done." : "All tasks are done, nice job!")+(done.length ? box("Done", done, "") : "");
   } else
