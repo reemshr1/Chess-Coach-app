@@ -334,15 +334,15 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 @media (max-width:480px){.tstats{grid-template-columns:1fr 1fr}}
 .new-tag{margin-inline-start:18px;align-self:center;flex:none}
 .quick-fit{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px}
-.medal{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:.75rem;color:#fff;font-style:normal;flex:none;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
-.m-bronze{background:linear-gradient(135deg,#E3A06B,#A8662F)}.m-silver{background:linear-gradient(135deg,#E9EDF1,#9AA4AE)}.m-gold{background:linear-gradient(135deg,#FFE27A,#D4A017)}
-.m-platinum{background:linear-gradient(135deg,#FFFFFF,#8E9BC7);color:#2E3B6E}.m-diamond{background:linear-gradient(135deg,#E6FAFF,#4FB6DC);color:#0F4C66}
-.streak-badge.m-bronze-bg{background:#F7E4D3;color:#7A4520}.streak-badge.m-silver-bg{background:#ECEFF2;color:#46525E}.streak-badge.m-gold-bg{background:#FFF0B8;color:#6E5100}.streak-badge.m-platinum-bg{background:#E8EBF7;color:#2E3B6E}.streak-badge.m-diamond-bg{background:#DDF5FD;color:#0F4C66}
-.m-silver{color:#4A5866}
+.medal{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:.85rem;line-height:1;font-family:"DejaVu Sans","Segoe UI Symbol","Apple Symbols",sans-serif;color:#fff;font-style:normal;flex:none;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
+.m-pawn{background:linear-gradient(135deg,#F1DFC0,#B98B5A);color:#4A2F14}.m-knight{background:linear-gradient(135deg,#E9A46E,#9C5A27)}.m-bishop{background:linear-gradient(135deg,#F2F4F6,#98A3AE);color:#36414C}
+.m-rook{background:linear-gradient(135deg,#FFE27A,#C9950F);color:#5A3E00}.m-queen{background:linear-gradient(135deg,#E2CCFA,#8550C6)}.m-king{background:linear-gradient(135deg,#3C6BC0,#16326B);color:#FFD54F}
+.streak-badge.m-pawn-bg{background:#F6EBDA;color:#5C3B19}.streak-badge.m-knight-bg{background:#F7E1D0;color:#7A4520}.streak-badge.m-bishop-bg{background:#ECEFF2;color:#36414C}
+.streak-badge.m-rook-bg{background:#FFF0B8;color:#6E5100}.streak-badge.m-queen-bg{background:#EFE3FC;color:#5B2E96}.streak-badge.m-king-bg{background:#DCE6F7;color:#16326B}
 .medal-row{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.medal-row .streak-badge{margin:0;display:inline-flex;align-items:center;gap:6px}
 .medal-track{padding:10px 0;border-top:1px solid var(--line)}.medal-track:first-child{border-top:0;padding-top:0}
-.medal-shelf{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px;text-align:center}
-.medal-shelf>div{display:flex;flex-direction:column;align-items:center;gap:2px}.medal-shelf .medal{width:34px;height:34px;font-size:1rem}
+.medal-shelf{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px;text-align:center}
+.medal-shelf>div{display:flex;flex-direction:column;align-items:center;gap:2px}.medal-shelf .medal{width:36px;height:36px;font-size:1.3rem}
 .medal-shelf .todo .medal{background:var(--paper);color:var(--line);box-shadow:inset 0 0 0 2px var(--line)}.medal-shelf .todo{opacity:.75}
 .streak-badge{display:inline-block;margin:0 0 14px;padding:6px 12px;border-radius:999px;background:var(--warn-bg);color:var(--warn);font-weight:600;font-size:.9rem}
 .fit-meter{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:10px 0 6px}
@@ -4769,9 +4769,9 @@ function fitStreak(s){
   const ws = weekStartOf(today()), list = s.fitness||[], n = i=>{ const a = addDays(ws,-7*i), b = addDays(a,6); return list.filter(w=>w.date>=a && w.date<=b).length; };
   let k = 0; for (let i = n(0)>=goal ? 0 : 1; i<104 && n(i)>=goal; i++) k++; return k;
 }
-// Medals for streaks: Bronze → Silver → Gold → Platinum → Diamond. Earned medals are kept (best streak ever).
-const MEDALS = [["bronze","Bronze"],["silver","Silver"],["gold","Gold"],["platinum","Platinum"],["diamond","Diamond"]];
-const STREAKS = {practice:{label:"Practice streak", unit:"day", steps:[3,7,14,30,60]}, fitness:{label:"Fitness streak", unit:"week", steps:[2,4,8,16,26]}};
+// Medals for streaks, from Pawn up to King. Earned medals are kept (best streak ever).
+const MEDALS = [["pawn","Pawn","♟"],["knight","Knight","♞"],["bishop","Bishop","♝"],["rook","Rook","♜"],["queen","Queen","♛"],["king","King","♚"]];
+const STREAKS = {practice:{label:"Practice streak", unit:"day", steps:[3,7,14,30,60,100]}, fitness:{label:"Fitness streak", unit:"week", steps:[2,4,8,12,20,30]}};
 const tierOf = (steps, n)=>steps.filter(x=>n>=x).length;
 function streaksOf(s){
   const t = today(), days = new Set(s.worklog.filter(w=>+w.minutes>0).map(w=>w.date));
@@ -4784,7 +4784,7 @@ function streaksOf(s){
     const fnow = fitStreak(s); out.fitness = {now:fnow, best:Math.max(fb, fnow)}; }
   return out;
 }
-const medal = (i, cls)=>'<span class="medal m-'+MEDALS[i-1][0]+(cls?" "+cls:"")+'" aria-hidden="true">'+(i===5?"◆":"★")+'</span>';
+const medal = (i, cls)=>'<span class="medal m-'+MEDALS[i-1][0]+(cls?" "+cls:"")+'" aria-hidden="true">'+MEDALS[i-1][2]+'\uFE0E</span>';
 // The line on Home: each streak that's going now, with its medal.
 function streakLine(s){
   const st = streaksOf(s), out = [];
@@ -6521,7 +6521,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Bronze":"ארד", "Silver":"כסף", "Gold":"זהב", "Platinum":"פלטינה", "Diamond":"יהלום", "My medals":"המדליות שלי", "Practice streak":"רצף תרגול", "Fitness streak":"רצף כושר",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Pawn":"רגלי", "Knight":"פרש", "Bishop":"רץ", "Rook":"צריח", "Queen":"מלכה", "King":"מלך", "My medals":"המדליות שלי", "Practice streak":"רצף תרגול", "Fitness streak":"רצף כושר",
   "Starts once your coach sets a weekly fitness goal.":"מתחיל אחרי שהמאמן יקבע יעד כושר שבועי.", "Set a weekly fitness goal in the Fitness tab to start this streak.":"כדי להתחיל את הרצף הזה יש לקבוע יעד כושר שבועי בלשונית כושר.", "Same time, but online":"באותה שעה, אבל אונליין", "Same time, but in person":"באותה שעה, אבל פרונטלי", "In person or online":"פרונטלי או אונליין", "Mark all as read":"סימון הכול כנקרא",
   "Group workout challenge (per month)":"אתגר אימונים קבוצתי (לחודש)", "Optional — a shared monthly target for the whole group's workouts. Students see only the group total.":"לא חובה — יעד חודשי משותף לאימוני כל הקבוצה. התלמידים רואים רק את סך הקבוצה.",
   "Quick log for today:":"תיעוד מהיר להיום:", "Which sport":"איזה ספורט", "e.g. Climbing":"למשל טיפוס", "group workouts this month":"אימונים קבוצתיים החודש", "The group reached the target!":"הקבוצה הגיעה ליעד!",
@@ -7024,7 +7024,7 @@ const HE_RX = [
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
   [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(\d+)-day practice streak$/, "רצף תרגול של $1 ימים"], [/^(\d+)-week fitness streak$/, "רצף כושר של $1 שבועות"], [/^(.+)’s medals$/, "המדליות של $1"],
   [/^(\d+) (days?|weeks?)$/, (m,n,u)=>(+n===1 ? (u[0]==="d"?"יום אחד":"שבוע אחד") : n+(u[0]==="d"?" ימים":" שבועות"))], [/^Now: (.+)$/, (m,x)=>"עכשיו: "+heT(x)], [/^Best: (.+)$/, (m,x)=>"הכי טוב: "+heT(x)],
-  [/^(\d+ (?:days?|weeks?)) more to (Bronze|Silver|Gold|Platinum|Diamond)$/, (m,x,t)=>"עוד "+heT(x)+" ל"+heT(t)], [/^Switch to online$/, "מעבר לאונליין"], [/^Switch to in person$/, "מעבר לפרונטלי"], [/^The lesson on (.+) is now online$/, "השיעור ב־$1 יהיה אונליין"], [/^The lesson on (.+) is now in person$/, "השיעור ב־$1 יהיה פרונטלי"], [/^(In person|Online) → (In person|Online)$/, (m,a,b)=>({"In person":"פרונטלי","Online":"אונליין"})[a]+" → "+({"In person":"פרונטלי","Online":"אונליין"})[b]], [/^Notes from your lesson on (.+)$/, "הערות מהשיעור ב־$1"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
+  [/^(\d+ (?:days?|weeks?)) more to (Pawn|Knight|Bishop|Rook|Queen|King)$/, (m,x,t)=>"עוד "+heT(x)+" ל"+heT(t)], [/^Switch to online$/, "מעבר לאונליין"], [/^Switch to in person$/, "מעבר לפרונטלי"], [/^The lesson on (.+) is now online$/, "השיעור ב־$1 יהיה אונליין"], [/^The lesson on (.+) is now in person$/, "השיעור ב־$1 יהיה פרונטלי"], [/^(In person|Online) → (In person|Online)$/, (m,a,b)=>({"In person":"פרונטלי","Online":"אונליין"})[a]+" → "+({"In person":"פרונטלי","Online":"אונליין"})[b]], [/^Notes from your lesson on (.+)$/, "הערות מהשיעור ב־$1"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
   [/^Logged: (.+)$/, "תועד: $1"], [/^🔥 (\d+) weeks in a row reaching the fitness goal$/, "🔥 $1 שבועות ברצף ביעד הכושר"], [/^Points scored after 8 h or more:$/, "נקודות אחרי 8 שעות שינה ומעלה:"], [/^after less:$/, "אחרי פחות:"], [/^([\d.]+) h$/, "$1 ש׳"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^(\d+) of (\d+) pages read$/, "$1 מתוך $2 עמודים נקראו"], [/^(\d+) pages read$/, "$1 עמודים נקראו"], [/^p\. ([\d–, ]+)$/, "עמ׳ $1"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
   [/^Green weeks reached the goal of (\d+) workouts?\.$/, "בשבועות הירוקים הושג היעד של $1 אימונים."], [/^No weekly goal yet — set one so (.+) has something to aim for\.$/, "עדיין אין יעד שבועי — כדאי לקבוע אחד, כדי של־$1 יהיה למה לשאוף."], [/^of (\d+)$/, "מתוך $1"],
   [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
