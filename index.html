@@ -4789,7 +4789,7 @@ const medal = (i, cls)=>'<span class="medal m-'+MEDALS[i-1][0]+(cls?" "+cls:"")+
 function streakLine(s){
   const st = streaksOf(s), out = [];
   Object.keys(STREAKS).forEach(k=>{ const o = st[k], d = STREAKS[k]; if (!o) return; const i = tierOf(d.steps, o.now); if (!i) return;
-    out.push('<span class="streak-badge medal-line m-'+MEDALS[i-1][0]+'-bg">'+medal(i)+' <span>'+o.now+'-'+d.unit+' '+(k==="practice"?"practice":"fitness")+' streak</span> · <b>'+MEDALS[i-1][1]+'</b></span>'); });
+    out.push('<span class="streak-badge medal-line m-'+MEDALS[i-1][0]+'-bg" title="'+MEDALS[i-1][1]+'">'+medal(i)+' <span>'+o.now+'-'+d.unit+' '+(k==="practice"?"practice":"fitness")+' streak</span></span>'); });
   return out.length ? '<div class="medal-row">'+out.join("")+'</div>' : '';
 }
 function medalsPanel(s){
