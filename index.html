@@ -123,7 +123,7 @@ kbd{font-family:var(--body);font-size:.75rem;border:1px solid var(--line);border
 .student-mode .btn.lang-btn{display:inline-flex}
 .student-mode .side-search,.student-mode .topbar a[href="#/search"]{display:none}
 /* a parent's board is view-only apart from lesson requests and changes */
-.parent-mode #view button[data-a]:not([data-a="req"]):not([data-a="reqat"]):not([data-a="les"]):not([data-a="open"]):not([data-a="ans"]):not([data-a="unreq"]):not([data-a="reqx"]):not([data-a="view"]):not([data-a="wk"]):not([data-a="more"]):not([data-a="all"]):not([data-a="src"]):not([data-a="gf"]):not([data-a="f"]):not([data-a="sf"]):not([data-a="rf"]):not([data-a="period"]):not([data-a="board"]):not([data-a="games"]):not([data-a="clearT"]):not([data-a="clearRep"]):not([data-a="dl"]):not([data-a="pp"]):not([data-a="ps"]):not([data-a="seenAll"]):not([data-a="gotIt"]){display:none}
+.parent-mode #view button[data-a]:not([data-a="req"]):not([data-a="reqat"]):not([data-a="les"]):not([data-a="open"]):not([data-a="ans"]):not([data-a="unreq"]):not([data-a="reqx"]):not([data-a="view"]):not([data-a="wk"]):not([data-a="more"]):not([data-a="all"]):not([data-a="src"]):not([data-a="gf"]):not([data-a="f"]):not([data-a="sf"]):not([data-a="rf"]):not([data-a="period"]):not([data-a="board"]):not([data-a="games"]):not([data-a="clearT"]):not([data-a="clearRep"]):not([data-a="dl"]):not([data-a="pp"]):not([data-a="ps"]):not([data-a="seenAll"]):not([data-a="notes"]){display:none}
 .parent-mode #view label:has(input[type=file]),.parent-mode #view .dropzone{display:none}
 .link-box{display:inline-block;direction:ltr;font-weight:600;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 8px;word-break:break-all;user-select:all}
 .code-box{font-family:var(--display);font-size:1.6rem;font-weight:700;letter-spacing:.18em;background:var(--paper);border:1px dashed var(--line);border-radius:var(--r-sm);padding:6px 14px;display:inline-block;direction:ltr}
@@ -2825,7 +2825,7 @@ function studentView(s){
   return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
-    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], checkins:s.checkins||[], notices:(s.notices||[]).filter(n=>(n.to||[]).includes("student")), appSince:(s.portal && s.portal.linkedAt)||"", fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0, sleep:s.sleep||[],
+    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], checkins:s.checkins||[], notices:(s.notices||[]).filter(n=>(n.to||[]).includes("student")), noticeReads:(s.noticeReads||[]), appSince:(s.portal && s.portal.linkedAt)||"", fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0, sleep:s.sleep||[],
     coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0,
     clubOnly:!!s.clubOnly, clubs:clubsOf(s).map(({rate, ...r})=>Object.assign(r, {challenge:groupChallenge(r, s)})),
     freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56), s.id).free, taken:[]})); // other students' bookings just leave a gap
@@ -2902,6 +2902,12 @@ function applyOp(s, op, coachSide){
     r.needsAnswer = false; r.answer = op.choice; r.answered = (op.at||"").slice(0,10)||today();
     return true;
   }
+  if (t==="notice.read"){ // "Mark read" on a notification from the coach
+    if (!it || !(s.notices||[]).some(n=>n.id===it.id)) return false;
+    const who = it.who==="parent" ? "parent" : "student", L = list("noticeReads");
+    if (!L.some(r=>r.id===it.id && r.who===who)) L.push({id:it.id, who, at:op.at||new Date().toISOString()});
+    return true;
+  }
   if (t==="checkin"){ // the student's answer when they haven't logged practice for a while
     if (!it || !it.id || !CHECKIN_REASONS.some(r=>r[0]===it.reason)) return false;
     const L = list("checkins"); if (L.some(r=>r.id===it.id)) return true;
@@ -2951,7 +2957,7 @@ function makePortal(db){
     clearTimeout(timers[sid]); timers[sid] = setTimeout(()=>{ sync(byId(sid)).catch(()=>{}); }, 900);
   }
   // owner(): the student or family this account belongs to now; childOf(o, op): which student an op is about.
-  const PARENT_OPS = ["request","request.cancel","move.answer","payment.report"];
+  const PARENT_OPS = ["request","request.cancel","move.answer","payment.report","notice.read"];
   function watchInbox(uid){
     if (subs[uid]) return;
     subs[uid] = db.collection("portal/"+uid+"/inbox").onSnapshot(snap=>{
@@ -3658,12 +3664,11 @@ function pHome(v, s){
   const clubs = []; for (let d=t; d<=addDays(t,7) && clubs.length<2; d=addDays(d,1)) clubOn(d).forEach(o=>clubs.push({d, o})); // their club classes this coming week
   const rt = sortBy(s.ratings.filter(r=>(r.source||mainSource(s))===mainSource(s)),"date").pop();
   const hr = new Date().getHours(), greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
-  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+(PARENT() ? esc(first)+'’s board' : greet+', '+esc(first))+'</h1>'+freshness(s)+'</div><div class="row-actions"><button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
+  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+(PARENT() ? esc(first)+'’s board' : greet+', '+esc(first))+'</h1>'+freshness(s)+'</div><div class="row-actions">'+noticesButton(s)+'<button class="btn" data-a="req">Request a lesson</button><button class="btn primary" data-a="log">Log practice</button></div></div>'+
     '<div class="stats"><div class="stat"><div class="v num">'+(lessons[0]?esc(fmtDate(lessons[0].date,{weekday:"short",day:"numeric",month:"short"})):"—")+'</div><div class="l">'+(lessons[0]?"Next lesson"+(lessons[0].time?" · "+esc(lessons[0].time):""):"No lesson planned")+'</div></div>'+
       '<div class="stat"><div class="v num'+(todo.some(a=>a.due&&a.due<t)?" money-owed":"")+'">'+todo.length+'</div><div class="l">Assignments to do</div></div>'+
       '<div class="stat"><div class="v num">'+week+'</div><div class="l">Practice minutes this week</div></div>'+
       '<div class="stat"><div class="v num">'+(rt?esc(rt.value):"—")+'</div><div class="l">'+(rt?esc(rt.source||mainSource(s))+" rating":"Rating")+'</div></div></div>'+
-    noticesBox(s)+
     answerBox(s)+
     checkinBox(s)+
     streakLine(s)+
@@ -3693,7 +3698,7 @@ function pHome(v, s){
     req:()=>requestLesson(s), log:()=>openPractice(s, null), sleep:id=>logSleep(s, id||today()),
     seenAll:()=>{ markSeen(studentUpdates(s).map(u=>u.key)); render(); },
     checkin:k=>sendCheckin(s, k),
-    gotIt:id=>{ markSeen(["msg:"+id]); render(); }, les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
+    notes:()=>showNotices(s), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
     hwdone:id=>{ const a = state.assignments.find(x=>x.id===id); if (!a) return; a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — your coach will review it"); } });
 }
 // Start times (every 30 minutes) at which a lesson of `dur` minutes fits in the coach's open windows that day.
@@ -3935,7 +3940,7 @@ function pDashboard(v){
   const received = state.students.filter(s=>!s.self).reduce((tt,s)=>tt+s.payments.filter(p=>p.date.slice(0,7)===month).reduce((a,p)=>a+(+p.amount||0),0),0);
   const hr = new Date().getHours(); const greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
 
-  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+greet+(state.settings.coachName?", "+esc(state.settings.coachName):"")+'</h1></div><div class="row-actions"><button class="btn" id="dNote">🔔 Send notification</button><button class="btn" id="dPay">Record payment</button><button class="btn primary" id="dSes">Plan session</button></div></div>'+
+  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+greet+(state.settings.coachName?", "+esc(state.settings.coachName):"")+'</h1></div><div class="row-actions"><button class="btn" id="dNote">🔔 Notifications'+(newReads()?' <i class="nav-badge" style="position:static" aria-label="'+newReads()+' new reads">'+newReads()+'</i>':'')+'</button><button class="btn" id="dPay">Record payment</button><button class="btn primary" id="dSes">Plan session</button></div></div>'+
   '<div class="stats"><div class="stat"><div class="v num">'+active.length+'</div><div class="l">Active students</div></div>'+
   '<div class="stat"><div class="v num">'+sessions.length+'</div><div class="l">Sessions in the next 7 days</div></div>'+
   '<div class="stat"><div class="v num'+(outstanding>0?" money-owed":"")+'">'+money(outstanding)+'</div><div class="l">Outstanding</div></div>'+
@@ -3952,7 +3957,7 @@ function pDashboard(v){
   (!tasks.length ? "" : panel("Assignments due", tasks.length ? '<ul class="list">'+tasks.map(({s,x})=>'<li><div class="main"><div class="title">'+esc(x.title)+'</div><div class="small muted"><a href="'+(x.href||'#/student/'+s.id+'/work')+'">'+esc(s.name)+'</a> · '+esc(x.category)+'</div></div>'+(x.review?'<span class="tag warn">Done · to review</span>':'<span class="tag '+(x.due<t?"flag":x.due===t?"warn":"")+'">'+(x.due<t?"Overdue":x.due===t?"Today":esc(fmtShort(x.due)))+'</span>')+'</li>').join("")+'</ul>' : '<p class="empty">Nothing due in the next 3 days.</p>'))+
   '</div>';
   $("#dSes").onclick = ()=>planSession();
-  $("#dNote").onclick = ()=>sendNotice();
+  $("#dNote").onclick = ()=>coachNotices();
   $("#dPay").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
   const find = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && s.sessions.find(y=>y.id===b)]; };
   const req = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && (s.requests||[]).find(y=>y.id===b)]; };
@@ -3995,7 +4000,7 @@ function whyNotApplied(s, o){
   return "It didn't match anything current.";
 }
 const OP_LABEL = {"request":"a lesson request", "request.cancel":"a withdrawn request", "move.answer":"an answer about a lesson", "assignment.status":"an assignment marked done",
-  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "fitness.upsert":"a workout", "fitness.delete":"a deleted workout", "sleep.upsert":"a night's sleep", "sleep.delete":"a deleted night's sleep", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "checkin":"a practice check-in", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
+  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "fitness.upsert":"a workout", "fitness.delete":"a deleted workout", "sleep.upsert":"a night's sleep", "sleep.delete":"a deleted night's sleep", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "checkin":"a practice check-in", "notice.read":"a notification read", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
 function issuesPanel(){
   const list = portal ? portal.issues() : []; if (!list.length) return "";
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--flag)"><div class="panel-head"><h2>Problems with the student and parent app</h2></div><ul class="list">'+
@@ -4292,6 +4297,32 @@ let studentFilter = {q:"", show:"active"};
 const bcName = s=>(s.nameHe||"").trim() || s.name.split(" ")[0];
 const bcFill = (text, s)=>String(text).replace(/\{name\}|\{שם\}/g, bcName(s)).replace(/\[([^\[\]|]*)\|([^\[\]|]*)\]/g, (m,a,b)=>s.gender==="f" ? b : a);
 const hasParentApp = s=>families().some(f=>f.portal && (f.studentIds||[]).includes(s.id));
+// The coach's window: send a new one, and see who marked each one read.
+function noticeGroups(){
+  const g = {};
+  state.students.forEach(s=>(s.notices||[]).forEach(n=>{ const x = g[n.id] = g[n.id] || {id:n.id, date:n.date, to:n.to, text:n.text, sent:0, reads:[], names:[]};
+    x.sent += (n.to||[]).length; x.names.push(s.name);
+    (s.noticeReads||[]).filter(r=>r.id===n.id).forEach(r=>x.reads.push({who:r.who, at:r.at, s})); }));
+  return sortBy(Object.values(g), "date", -1);
+}
+const newReads = ()=>{ const since = state.settings.noticesSeenAt||""; return noticeGroups().reduce((a,g)=>a+g.reads.filter(r=>(r.at||"")>since).length, 0); };
+function coachNotices(){
+  const m = $("#modal"), groups = noticeGroups(), since = state.settings.noticesSeenAt||"";
+  m.innerHTML = '<div class="modal-form"><header><h2>Notifications</h2></header><div style="padding:8px 20px 4px;overflow:auto">'+
+    '<button class="btn primary" id="ntNew" style="margin-bottom:12px">New notification</button>'+
+    (groups.length ? '<ul class="list">'+groups.slice(0,30).map(g=>{ const fresh = g.reads.filter(r=>(r.at||"")>since).length;
+      return '<li style="display:block"><p class="pre" dir="auto" style="margin:0">'+esc(g.text)+'</p>'+
+        '<div class="small muted" style="margin-top:4px">'+esc(fmtDate(g.date,{weekday:"short",day:"numeric",month:"short"}))+' · <span>'+(g.names.length===1?esc(g.names[0]):g.names.length+" students")+'</span></div>'+
+        '<div class="small" style="margin-top:4px"><span class="tag '+(g.reads.length>=g.sent?'ok':'board')+'">Read '+g.reads.length+' of '+g.sent+'</span>'+(fresh?' <span class="tag warn">+'+fresh+' new</span>':'')+
+        (g.reads.length?' <span class="muted">'+g.reads.map(r=>esc(r.s.name.split(" ")[0])+(r.who==="parent"?"’s parent":"")).join(", ")+'</span>':'')+'</div></li>'; }).join("")+'</ul>'
+      : '<p class="empty">No notifications sent yet.</p>')+
+    '</div><footer><button type="button" class="btn" id="ntClose">Close</button></footer></div>';
+  m.querySelector("#ntClose").onclick = ()=>m.close();
+  m.querySelector("#ntNew").onclick = ()=>sendNotice();
+  m.showModal();
+  state.settings.noticesSeenAt = new Date().toISOString(); saveSettings(); // the counter on the button starts again
+  const b = $("#dNote .nav-badge"); if (b) b.remove();
+}
 function sendNotice(){
   const m = $("#modal"), all = sortBy(state.students.filter(s=>s.active && !s.self), "name"), groups = clubRules().filter(r=>all.some(s=>(s.clubIds||[]).includes(r.id)));
   m.innerHTML = '<form class="modal-form" method="dialog"><header><h2>Send a notification</h2><p class="sub small">It appears at the top of their Home in the app, marked New.</p></header><div class="modal-body" style="display:block">'+
@@ -4320,12 +4351,21 @@ function sendNotice(){
     m.close(); render(); toast("Notification sent to "+ids.length+" student"+(ids.length===1?"":"s")+(to.length===2?" and their parents":to[0]==="parent"?"’ parents":"")); };
   m.showModal(); m.querySelector("#nt").focus();
 }
-// On a student's or parent's Home: recent messages from the coach, New until "Got it".
-function noticesBox(s){
-  const t = today(), seen = seenSet(), list = sortBy((s.notices||[]).filter(n=>n.date>=addDays(t,-30)), "date", -1).slice(0,5); if (!list.length) return "";
-  return '<section class="panel notices" style="margin-bottom:16px;border-color:var(--sq-dark)"><div class="panel-head"><h2>Message from your coach</h2></div><ul class="list">'+
-    list.map(n=>{ const fresh = !seen.has("msg:"+n.id); return '<li style="display:block"><p class="pre" dir="auto" style="margin:0'+(fresh?';font-weight:600':'')+'">'+esc(n.text)+'</p><div class="row-actions" style="margin-top:6px;justify-content:space-between"><span class="small muted">'+esc(fmtDate(n.date,{weekday:"short",day:"numeric",month:"short"}))+'</span>'+
-      (fresh ? '<span><span class="tag board">New</span> <button class="btn small" data-a="gotIt" data-id="'+n.id+'">Got it</button></span>' : '')+'</div></li>'; }).join("")+'</ul></section>';
+// Students and parents: the notifications they haven't marked read yet, in a window from the 🔔 button.
+const myWho = ()=>PARENT() ? "parent" : "student";
+const unreadNotices = s=>{ const seen = seenSet(); return sortBy((s.notices||[]).filter(n=>!seen.has("msg:"+n.id) && !(s.noticeReads||[]).some(r=>r.id===n.id && r.who===myWho())), "date", -1); };
+function noticesButton(s){ const n = unreadNotices(s).length;
+  return '<button class="btn" data-a="notes" aria-label="Notifications'+(n?", "+n+" unread":"")+'">🔔 <span>Notifications</span>'+(n?' <i class="nav-badge" style="position:static">'+n+'</i>':'')+'</button>'; }
+function showNotices(s){
+  const m = $("#modal"), draw = ()=>{ const list = unreadNotices(s);
+    m.innerHTML = '<div class="modal-form"><header><h2>Notifications</h2></header><div style="padding:8px 20px 4px;overflow:auto">'+
+      (list.length ? '<ul class="list">'+list.map(n=>'<li style="display:block"><p class="pre" dir="auto" style="margin:0">'+esc(n.text)+'</p><div class="row-actions" style="margin-top:8px;justify-content:space-between"><span class="small muted">'+esc(fmtDate(n.date,{weekday:"short",day:"numeric",month:"short"}))+'</span><button class="btn small" data-read="'+n.id+'">Mark read</button></div></li>').join("")+'</ul>'
+        : '<p class="empty">No new notifications.</p>')+
+      '</div><footer><button type="button" class="btn" id="ntClose">Close</button></footer></div>';
+    m.querySelector("#ntClose").onclick = ()=>{ m.close(); render(); };
+    m.querySelectorAll("[data-read]").forEach(b=>b.onclick = ()=>{ const id = b.dataset.read; markSeen(["msg:"+id]);
+      const op = {type:"notice.read", item:{id, who:myWho()}}; store.send(op); applyOp(s, op, false); draw(); }); };
+  draw(); m.showModal();
 }
 function pStudents(v){
   v.innerHTML = '<div class="page-head"><div><h1>Students</h1><p class="sub">'+state.students.filter(s=>s.active && !s.self).length+' active</p></div><div class="row-actions"><input class="search" id="sq" type="search" placeholder="Search by name" value="'+esc(studentFilter.q)+'" aria-label="Search students"><select class="search" id="sf" style="min-width:auto" aria-label="Filter"><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><button class="btn primary" id="sAdd">Add student</button></div></div><section class="panel" style="padding:0" id="slist"></section>'+
@@ -6638,7 +6678,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Send a notification":"שליחת התראה", "🔔 Send notification":"🔔 שליחת התראה", "It appears at the top of their Home in the app, marked New.":"ההתראה תופיע בראש מסך הבית באפליקציה, מסומנת כחדשה.",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Notifications":"התראות", "🔔 Notifications":"🔔 התראות", "Mark read":"סימון כנקרא", "No new notifications.":"אין התראות חדשות.", "Close":"סגירה", "New notification":"התראה חדשה", "No notifications sent yet.":"עדיין לא נשלחו התראות.", "a notification read":"קריאת התראה", "Send a notification":"שליחת התראה", "🔔 Send notification":"🔔 שליחת התראה", "It appears at the top of their Home in the app, marked New.":"ההתראה תופיע בראש מסך הבית באפליקציה, מסומנת כחדשה.",
   "Send to":"למי לשלוח", "Parents":"הורים", "Students":"תלמידים", "Who":"מי", "Everyone":"כולם", "No one":"אף אחד", "Private students":"תלמידים פרטיים", "· parent not on the app":"· ההורה לא באפליקציה",
   "Choose who gets it":"יש לבחור למי לשלוח", "Write the message.":"יש לכתוב הודעה.", "Choose parents, students or both.":"יש לבחור הורים, תלמידים או שניהם.", "Choose at least one student.":"יש לבחור לפחות תלמיד אחד.",
   "Message from your coach":"הודעה מהמאמן", "Got it":"הבנתי", "{name} = the child’s name · [boy|girl] = the right word, e.g. [מוזמן|מוזמנת]":"{name} = שם הילד/ה · [בן|בת] = המילה המתאימה, למשל [מוזמן|מוזמנת]", "First name in Hebrew":"שם פרטי בעברית", "Used in messages to parents":"משמש בהודעות להורים", "Boy or girl":"בן או בת", "Boy":"בן", "Girl":"בת", "For the right Hebrew forms in messages":"כדי שהניסוח בהודעות יתאים",
@@ -7150,7 +7190,7 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(\d+) students? chosen$/, (m,n)=>+n===1?"נבחר תלמיד אחד":"נבחרו "+n+" תלמידים"], [/^Notification sent to (\d+) students?(.*)$/, (m,n,r)=>"ההתראה נשלחה ל־"+n+" תלמידים"+(r.includes("and")?" ולהורים שלהם":r?" (להורים)":"")], [/^(\d+) more workouts? this week to keep your streak$/, (m,n)=>(+n===1?"עוד אימון אחד":"עוד "+n+" אימונים")+" השבוע כדי לשמור על הרצף"], [/^Now: (\d+ days?) in a row$/, (m,x)=>"עכשיו: "+heT(x)+" ברצף"], [/^Highest: (Pawn|Knight|Bishop|Rook|Queen|King)$/, (m,p)=>"הכי גבוה: "+heT(p)], [/^No practice logged for (\d+) days$/, "לא נרשם תרגול כבר $1 ימים"], [/^Nudge — (.+)$/, "תזכורת — $1"], [/^(\d+)-day practice streak$/, "רצף תרגול של $1 ימים"], [/^(\d+)-week fitness streak$/, "רצף כושר של $1 שבועות"], [/^(.+)’s medals$/, "המדליות של $1"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^Read (\d+) of (\d+)$/, "נקרא $1 מתוך $2"], [/^\+(\d+) new$/, "+$1 חדשים"], [/^(\d+) students$/, "$1 תלמידים"], [/^(\d+) students? chosen$/, (m,n)=>+n===1?"נבחר תלמיד אחד":"נבחרו "+n+" תלמידים"], [/^Notification sent to (\d+) students?(.*)$/, (m,n,r)=>"ההתראה נשלחה ל־"+n+" תלמידים"+(r.includes("and")?" ולהורים שלהם":r?" (להורים)":"")], [/^(\d+) more workouts? this week to keep your streak$/, (m,n)=>(+n===1?"עוד אימון אחד":"עוד "+n+" אימונים")+" השבוע כדי לשמור על הרצף"], [/^Now: (\d+ days?) in a row$/, (m,x)=>"עכשיו: "+heT(x)+" ברצף"], [/^Highest: (Pawn|Knight|Bishop|Rook|Queen|King)$/, (m,p)=>"הכי גבוה: "+heT(p)], [/^No practice logged for (\d+) days$/, "לא נרשם תרגול כבר $1 ימים"], [/^Nudge — (.+)$/, "תזכורת — $1"], [/^(\d+)-day practice streak$/, "רצף תרגול של $1 ימים"], [/^(\d+)-week fitness streak$/, "רצף כושר של $1 שבועות"], [/^(.+)’s medals$/, "המדליות של $1"],
   [/^(\d+) (days?|weeks?)$/, (m,n,u)=>(+n===1 ? (u[0]==="d"?"יום אחד":"שבוע אחד") : n+(u[0]==="d"?" ימים":" שבועות"))], [/^Now: (.+)$/, (m,x)=>"עכשיו: "+heT(x)], [/^Best: (.+)$/, (m,x)=>"הכי טוב: "+heT(x)],
   [/^(\d+ (?:days?|weeks?)) more to (Pawn|Knight|Bishop|Rook|Queen|King)$/, (m,x,t)=>"עוד "+heT(x)+" ל"+heT(t)], [/^Switch to online$/, "מעבר לאונליין"], [/^Switch to in person$/, "מעבר לפרונטלי"], [/^The lesson on (.+) is now online$/, "השיעור ב־$1 יהיה אונליין"], [/^The lesson on (.+) is now in person$/, "השיעור ב־$1 יהיה פרונטלי"], [/^(In person|Online) → (In person|Online)$/, (m,a,b)=>({"In person":"פרונטלי","Online":"אונליין"})[a]+" → "+({"In person":"פרונטלי","Online":"אונליין"})[b]], [/^Notes from your lesson on (.+)$/, "הערות מהשיעור ב־$1"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
   [/^Logged: (.+)$/, "תועד: $1"], [/^🔥 (\d+) weeks in a row reaching the fitness goal$/, "🔥 $1 שבועות ברצף ביעד הכושר"], [/^Points scored after 8 h or more:$/, "נקודות אחרי 8 שעות שינה ומעלה:"], [/^after less:$/, "אחרי פחות:"], [/^([\d.]+) h$/, "$1 ש׳"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^(\d+) of (\d+) pages read$/, "$1 מתוך $2 עמודים נקראו"], [/^(\d+) pages read$/, "$1 עמודים נקראו"], [/^p\. ([\d–, ]+)$/, "עמ׳ $1"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
