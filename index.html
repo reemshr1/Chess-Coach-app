@@ -2819,7 +2819,7 @@ function studentView(s){
   return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
-    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0, sleep:s.sleep||[],
+    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], checkins:s.checkins||[], appSince:(s.portal && s.portal.linkedAt)||"", fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0, sleep:s.sleep||[],
     coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0,
     clubOnly:!!s.clubOnly, clubs:clubsOf(s).map(({rate, ...r})=>Object.assign(r, {challenge:groupChallenge(r, s)})),
     freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56), s.id).free, taken:[]})); // other students' bookings just leave a gap
@@ -2895,6 +2895,12 @@ function applyOp(s, op, coachSide){
     if (op.choice==="cancel" && les && les.status==="planned" && les.date>=today()) les.status = "cancelled";
     r.needsAnswer = false; r.answer = op.choice; r.answered = (op.at||"").slice(0,10)||today();
     return true;
+  }
+  if (t==="checkin"){ // the student's answer when they haven't logged practice for a while
+    if (!it || !it.id || !CHECKIN_REASONS.some(r=>r[0]===it.reason)) return false;
+    const L = list("checkins"); if (L.some(r=>r.id===it.id)) return true;
+    L.push({id:it.id, date:/^\d{4}-\d{2}-\d{2}$/.test(it.date||"") ? it.date : today(), reason:it.reason, note:String(it.note||"").slice(0,300)});
+    s.checkins = L.slice(-10); return true;
   }
   if (t==="payment.report"){
     if (!it || !it.id || !(+it.amount>0) || !/^\d{4}-\d{2}-\d{2}$/.test(it.date||"")) return false;
@@ -3652,6 +3658,7 @@ function pHome(v, s){
       '<div class="stat"><div class="v num">'+week+'</div><div class="l">Practice minutes this week</div></div>'+
       '<div class="stat"><div class="v num">'+(rt?esc(rt.value):"—")+'</div><div class="l">'+(rt?esc(rt.source||mainSource(s))+" rating":"Rating")+'</div></div></div>'+
     answerBox(s)+
+    checkinBox(s)+
     streakLine(s)+
     (!PARENT() && sleepRows(s).some(o=>o.d===t && !o.sl) ? '<section class="panel" style="margin-bottom:16px;border-color:var(--sq-dark);display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:0"><b>Tournament today</b><div class="small muted">How many hours did you sleep last night?</div></div><button class="btn small" data-a="sleep" data-id="'+t+'">Add sleep</button></section>' : '')+
     lessonSoon(s)+
@@ -3677,7 +3684,8 @@ function pHome(v, s){
     '</div>';
   bindActions(v,{ ans:id=>{ const [rid, c] = id.split("|"), r = (s.requests||[]).find(x=>x.id===rid); if (r) answerMove(s, r, c); },
     req:()=>requestLesson(s), log:()=>openPractice(s, null), sleep:id=>logSleep(s, id||today()),
-    seenAll:()=>{ markSeen(studentUpdates(s).map(u=>u.key)); render(); }, les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
+    seenAll:()=>{ markSeen(studentUpdates(s).map(u=>u.key)); render(); },
+    checkin:k=>sendCheckin(s, k), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
     hwdone:id=>{ const a = state.assignments.find(x=>x.id===id); if (!a) return; a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — your coach will review it"); } });
 }
 // Start times (every 30 minutes) at which a lesson of `dur` minutes fits in the coach's open windows that day.
@@ -3939,6 +3947,7 @@ function pDashboard(v){
   bindActions(v,{ prOk:id=>decidePayReport(id, true), prNo:id=>decidePayReport(id, false), done:id=>{ const [s,x] = find(id); if (x) markDone(s,x); }, plan:id=>planSession({sid:id}), backup:()=>downloadBackup(),
     approve:id=>{ const [s,r] = req(id); if (r) approveRequest(s,r); },
     remind:id=>{ const x = byId(id); if (x) sendReminder(x); },
+    nudge:id=>{ const x = byId(id); if (x) nudgeStudent(x); },
     issueRetry:id=>portal && portal.retry(id), issueDrop:id=>confirmBox("Discard this change?", "What they sent will be deleted. They can send it again from their app.", "Discard", ()=>portal.discard(id)),
     decline:id=>{ const [s,r] = req(id); if (!r) return;
       if (r.kind==="move") return openForm({title:"Can't meet then — "+s.name, submit:"Decline the move", fields:[
@@ -3974,7 +3983,7 @@ function whyNotApplied(s, o){
   return "It didn't match anything current.";
 }
 const OP_LABEL = {"request":"a lesson request", "request.cancel":"a withdrawn request", "move.answer":"an answer about a lesson", "assignment.status":"an assignment marked done",
-  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "fitness.upsert":"a workout", "fitness.delete":"a deleted workout", "sleep.upsert":"a night's sleep", "sleep.delete":"a deleted night's sleep", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
+  "worklog.upsert":"a practice entry", "worklog.delete":"a deleted practice entry", "fitness.upsert":"a workout", "fitness.delete":"a deleted workout", "sleep.upsert":"a night's sleep", "sleep.delete":"a deleted night's sleep", "tournaments.upsert":"a tournament", "books.upsert":"a book", "training.upsert":"a training plan", "game.upsert":"a game", "repertoire.upsert":"an opening line", "checkin":"a practice check-in", "payment.report":"a payment report", "repertoire.delete":"a deleted opening line"};
 function issuesPanel(){
   const list = portal ? portal.issues() : []; if (!list.length) return "";
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--flag)"><div class="panel-head"><h2>Problems with the student and parent app</h2></div><ul class="list">'+
@@ -4078,6 +4087,40 @@ function backupNote(t){
   return '<div class="note-bar"><span>'+(last ? "Last backup: "+age+" days ago — download a fresh copy." : "No backup downloaded yet — keep a copy of your records outside the app.")+'</span><button class="btn small" data-a="backup">Download backup</button></div>';
 }
 const PRACTICE_GAP_DAYS = 7;
+const ASK_GAP_DAYS = 5; // the student's app asks what's going on a bit before the coach sees them as quiet
+const CHECKIN_REASONS = [["busy","Busy with school / exams"],["sick","I was sick"],["break","Taking a short break"],["other","Something else"]];
+// Days since the student last logged practice (or since they got the app, if they never have); null if neither.
+function practiceGap(s){
+  const last = s.worklog.reduce((m,w)=>w.date>m?w.date:m, "") || (s.portal && s.portal.linkedAt) || s.appSince || "";
+  return last ? {days:daysBetween(last, today()), never:!s.worklog.length, last} : null;
+}
+const lastCheckin = s=>sortBy(s.checkins||[],"date").pop();
+// Ask again only after another week without practice.
+function askCheckin(s){
+  const g = practiceGap(s); if (!g || g.days<ASK_GAP_DAYS) return false;
+  const c = lastCheckin(s); return !c || c.date<g.last || daysBetween(c.date, today())>=7;
+}
+function checkinBox(s){
+  if (PARENT() || !askCheckin(s)) return "";
+  const g = practiceGap(s);
+  return '<section class="panel checkin" style="margin-bottom:16px;border-color:var(--warn)"><div class="panel-head"><h2>'+(g.never?"No practice logged yet":"No practice logged for "+g.days+" days")+'</h2></div>'+
+    '<p style="margin:0 0 10px">What’s going on? Your coach would like to know.</p><div class="row-actions" style="flex-wrap:wrap;justify-content:flex-start">'+
+    '<button class="btn small primary" data-a="log">I practised — log it now</button>'+CHECKIN_REASONS.map(([k,l])=>'<button class="btn small" data-a="checkin" data-id="'+k+'">'+esc(l)+'</button>').join("")+'</div></section>';
+}
+function sendCheckin(s, reason){
+  const go = note=>{ const op = {type:"checkin", item:{id:uid(), date:today(), reason, note:note||""}}; store.send(op); applyOp(s, op, false); render(); toast("Thanks — your coach will see it"); };
+  if (reason!=="other") return go("");
+  openForm({title:"What’s going on?", submit:"Send to your coach", fields:[{name:"note",label:"A few words for your coach",type:"textarea",value:"",placeholder:"e.g. Busy with a school project this week"}],
+    onSubmit:d=>{ if (!d.note.trim()) return "Write a few words, or pick one of the other answers."; go(d.note.trim()); }});
+}
+// A friendly message to send from the coach's phone.
+function nudgeStudent(s){
+  const g = practiceGap(s), first = s.name.split(" ")[0];
+  shareMessage({title:"Nudge — "+s.name, sub:"A friendly check-in. Edit it before sending.", contact:s.contact,
+    text:lng=>lng==="he" ? "היי "+first+", שמתי לב שלא נרשם תרגול כבר "+(g?g.days:"כמה")+" ימים. הכול בסדר? אפילו 15 דקות של פאזלים ביום עושות הבדל. מחכה לראות אותך בשיעור!\n"+signName("he")
+      : "Hi "+first+", I noticed no practice has been logged for "+(g?g.days:"a few")+" days. Everything OK? Even 15 minutes of puzzles a day makes a difference. See you at the lesson!\n"+signName("en"),
+    subject:lng=>lng==="he"?"תרגול שחמט":"Chess practice", copied:"Message copied"});
+}
 // Things that slip through: lessons never marked done (so never charged), students with nothing planned,
 // and students who log practice but have gone quiet.
 function attentionPanel(active, t){
@@ -4085,8 +4128,8 @@ function attentionPanel(active, t){
   active.forEach(s=>{
     s.sessions.forEach(x=>{ if (x.status==="planned" && x.date<t) unmarked.push({s,x}); });
     if (!s.sessions.some(x=>x.status==="planned" && x.date>=t)) noNext.push(s);
-    const lastLog = s.worklog.reduce((m,w)=>w.date>m?w.date:m, "");
-    if (lastLog && daysBetween(lastLog, t)>=PRACTICE_GAP_DAYS) quiet.push({s, days:daysBetween(lastLog, t)});
+    const g = practiceGap(s);
+    if (g && g.days>=PRACTICE_GAP_DAYS) quiet.push({s, days:g.days, never:g.never, c:lastCheckin(s)});
   });
   if (!unmarked.length && !noNext.length && !quiet.length) return "";
   unmarked.sort((a,b)=>a.x.date<b.x.date?1:-1); quiet.sort((a,b)=>b.days-a.days);
@@ -4095,7 +4138,9 @@ function attentionPanel(active, t){
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="panel-head"><h2>Needs attention</h2></div><div class="grid g3">'+
     (unmarked.length?col("Lessons not marked done ("+unmarked.length+")", unmarked.slice(0,4).map(({s,x})=>'<li><div class="main"><div class="title">'+esc(s.name)+'</div><div class="small muted">'+esc(fmtDate(x.date,{weekday:"short",day:"numeric",month:"short"}))+(x.time?" "+esc(x.time):"")+'</div></div><button class="btn small" data-a="done" data-id="'+s.id+'|'+x.id+'">Mark done</button></li>').join("")+more(unmarked.length-4,"#/schedule","on the Schedule page")):"")+
     (noNext.length?col("No lesson planned ("+noNext.length+")", sortBy(noNext,"name").slice(0,4).map(s=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a></div><div class="small muted">'+(()=>{ const last = sortBy(s.sessions.filter(x=>x.status==="done"),"date",-1)[0]; return last?"Last lesson "+esc(fmtShort(last.date)):"No lessons yet"; })()+'</div></div><button class="btn small" data-a="plan" data-id="'+s.id+'">Plan</button></li>').join("")+more(noNext.length-4,"#/students","students")):"")+
-    (quiet.length?col("No practice for "+PRACTICE_GAP_DAYS+"+ days ("+quiet.length+")", quiet.slice(0,4).map(({s,days})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/work">'+esc(s.name)+'</a></div><div class="small muted">Last practice '+days+' days ago</div></div></li>').join("")+more(quiet.length-4,"#/students","students")):"")+
+    (quiet.length?col("No practice for "+PRACTICE_GAP_DAYS+"+ days ("+quiet.length+")", quiet.slice(0,4).map(({s,days,never,c})=>'<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/work">'+esc(s.name)+'</a></div><div class="small muted">'+(never?"Has the app, no practice logged yet":"Last practice "+days+" days ago")+'</div>'+
+      (c ? '<div class="small"><span class="tag warn">'+esc((CHECKIN_REASONS.find(r=>r[0]===c.reason)||[,"Answered"])[1])+'</span>'+(c.note?' “'+esc(c.note)+'”':'')+' <span class="muted">'+esc(fmtShort(c.date))+'</span></div>' : '')+
+      '</div><button class="btn small ghost" data-a="nudge" data-id="'+s.id+'">Nudge</button></li>').join("")+more(quiet.length-4,"#/students","quiet students")):"")+
     '</div></section>';
 }
 function panel(title, body, action){ return '<section class="panel"><div class="panel-head"><h2>'+esc(title)+'</h2>'+(action||"")+'</div>'+body+'</section>'; }
@@ -6521,7 +6566,11 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Pawn":"רגלי", "Knight":"פרש", "Bishop":"רץ", "Rook":"צריח", "Queen":"מלכה", "King":"מלך", "My medals":"המדליות שלי", "Practice streak":"רצף תרגול", "Fitness streak":"רצף כושר",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול",
+  "Busy with school / exams":"עסוק/ה בבית הספר / מבחנים", "I was sick":"הייתי חולה", "Taking a short break":"לוקח/ת הפסקה קצרה", "Something else":"משהו אחר", "I practised — log it now":"תרגלתי — לרשום עכשיו",
+  "What’s going on? Your coach would like to know.":"מה קורה? המאמן ישמח לדעת.", "No practice logged yet":"עדיין לא נרשם תרגול", "Thanks — your coach will see it":"תודה — המאמן יראה את זה",
+  "What’s going on?":"מה קורה?", "A few words for your coach":"כמה מילים למאמן", "Write a few words, or pick one of the other answers.":"אפשר לכתוב כמה מילים או לבחור אחת מהתשובות האחרות.",
+  "Nudge":"תזכורת", "Has the app, no practice logged yet":"יש לו/ה את האפליקציה, עדיין לא נרשם תרגול", "Answered":"ענה/תה", "a practice check-in":"תשובה על תרגול", "Pawn":"רגלי", "Knight":"פרש", "Bishop":"רץ", "Rook":"צריח", "Queen":"מלכה", "King":"מלך", "My medals":"המדליות שלי", "Practice streak":"רצף תרגול", "Fitness streak":"רצף כושר",
   "Starts once your coach sets a weekly fitness goal.":"מתחיל אחרי שהמאמן יקבע יעד כושר שבועי.", "Set a weekly fitness goal in the Fitness tab to start this streak.":"כדי להתחיל את הרצף הזה יש לקבוע יעד כושר שבועי בלשונית כושר.", "Same time, but online":"באותה שעה, אבל אונליין", "Same time, but in person":"באותה שעה, אבל פרונטלי", "In person or online":"פרונטלי או אונליין", "Mark all as read":"סימון הכול כנקרא",
   "Group workout challenge (per month)":"אתגר אימונים קבוצתי (לחודש)", "Optional — a shared monthly target for the whole group's workouts. Students see only the group total.":"לא חובה — יעד חודשי משותף לאימוני כל הקבוצה. התלמידים רואים רק את סך הקבוצה.",
   "Quick log for today:":"תיעוד מהיר להיום:", "Which sport":"איזה ספורט", "e.g. Climbing":"למשל טיפוס", "group workouts this month":"אימונים קבוצתיים החודש", "The group reached the target!":"הקבוצה הגיעה ליעד!",
@@ -7022,7 +7071,7 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(\d+)-day practice streak$/, "רצף תרגול של $1 ימים"], [/^(\d+)-week fitness streak$/, "רצף כושר של $1 שבועות"], [/^(.+)’s medals$/, "המדליות של $1"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^No practice logged for (\d+) days$/, "לא נרשם תרגול כבר $1 ימים"], [/^Nudge — (.+)$/, "תזכורת — $1"], [/^(\d+)-day practice streak$/, "רצף תרגול של $1 ימים"], [/^(\d+)-week fitness streak$/, "רצף כושר של $1 שבועות"], [/^(.+)’s medals$/, "המדליות של $1"],
   [/^(\d+) (days?|weeks?)$/, (m,n,u)=>(+n===1 ? (u[0]==="d"?"יום אחד":"שבוע אחד") : n+(u[0]==="d"?" ימים":" שבועות"))], [/^Now: (.+)$/, (m,x)=>"עכשיו: "+heT(x)], [/^Best: (.+)$/, (m,x)=>"הכי טוב: "+heT(x)],
   [/^(\d+ (?:days?|weeks?)) more to (Pawn|Knight|Bishop|Rook|Queen|King)$/, (m,x,t)=>"עוד "+heT(x)+" ל"+heT(t)], [/^Switch to online$/, "מעבר לאונליין"], [/^Switch to in person$/, "מעבר לפרונטלי"], [/^The lesson on (.+) is now online$/, "השיעור ב־$1 יהיה אונליין"], [/^The lesson on (.+) is now in person$/, "השיעור ב־$1 יהיה פרונטלי"], [/^(In person|Online) → (In person|Online)$/, (m,a,b)=>({"In person":"פרונטלי","Online":"אונליין"})[a]+" → "+({"In person":"פרונטלי","Online":"אונליין"})[b]], [/^Notes from your lesson on (.+)$/, "הערות מהשיעור ב־$1"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
   [/^Logged: (.+)$/, "תועד: $1"], [/^🔥 (\d+) weeks in a row reaching the fitness goal$/, "🔥 $1 שבועות ברצף ביעד הכושר"], [/^Points scored after 8 h or more:$/, "נקודות אחרי 8 שעות שינה ומעלה:"], [/^after less:$/, "אחרי פחות:"], [/^([\d.]+) h$/, "$1 ש׳"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^(\d+) of (\d+) pages read$/, "$1 מתוך $2 עמודים נקראו"], [/^(\d+) pages read$/, "$1 עמודים נקראו"], [/^p\. ([\d–, ]+)$/, "עמ׳ $1"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
