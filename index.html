@@ -3477,7 +3477,7 @@ function render(){
   const r = route();
   if (STUDENT()) return renderStudent(v, r);
   if (!state.students.length && ["dashboard","students","schedule","payments","assignments"].includes(r.page)){ v.innerHTML = welcome(); bindWelcome(); return; }
-  const pages = {dashboard:pDashboard, students:pStudents, student:pStudent, schedule:pSchedule, payments:pPayments, settings:pSettings, assignments:pAssignments, assignment:pAssignment, search:pSearch};
+  const pages = {dashboard:pDashboard, students:pStudents, broadcast:pBroadcast, student:pStudent, schedule:pSchedule, payments:pPayments, settings:pSettings, assignments:pAssignments, assignment:pAssignment, search:pSearch};
   (pages[r.page]||pDashboard)(v, r);
 }
 
@@ -4280,8 +4280,47 @@ function ratingProblems(failed, changed, why, signedOut){
 
 /* ---------- students list ---------- */
 let studentFilter = {q:"", show:"active"};
+/* ---------- message to parents: one message, each child's name and boy/girl forms filled in ---------- */
+// In the text, {name} is the child's name (the Hebrew name when set) and [boy|girl] picks the word, e.g. [מדווח|מדווחת].
+const BROADCAST_SAMPLE = "\u05e9\u05dc\u05d5\u05dd \u05dc\u05db\u05d5\u05dc\u05dd \ud83d\udc4b\n\n\u05e8\u05e6\u05d9\u05ea\u05d9 \u05dc\u05e2\u05d3\u05db\u05df \u05e2\u05dc \u05ea\u05d5\u05e1\u05e4\u05ea \u05d7\u05d3\u05e9\u05d4 \u05d1\u05d0\u05e4\u05dc\u05d9\u05e7\u05e6\u05d9\u05d4 \"\u05e2\u05d5\u05dc\u05d9\u05dd \u05d1\u05d3\u05e8\u05d2\u05d4\": \u05dc\u05e9\u05d5\u05e0\u05d9\u05ea \u05db\u05d5\u05e9\u05e8 \ud83c\udfc3\u200d\u2642\ufe0f\u26bd\ud83c\udfca\n\n\u05dc\u05de\u05d4 \u05db\u05d5\u05e9\u05e8?\n\u05de\u05e9\u05d7\u05e7 \u05e9\u05d7\u05de\u05d8 \u05d0\u05e8\u05d5\u05da \u05d3\u05d5\u05e8\u05e9 \u05d4\u05e8\u05d1\u05d4 \u05e8\u05d9\u05db\u05d5\u05d6 \u05d5\u05e1\u05d1\u05d5\u05dc\u05ea. \u05e9\u05d7\u05e7\u05e0\u05d9\u05dd \u05e9\u05e2\u05d5\u05e9\u05d9\u05dd \u05e1\u05e4\u05d5\u05e8\u05d8 \u05d1\u05d0\u05d5\u05e4\u05df \u05e7\u05d1\u05d5\u05e2 \u05de\u05d2\u05d9\u05e2\u05d9\u05dd \u05dc\u05e1\u05d9\u05d1\u05d5\u05d1\u05d9\u05dd \u05d4\u05d0\u05d7\u05e8\u05d5\u05e0\u05d9\u05dd \u05d1\u05d8\u05d5\u05e8\u05e0\u05d9\u05e8 \u05e8\u05e2\u05e0\u05e0\u05d9\u05dd \u05d9\u05d5\u05ea\u05e8, \u05d5\u05de\u05d7\u05d6\u05d9\u05e7\u05d9\u05dd \u05e8\u05d9\u05db\u05d5\u05d6 \u05dc\u05d0\u05d5\u05e8\u05da \u05d6\u05de\u05df.\n\n\u05d0\u05d9\u05da \u05d6\u05d4 \u05e2\u05d5\u05d1\u05d3?\n\u2022  \u05d1\u05d0\u05e4\u05dc\u05d9\u05e7\u05e6\u05d9\u05d4, \u05ea\u05d7\u05ea \u05ea\u05e8\u05d2\u05d5\u05dc \u2190 \u05db\u05d5\u05e9\u05e8, {name} [\u05de\u05d3\u05d5\u05d5\u05d7|\u05de\u05d3\u05d5\u05d5\u05d7\u05ea] \u05db\u05dc \u05e4\u05e2\u05d9\u05dc\u05d5\u05ea: \u05e8\u05d9\u05e6\u05d4, \u05db\u05d3\u05d5\u05e8\u05d2\u05dc, \u05e9\u05d7\u05d9\u05d9\u05d4, \u05e4\u05d9\u05e0\u05d2 \u05e4\u05d5\u05e0\u05d2 \u05d5\u05db\u05dc \u05e1\u05e4\u05d5\u05e8\u05d8 \u05d0\u05d7\u05e8, \u05d5\u05dc\u05db\u05de\u05d4 \u05d6\u05de\u05df.\n\u2022  \u05d0\u05e0\u05d9 \u05d0\u05e7\u05d1\u05e2 \u05d9\u05e2\u05d3 \u05e9\u05d1\u05d5\u05e2\u05d9 (\u05dc\u05de\u05e9\u05dc 2 \u05d0\u05d9\u05de\u05d5\u05e0\u05d9\u05dd \u05d1\u05e9\u05d1\u05d5\u05e2). \u05d1\u05d0\u05e4\u05dc\u05d9\u05e7\u05e6\u05d9\u05d4 \u05e8\u05d5\u05d0\u05d9\u05dd \u05db\u05de\u05d4 \u05e0\u05e9\u05d0\u05e8 \u05dc{name} \u05e2\u05d3 \u05dc\u05d4\u05e9\u05d2\u05ea \u05d4\u05d9\u05e2\u05d3.\n\u2022  \u05e9\u05d1\u05d5\u05e2 \u05e9\u05d1\u05d5 \u05d4\u05d2\u05d9\u05e2\u05d5 \u05dc\u05d9\u05e2\u05d3 \u05e0\u05e1\u05e4\u05e8 \u05dc\u05e8\u05e6\u05e3, \u05d5\u05e2\u05dc \u05e8\u05e6\u05e3 \u05de\u05e7\u05d1\u05dc\u05d9\u05dd \u05de\u05d3\u05dc\u05d9\u05d5\u05ea \u05d1\u05e6\u05d5\u05e8\u05ea \u05db\u05dc\u05d9 \u05e9\u05d7\u05de\u05d8:\n\u265f \u05e8\u05d2\u05dc\u05d9 (2 \u05e9\u05d1\u05d5\u05e2\u05d5\u05ea) \u2190 \u265e \u05e4\u05e8\u05e9 (4) \u2190 \u265d \u05e8\u05e5 (8) \u2190 \u265c \u05e6\u05e8\u05d9\u05d7 (12) \u2190 \u265b \u05de\u05dc\u05db\u05d4 (20) \u2190 \u265a \u05de\u05dc\u05da (30)\n\u2022  \u05dc\u05e7\u05e8\u05d0\u05ea \u05e1\u05d5\u05e3 \u05d4\u05e9\u05d1\u05d5\u05e2, \u05d0\u05dd \u05e2\u05d5\u05d3 \u05dc\u05d0 \u05d4\u05d2\u05d9\u05e2\u05d5 \u05dc\u05d9\u05e2\u05d3, \u05d4\u05d9\u05dc\u05d3\u05d9\u05dd \u05d9\u05e7\u05d1\u05dc\u05d5 \u05ea\u05d6\u05db\u05d5\u05e8\u05ea.\n\u2022  \u05dc\u05e4\u05e0\u05d9 \u05ea\u05d7\u05e8\u05d5\u05d9\u05d5\u05ea \u05d0\u05e4\u05e9\u05e8 \u05d2\u05dd \u05dc\u05e8\u05e9\u05d5\u05dd \u05db\u05de\u05d4 \u05e9\u05e2\u05d5\u05ea {name} [\u05d9\u05e9\u05df|\u05d9\u05e9\u05e0\u05d4], \u05d5\u05dc\u05e8\u05d0\u05d5\u05ea \u05d0\u05d9\u05da \u05d4\u05e9\u05d9\u05e0\u05d4 \u05de\u05e9\u05e4\u05d9\u05e2\u05d4 \u05e2\u05dc \u05d4\u05ea\u05d5\u05e6\u05d0\u05d5\u05ea.\n\n\u05de\u05d4 \u05d0\u05ea\u05dd \u05e8\u05d5\u05d0\u05d9\u05dd?\n\u05d1\u05d7\u05e9\u05d1\u05d5\u05df \u05e9\u05dc\u05db\u05dd \u05d0\u05e4\u05e9\u05e8 \u05dc\u05e8\u05d0\u05d5\u05ea \u05d0\u05ea \u05d4\u05d0\u05d9\u05de\u05d5\u05e0\u05d9\u05dd, \u05d0\u05ea \u05d4\u05d9\u05e2\u05d3 \u05d4\u05e9\u05d1\u05d5\u05e2\u05d9 \u05d5\u05d0\u05ea \u05d4\u05de\u05d3\u05dc\u05d9\u05d5\u05ea \u05e9\u05dc {name}. \u05d0\u05ea\u05dd \u05dc\u05d0 \u05e6\u05e8\u05d9\u05db\u05d9\u05dd \u05dc\u05e8\u05e9\u05d5\u05dd \u05db\u05dc\u05d5\u05dd, \u05d4\u05e8\u05d9\u05e9\u05d5\u05dd \u05d4\u05d5\u05d0 \u05e9\u05dc {name}.\n\n\u05d0\u05e9\u05de\u05d7 \u05d0\u05dd \u05ea\u05e2\u05d5\u05d3\u05d3\u05d5 \u05d0\u05d5\u05ea\u05dd \u05dc\u05e8\u05e9\u05d5\u05dd \u05db\u05dc \u05e4\u05e2\u05d9\u05dc\u05d5\u05ea, \u05d2\u05dd \u05d0\u05dd \u05d4\u05d9\u05d0 \u05e7\u05e6\u05e8\u05d4 \ud83d\udcaa\n\u05dc\u05e9\u05d0\u05dc\u05d5\u05ea \u05d0\u05e0\u05d9 \u05d6\u05de\u05d9\u05df \u05e4\u05d4 \u05d5\u05d1\u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4.\n\n\u05e8\u05d0\u05dd";
+let bcShow = "all", bcSent = {};
+const bcName = s=>(s.nameHe||"").trim() || s.name.split(" ")[0];
+const bcFill = (text, s)=>String(text).replace(/\{name\}|\{שם\}/g, bcName(s)).replace(/\[([^\[\]|]*)\|([^\[\]|]*)\]/g, (m,a,b)=>s.gender==="f" ? b : a);
+const hasParentApp = s=>families().some(f=>f.portal && (f.studentIds||[]).includes(s.id));
+function pBroadcast(v){
+  const st = state.settings, text = st.broadcastText!=null ? st.broadcastText : BROADCAST_SAMPLE;
+  const list = sortBy(state.students.filter(s=>s.active && !s.self && !s.clubOnly && (bcShow==="all" || hasParentApp(s))), "name");
+  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px"><a href="#/students">‹ Students</a></p><h1>Message parents</h1><p class="sub">Write once — each child’s name and the right boy/girl words are filled in for every parent.</p></div></div>'+
+    '<div class="grid g2">'+
+    panel("Message", '<textarea id="bcText" class="fb" dir="auto" style="min-height:360px" aria-label="Message">'+esc(text)+'</textarea>'+
+      '<p class="small muted" style="margin:8px 0 0"><b>{name}</b> = the child’s name (the Hebrew name when set). <b>[boy|girl]</b> = the word for boys or for girls, e.g. [מדווח|מדווחת].</p>'+
+      '<div class="row-actions" style="margin-top:8px"><button class="btn small" data-a="bcIns">Insert {name}</button><button class="btn small ghost" data-a="bcSample">Use the fitness message</button></div>')+
+    panel("Send", '<div class="seg" role="group" aria-label="Who" style="margin-bottom:10px"><button type="button" class="'+(bcShow==="all"?"on":"")+'" data-a="bcShow" data-id="all">All active students</button><button type="button" class="'+(bcShow==="app"?"on":"")+'" data-a="bcShow" data-id="app">Parents with the app</button></div>'+
+      (list.length ? '<ul class="list" id="bcList">'+list.map(s=>{ const c = contactParts(s.contact), miss = [!s.nameHe?"no Hebrew name":"", !s.gender?"boy/girl not set":""].filter(Boolean);
+        return '<li style="flex-wrap:wrap"><div class="main"><div class="title">'+esc(s.name)+(s.nameHe?' <span class="muted" dir="rtl">'+esc(s.nameHe)+'</span>':'')+(bcSent[s.id]?' <span class="tag ok">Sent</span>':'')+'</div>'+
+          '<div class="small muted">'+(s.guardian?esc(s.guardian)+' · ':'')+(c.phone?esc(s.contact):'<span style="color:var(--flag)">No phone number</span>')+'</div>'+
+          (miss.length?'<div class="small"><a href="#" data-a="bcEdit" data-id="'+s.id+'" style="color:var(--warn)">⚠ '+esc(miss.join(", "))+' — edit</a></div>':'')+
+          '<details class="small"><summary>Preview</summary><p class="pre no-tr" dir="auto" style="margin:6px 0 0" data-prev="'+s.id+'"></p></details></div>'+
+          '<div class="row-actions">'+(c.phone?'<a class="btn small primary" target="_blank" rel="noopener" data-wa="'+s.id+'" style="text-decoration:none">WhatsApp</a>':'')+'<button class="btn small" data-a="bcCopy" data-id="'+s.id+'">Copy</button></div></li>'; }).join("")+'</ul>'
+        : '<p class="empty">'+(bcShow==="app" ? "No parent has connected to the app yet." : "No active students.")+'</p>'))+
+    '</div>';
+  const ta = $("#bcText"), byS = id=>state.students.find(x=>x.id===id);
+  const refresh = ()=>{ v.querySelectorAll("[data-prev]").forEach(p=>{ p.textContent = bcFill(ta.value, byS(p.dataset.prev)); });
+    v.querySelectorAll("[data-wa]").forEach(a=>{ const s = byS(a.dataset.wa); a.href = "https://wa.me/"+contactParts(s.contact).phone+"?text="+encodeURIComponent(bcFill(ta.value, s)); }); };
+  let saveT; ta.oninput = ()=>{ st.broadcastText = ta.value; refresh(); clearTimeout(saveT); saveT = setTimeout(saveSettings, 800); }; // kept at once, saved after a pause
+  v.querySelectorAll("[data-wa]").forEach(a=>a.addEventListener("click", ()=>{ bcSent[a.dataset.wa] = true; setTimeout(render, 300); }));
+  refresh();
+  bindActions(v,{
+    bcShow:id=>{ bcShow = id; render(); },
+    bcIns:()=>{ const p = ta.selectionStart||ta.value.length; ta.value = ta.value.slice(0,p)+"{name}"+ta.value.slice(p); ta.oninput(); ta.focus(); },
+    bcSample:()=>confirmBox("Use the fitness message?", "The text in the box will be replaced.", "Replace", ()=>{ st.broadcastText = BROADCAST_SAMPLE; saveSettings(); render(); }),
+    bcEdit:id=>editStudent(byS(id)),
+    bcCopy:async id=>{ const t = bcFill(ta.value, byS(id)); try { await navigator.clipboard.writeText(t); } catch(e){ const x = document.createElement("textarea"); x.value = t; document.body.appendChild(x); x.select(); document.execCommand("copy"); x.remove(); }
+      bcSent[id] = true; toast("Message copied"); render(); }
+  });
+}
 function pStudents(v){
-  v.innerHTML = '<div class="page-head"><div><h1>Students</h1><p class="sub">'+state.students.filter(s=>s.active && !s.self).length+' active</p></div><div class="row-actions"><input class="search" id="sq" type="search" placeholder="Search by name" value="'+esc(studentFilter.q)+'" aria-label="Search students"><select class="search" id="sf" style="min-width:auto" aria-label="Filter"><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><button class="btn primary" id="sAdd">Add student</button></div></div><section class="panel" style="padding:0" id="slist"></section>'+
+  v.innerHTML = '<div class="page-head"><div><h1>Students</h1><p class="sub">'+state.students.filter(s=>s.active && !s.self).length+' active</p></div><div class="row-actions"><input class="search" id="sq" type="search" placeholder="Search by name" value="'+esc(studentFilter.q)+'" aria-label="Search students"><select class="search" id="sf" style="min-width:auto" aria-label="Filter"><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><a class="btn" href="#/broadcast" style="text-decoration:none">Message parents</a><button class="btn primary" id="sAdd">Add student</button></div></div><section class="panel" style="padding:0" id="slist"></section>'+
     (WEB ? '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are checked automatically once a month'+(state.settings.ratingsSyncedAt?' — last checked '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. <button type="button" class="btn small ghost" id="ratingsNow"'+(ratingsBusy?' disabled':'')+'>'+(ratingsBusy?'Checking…':'Check now')+'</button></p>'+
       ((state.settings.ratingsFailed||[]).length ? '<p class="small" style="color:var(--warn);margin-top:0">Couldn\'t read last time: '+state.settings.ratingsFailed.map(esc).join(", ")+'</p>' : '') : '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are filled in by Claude'+(state.settings.ratingsSyncedAt?' — last updated '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. To refresh them, ask Claude in the chat: “Update my students’ ratings.”</p>');
   $("#sf").value = studentFilter.show;
@@ -4325,6 +4364,8 @@ function editStudent(s){
   openForm({ title: isNew?"Add student":"Edit "+x.name, submit:isNew?"Add student":"Save changes",
     fields:[
       {name:"name",label:"Full name",value:x.name,required:true,full:true},
+      {name:"nameHe",label:"First name in Hebrew",value:x.nameHe||"",placeholder:"e.g. גיא",hint:"Used in messages to parents"},
+      {name:"gender",label:"Boy or girl",type:"select",options:[["","—"],["m","Boy"],["f","Girl"]],value:x.gender||"",hint:"For the right Hebrew forms in messages"},
       {name:"fideId",label:"FIDE ID",value:x.fideId,placeholder:"e.g. 2807681",hint:"The number on the player's ratings.fide.com profile"},
       {name:"icfId",label:"Israeli Chess Federation ID",value:x.icfId,placeholder:"e.g. 20256",hint:"The Id= number on chess.org.il"},
       {name:"idStatus",label:"Player ID",type:"select",options:[["has","Has a FIDE or ICF ID"],["none","No ID yet (new player)"]],value:x.noId?"none":"has",full:true},
@@ -4369,6 +4410,7 @@ function editStudent(s){
       if (!isNew && (+x.rate||0)!==oldRate){ const t = today(), onOld = v=>v!==""&&v!=null&&+v===oldRate;
         (x.slots||[]).forEach(sl=>{ if (onOld(sl.fee)) sl.fee = x.rate; });
         x.sessions.forEach(ss=>{ if (ss.status==="planned" && ss.date>=t && onOld(ss.fee)){ ss.fee = x.rate; repriced++; } }); }
+      x.nameHe = (d.nameHe||"").trim(); x.gender = d.gender||"";
       if ("lessons" in d){ x.clubOnly = d.lessons==="club"; const others = (x.clubIds||[]).filter(id=>id!==(x.clubIds||[])[0]); x.clubIds = d.clubId ? [d.clubId, ...others.filter(id=>id!==d.clubId)] : others; }
       if (isNew){ state.students.push(x); location.hash = "#/student/"+x.id; }
       saveStudent(x); render(); toast(isNew?"Student added":repriced?"Changes saved — new fee applied to "+repriced+" planned session"+(repriced===1?"":"s"):"Changes saved");
@@ -6588,7 +6630,11 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Practice today to keep your streak":"כדאי לתרגל היום כדי לשמור על הרצף", "Miss 2 days in a row and you drop 2 levels.":"יומיים ברצף בלי תרגול — יורדים שתי דרגות.",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "First name in Hebrew":"שם פרטי בעברית", "Used in messages to parents":"משמש בהודעות להורים", "Boy or girl":"בן או בת", "Boy":"בן", "Girl":"בת", "For the right Hebrew forms in messages":"כדי שהניסוח בהודעות יתאים",
+  "Message parents":"הודעה להורים", "Write once — each child’s name and the right boy/girl words are filled in for every parent.":"כותבים פעם אחת — השם של כל ילד/ה והניסוח לבן או לבת מתמלאים לכל הורה.", "Message":"הודעה", "Send":"שליחה",
+  "Insert {name}":"הוספת {name}", "Use the fitness message":"להשתמש בהודעה על הכושר", "All active students":"כל התלמידים הפעילים", "Parents with the app":"הורים עם האפליקציה", "Preview":"תצוגה מקדימה", "Sent":"נשלח",
+  "No phone number":"אין מספר טלפון", "Use the fitness message?":"להשתמש בהודעה על הכושר?", "The text in the box will be replaced.":"הטקסט בתיבה יוחלף.", "Replace":"החלפה", "Message copied":"ההודעה הועתקה",
+  "No parent has connected to the app yet.":"עדיין אף הורה לא התחבר לאפליקציה.", "No active students.":"אין תלמידים פעילים.", "no Hebrew name":"אין שם בעברית", "boy/girl not set":"לא צוין בן/בת", "Practice today to keep your streak":"כדאי לתרגל היום כדי לשמור על הרצף", "Miss 2 days in a row and you drop 2 levels.":"יומיים ברצף בלי תרגול — יורדים שתי דרגות.",
   "Busy with school / exams":"עסוק/ה בבית הספר / מבחנים", "I was sick":"הייתי חולה", "Taking a short break":"לוקח/ת הפסקה קצרה", "Something else":"משהו אחר", "I practiced — log it now":"תרגלתי — לרשום עכשיו",
   "What’s going on? Your coach would like to know.":"מה קורה? המאמן ישמח לדעת.", "No practice logged yet":"עדיין לא נרשם תרגול", "Thanks — your coach will see it":"תודה — המאמן יראה את זה",
   "What’s going on?":"מה קורה?", "A few words for your coach":"כמה מילים למאמן", "Write a few words, or pick one of the other answers.":"אפשר לכתוב כמה מילים או לבחור אחת מהתשובות האחרות.",
