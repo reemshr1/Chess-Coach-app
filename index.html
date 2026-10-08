@@ -123,7 +123,7 @@ kbd{font-family:var(--body);font-size:.75rem;border:1px solid var(--line);border
 .student-mode .btn.lang-btn{display:inline-flex}
 .student-mode .side-search,.student-mode .topbar a[href="#/search"]{display:none}
 /* a parent's board is view-only apart from lesson requests and changes */
-.parent-mode #view button[data-a]:not([data-a="req"]):not([data-a="reqat"]):not([data-a="les"]):not([data-a="open"]):not([data-a="ans"]):not([data-a="unreq"]):not([data-a="reqx"]):not([data-a="view"]):not([data-a="wk"]):not([data-a="more"]):not([data-a="all"]):not([data-a="src"]):not([data-a="gf"]):not([data-a="f"]):not([data-a="sf"]):not([data-a="rf"]):not([data-a="period"]):not([data-a="board"]):not([data-a="games"]):not([data-a="clearT"]):not([data-a="clearRep"]):not([data-a="dl"]):not([data-a="pp"]):not([data-a="ps"]):not([data-a="seenAll"]){display:none}
+.parent-mode #view button[data-a]:not([data-a="req"]):not([data-a="reqat"]):not([data-a="les"]):not([data-a="open"]):not([data-a="ans"]):not([data-a="unreq"]):not([data-a="reqx"]):not([data-a="view"]):not([data-a="wk"]):not([data-a="more"]):not([data-a="all"]):not([data-a="src"]):not([data-a="gf"]):not([data-a="f"]):not([data-a="sf"]):not([data-a="rf"]):not([data-a="period"]):not([data-a="board"]):not([data-a="games"]):not([data-a="clearT"]):not([data-a="clearRep"]):not([data-a="dl"]):not([data-a="pp"]):not([data-a="ps"]):not([data-a="seenAll"]):not([data-a="gotIt"]){display:none}
 .parent-mode #view label:has(input[type=file]),.parent-mode #view .dropzone{display:none}
 .link-box{display:inline-block;direction:ltr;font-weight:600;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 8px;word-break:break-all;user-select:all}
 .code-box{font-family:var(--display);font-size:1.6rem;font-weight:700;letter-spacing:.18em;background:var(--paper);border:1px dashed var(--line);border-radius:var(--r-sm);padding:6px 14px;display:inline-block;direction:ltr}
@@ -333,6 +333,10 @@ dialog.wide{width:min(960px,calc(100vw - 24px))}
 .tstats .l{font-size:.78rem;color:var(--muted)}
 @media (max-width:480px){.tstats{grid-template-columns:1fr 1fr}}
 .new-tag{margin-inline-start:18px;align-self:center;flex:none}
+.notice-list{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto;margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:var(--r-sm)}
+.modal-form label.chk,label.chk{display:inline-flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;margin:0;text-align:start}
+.chk input[type=checkbox]{width:auto;min-width:0;margin:0;flex:none}
+.notice-list label.chk{display:flex;width:100%;justify-content:flex-start;flex-wrap:wrap}
 .quick-fit{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px}
 .medal{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:.85rem;line-height:1;font-family:"DejaVu Sans","Segoe UI Symbol","Apple Symbols",sans-serif;color:#fff;font-style:normal;flex:none;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
 .m-pawn{background:linear-gradient(135deg,#F1DFC0,#B98B5A);color:#4A2F14}.m-knight{background:linear-gradient(135deg,#E9A46E,#9C5A27)}.m-bishop{background:linear-gradient(135deg,#F2F4F6,#98A3AE);color:#36414C}
@@ -2810,7 +2814,7 @@ function familyDocs(f){
   out.family = stampView({name:f.name, children:kids.map(k=>({id:k.id, name:k.name})), coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0});
   kids.forEach(k=>{
     const parts = splitStudent(studentView(k));
-    out["ch-"+k.id] = Object.assign(parts.main, {pay:payView(k), payReports:(k.payReports||[]).filter(r=>r.status==="pending" || daysBetween(r.decided||r.reported||today(), today())<=30)});
+    out["ch-"+k.id] = Object.assign(parts.main, {notices:(k.notices||[]).filter(n=>(n.to||[]).includes("parent")), pay:payView(k), payReports:(k.payReports||[]).filter(r=>r.status==="pending" || daysBetween(r.decided||r.reported||today(), today())<=30)});
     Object.keys(parts.logs).forEach(id=>{ out[id] = parts.logs[id]; });
     state.assignments.filter(a=>a.studentId===k.id).forEach(a=>{ out[a.id] = a; });
     state.games.filter(g=>g.studentId===k.id).forEach(g=>{ out[g.id] = g; });
@@ -2821,7 +2825,7 @@ function studentView(s){
   return JSON.parse(JSON.stringify({id:s.id, name:s.name, level:s.level, rating:s.rating, ratingType:s.ratingType, fideId:s.fideId, icfId:s.icfId, fide:s.fide, icf:s.icf, noId:s.noId,
     goals:s.goals, notes:s.notesShared ? s.notes : "", notesShared:!!s.notesShared, active:s.active, createdAt:s.createdAt,
     sessions:s.sessions.map(x=>({id:x.id, date:x.date, time:x.time, duration:x.duration, format:x.format, status:x.status, topics:x.topics, added:x.added, notes:isShared(x.shareNotes)?x.notes:"", slotId:x.slotId, slotDate:x.slotDate})),
-    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], checkins:s.checkins||[], appSince:(s.portal && s.portal.linkedAt)||"", fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0, sleep:s.sleep||[],
+    worklog:s.worklog, repertoire:s.repertoire, tournaments:s.tournaments.map(({assist, assistDays, assistFee, assistReason, ...x})=>x), books:s.books, ratings:s.ratings, training:s.training||[], requests:s.requests||[], checkins:s.checkins||[], notices:(s.notices||[]).filter(n=>(n.to||[]).includes("student")), appSince:(s.portal && s.portal.linkedAt)||"", fitness:s.fitness||[], fitnessGoal:+s.fitnessGoal||0, sleep:s.sleep||[],
     coachName:state.settings.coachName||"", coachNameHe:state.settings.coachNameHe||"", weekStart:state.settings.weekStart||0,
     clubOnly:!!s.clubOnly, clubs:clubsOf(s).map(({rate, ...r})=>Object.assign(r, {challenge:groupChallenge(r, s)})),
     freeSet:freeRules().some(r=>r.kind!=="off"), free:openSlots(today(), addDays(today(),56), s.id).free, taken:[]})); // other students' bookings just leave a gap
@@ -3477,7 +3481,7 @@ function render(){
   const r = route();
   if (STUDENT()) return renderStudent(v, r);
   if (!state.students.length && ["dashboard","students","schedule","payments","assignments"].includes(r.page)){ v.innerHTML = welcome(); bindWelcome(); return; }
-  const pages = {dashboard:pDashboard, students:pStudents, broadcast:pBroadcast, student:pStudent, schedule:pSchedule, payments:pPayments, settings:pSettings, assignments:pAssignments, assignment:pAssignment, search:pSearch};
+  const pages = {dashboard:pDashboard, students:pStudents, student:pStudent, schedule:pSchedule, payments:pPayments, settings:pSettings, assignments:pAssignments, assignment:pAssignment, search:pSearch};
   (pages[r.page]||pDashboard)(v, r);
 }
 
@@ -3659,6 +3663,7 @@ function pHome(v, s){
       '<div class="stat"><div class="v num'+(todo.some(a=>a.due&&a.due<t)?" money-owed":"")+'">'+todo.length+'</div><div class="l">Assignments to do</div></div>'+
       '<div class="stat"><div class="v num">'+week+'</div><div class="l">Practice minutes this week</div></div>'+
       '<div class="stat"><div class="v num">'+(rt?esc(rt.value):"—")+'</div><div class="l">'+(rt?esc(rt.source||mainSource(s))+" rating":"Rating")+'</div></div></div>'+
+    noticesBox(s)+
     answerBox(s)+
     checkinBox(s)+
     streakLine(s)+
@@ -3687,7 +3692,8 @@ function pHome(v, s){
   bindActions(v,{ ans:id=>{ const [rid, c] = id.split("|"), r = (s.requests||[]).find(x=>x.id===rid); if (r) answerMove(s, r, c); },
     req:()=>requestLesson(s), log:()=>openPractice(s, null), sleep:id=>logSleep(s, id||today()),
     seenAll:()=>{ markSeen(studentUpdates(s).map(u=>u.key)); render(); },
-    checkin:k=>sendCheckin(s, k), les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
+    checkin:k=>sendCheckin(s, k),
+    gotIt:id=>{ markSeen(["msg:"+id]); render(); }, les:id=>{ const x = s.sessions.find(y=>y.id===id); if (x) lessonActions(s, x); }, reqat:id=>{ const [date, time] = id.split("|"); requestLesson(s, {date, time}); },
     hwdone:id=>{ const a = state.assignments.find(x=>x.id===id); if (!a) return; a.status = "Submitted"; a.submitted = today(); saveAssignment(a); render(); toast("Marked done — your coach will review it"); } });
 }
 // Start times (every 30 minutes) at which a lesson of `dur` minutes fits in the coach's open windows that day.
@@ -3929,7 +3935,7 @@ function pDashboard(v){
   const received = state.students.filter(s=>!s.self).reduce((tt,s)=>tt+s.payments.filter(p=>p.date.slice(0,7)===month).reduce((a,p)=>a+(+p.amount||0),0),0);
   const hr = new Date().getHours(); const greet = hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
 
-  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+greet+(state.settings.coachName?", "+esc(state.settings.coachName):"")+'</h1></div><div class="row-actions"><button class="btn" id="dPay">Record payment</button><button class="btn primary" id="dSes">Plan session</button></div></div>'+
+  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px">'+esc(fmtDay(t))+'</p><h1>'+greet+(state.settings.coachName?", "+esc(state.settings.coachName):"")+'</h1></div><div class="row-actions"><button class="btn" id="dNote">🔔 Send notification</button><button class="btn" id="dPay">Record payment</button><button class="btn primary" id="dSes">Plan session</button></div></div>'+
   '<div class="stats"><div class="stat"><div class="v num">'+active.length+'</div><div class="l">Active students</div></div>'+
   '<div class="stat"><div class="v num">'+sessions.length+'</div><div class="l">Sessions in the next 7 days</div></div>'+
   '<div class="stat"><div class="v num'+(outstanding>0?" money-owed":"")+'">'+money(outstanding)+'</div><div class="l">Outstanding</div></div>'+
@@ -3946,6 +3952,7 @@ function pDashboard(v){
   (!tasks.length ? "" : panel("Assignments due", tasks.length ? '<ul class="list">'+tasks.map(({s,x})=>'<li><div class="main"><div class="title">'+esc(x.title)+'</div><div class="small muted"><a href="'+(x.href||'#/student/'+s.id+'/work')+'">'+esc(s.name)+'</a> · '+esc(x.category)+'</div></div>'+(x.review?'<span class="tag warn">Done · to review</span>':'<span class="tag '+(x.due<t?"flag":x.due===t?"warn":"")+'">'+(x.due<t?"Overdue":x.due===t?"Today":esc(fmtShort(x.due)))+'</span>')+'</li>').join("")+'</ul>' : '<p class="empty">Nothing due in the next 3 days.</p>'))+
   '</div>';
   $("#dSes").onclick = ()=>planSession();
+  $("#dNote").onclick = ()=>sendNotice();
   $("#dPay").onclick = ()=>pickStudent("Record a payment from…", s=>editPayment(s,null));
   const find = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && s.sessions.find(y=>y.id===b)]; };
   const req = id=>{ const [a,b] = id.split("|"); const s = byId(a); return [s, s && (s.requests||[]).find(y=>y.id===b)]; };
@@ -4280,47 +4287,48 @@ function ratingProblems(failed, changed, why, signedOut){
 
 /* ---------- students list ---------- */
 let studentFilter = {q:"", show:"active"};
-/* ---------- message to parents: one message, each child's name and boy/girl forms filled in ---------- */
+/* ---------- notifications: a message from the coach to chosen parents and/or students, shown in their app ---------- */
 // In the text, {name} is the child's name (the Hebrew name when set) and [boy|girl] picks the word, e.g. [מדווח|מדווחת].
-const BROADCAST_SAMPLE = "\u05e9\u05dc\u05d5\u05dd \u05dc\u05db\u05d5\u05dc\u05dd \ud83d\udc4b\n\n\u05e8\u05e6\u05d9\u05ea\u05d9 \u05dc\u05e2\u05d3\u05db\u05df \u05e2\u05dc \u05ea\u05d5\u05e1\u05e4\u05ea \u05d7\u05d3\u05e9\u05d4 \u05d1\u05d0\u05e4\u05dc\u05d9\u05e7\u05e6\u05d9\u05d4 \"\u05e2\u05d5\u05dc\u05d9\u05dd \u05d1\u05d3\u05e8\u05d2\u05d4\": \u05dc\u05e9\u05d5\u05e0\u05d9\u05ea \u05db\u05d5\u05e9\u05e8 \ud83c\udfc3\u200d\u2642\ufe0f\u26bd\ud83c\udfca\n\n\u05dc\u05de\u05d4 \u05db\u05d5\u05e9\u05e8?\n\u05de\u05e9\u05d7\u05e7 \u05e9\u05d7\u05de\u05d8 \u05d0\u05e8\u05d5\u05da \u05d3\u05d5\u05e8\u05e9 \u05d4\u05e8\u05d1\u05d4 \u05e8\u05d9\u05db\u05d5\u05d6 \u05d5\u05e1\u05d1\u05d5\u05dc\u05ea. \u05e9\u05d7\u05e7\u05e0\u05d9\u05dd \u05e9\u05e2\u05d5\u05e9\u05d9\u05dd \u05e1\u05e4\u05d5\u05e8\u05d8 \u05d1\u05d0\u05d5\u05e4\u05df \u05e7\u05d1\u05d5\u05e2 \u05de\u05d2\u05d9\u05e2\u05d9\u05dd \u05dc\u05e1\u05d9\u05d1\u05d5\u05d1\u05d9\u05dd \u05d4\u05d0\u05d7\u05e8\u05d5\u05e0\u05d9\u05dd \u05d1\u05d8\u05d5\u05e8\u05e0\u05d9\u05e8 \u05e8\u05e2\u05e0\u05e0\u05d9\u05dd \u05d9\u05d5\u05ea\u05e8, \u05d5\u05de\u05d7\u05d6\u05d9\u05e7\u05d9\u05dd \u05e8\u05d9\u05db\u05d5\u05d6 \u05dc\u05d0\u05d5\u05e8\u05da \u05d6\u05de\u05df.\n\n\u05d0\u05d9\u05da \u05d6\u05d4 \u05e2\u05d5\u05d1\u05d3?\n\u2022  \u05d1\u05d0\u05e4\u05dc\u05d9\u05e7\u05e6\u05d9\u05d4, \u05ea\u05d7\u05ea \u05ea\u05e8\u05d2\u05d5\u05dc \u2190 \u05db\u05d5\u05e9\u05e8, {name} [\u05de\u05d3\u05d5\u05d5\u05d7|\u05de\u05d3\u05d5\u05d5\u05d7\u05ea] \u05db\u05dc \u05e4\u05e2\u05d9\u05dc\u05d5\u05ea: \u05e8\u05d9\u05e6\u05d4, \u05db\u05d3\u05d5\u05e8\u05d2\u05dc, \u05e9\u05d7\u05d9\u05d9\u05d4, \u05e4\u05d9\u05e0\u05d2 \u05e4\u05d5\u05e0\u05d2 \u05d5\u05db\u05dc \u05e1\u05e4\u05d5\u05e8\u05d8 \u05d0\u05d7\u05e8, \u05d5\u05dc\u05db\u05de\u05d4 \u05d6\u05de\u05df.\n\u2022  \u05d0\u05e0\u05d9 \u05d0\u05e7\u05d1\u05e2 \u05d9\u05e2\u05d3 \u05e9\u05d1\u05d5\u05e2\u05d9 (\u05dc\u05de\u05e9\u05dc 2 \u05d0\u05d9\u05de\u05d5\u05e0\u05d9\u05dd \u05d1\u05e9\u05d1\u05d5\u05e2). \u05d1\u05d0\u05e4\u05dc\u05d9\u05e7\u05e6\u05d9\u05d4 \u05e8\u05d5\u05d0\u05d9\u05dd \u05db\u05de\u05d4 \u05e0\u05e9\u05d0\u05e8 \u05dc{name} \u05e2\u05d3 \u05dc\u05d4\u05e9\u05d2\u05ea \u05d4\u05d9\u05e2\u05d3.\n\u2022  \u05e9\u05d1\u05d5\u05e2 \u05e9\u05d1\u05d5 \u05d4\u05d2\u05d9\u05e2\u05d5 \u05dc\u05d9\u05e2\u05d3 \u05e0\u05e1\u05e4\u05e8 \u05dc\u05e8\u05e6\u05e3, \u05d5\u05e2\u05dc \u05e8\u05e6\u05e3 \u05de\u05e7\u05d1\u05dc\u05d9\u05dd \u05de\u05d3\u05dc\u05d9\u05d5\u05ea \u05d1\u05e6\u05d5\u05e8\u05ea \u05db\u05dc\u05d9 \u05e9\u05d7\u05de\u05d8:\n\u265f \u05e8\u05d2\u05dc\u05d9 (2 \u05e9\u05d1\u05d5\u05e2\u05d5\u05ea) \u2190 \u265e \u05e4\u05e8\u05e9 (4) \u2190 \u265d \u05e8\u05e5 (8) \u2190 \u265c \u05e6\u05e8\u05d9\u05d7 (12) \u2190 \u265b \u05de\u05dc\u05db\u05d4 (20) \u2190 \u265a \u05de\u05dc\u05da (30)\n\u2022  \u05dc\u05e7\u05e8\u05d0\u05ea \u05e1\u05d5\u05e3 \u05d4\u05e9\u05d1\u05d5\u05e2, \u05d0\u05dd \u05e2\u05d5\u05d3 \u05dc\u05d0 \u05d4\u05d2\u05d9\u05e2\u05d5 \u05dc\u05d9\u05e2\u05d3, \u05d4\u05d9\u05dc\u05d3\u05d9\u05dd \u05d9\u05e7\u05d1\u05dc\u05d5 \u05ea\u05d6\u05db\u05d5\u05e8\u05ea.\n\u2022  \u05dc\u05e4\u05e0\u05d9 \u05ea\u05d7\u05e8\u05d5\u05d9\u05d5\u05ea \u05d0\u05e4\u05e9\u05e8 \u05d2\u05dd \u05dc\u05e8\u05e9\u05d5\u05dd \u05db\u05de\u05d4 \u05e9\u05e2\u05d5\u05ea {name} [\u05d9\u05e9\u05df|\u05d9\u05e9\u05e0\u05d4], \u05d5\u05dc\u05e8\u05d0\u05d5\u05ea \u05d0\u05d9\u05da \u05d4\u05e9\u05d9\u05e0\u05d4 \u05de\u05e9\u05e4\u05d9\u05e2\u05d4 \u05e2\u05dc \u05d4\u05ea\u05d5\u05e6\u05d0\u05d5\u05ea.\n\n\u05de\u05d4 \u05d0\u05ea\u05dd \u05e8\u05d5\u05d0\u05d9\u05dd?\n\u05d1\u05d7\u05e9\u05d1\u05d5\u05df \u05e9\u05dc\u05db\u05dd \u05d0\u05e4\u05e9\u05e8 \u05dc\u05e8\u05d0\u05d5\u05ea \u05d0\u05ea \u05d4\u05d0\u05d9\u05de\u05d5\u05e0\u05d9\u05dd, \u05d0\u05ea \u05d4\u05d9\u05e2\u05d3 \u05d4\u05e9\u05d1\u05d5\u05e2\u05d9 \u05d5\u05d0\u05ea \u05d4\u05de\u05d3\u05dc\u05d9\u05d5\u05ea \u05e9\u05dc {name}. \u05d0\u05ea\u05dd \u05dc\u05d0 \u05e6\u05e8\u05d9\u05db\u05d9\u05dd \u05dc\u05e8\u05e9\u05d5\u05dd \u05db\u05dc\u05d5\u05dd, \u05d4\u05e8\u05d9\u05e9\u05d5\u05dd \u05d4\u05d5\u05d0 \u05e9\u05dc {name}.\n\n\u05d0\u05e9\u05de\u05d7 \u05d0\u05dd \u05ea\u05e2\u05d5\u05d3\u05d3\u05d5 \u05d0\u05d5\u05ea\u05dd \u05dc\u05e8\u05e9\u05d5\u05dd \u05db\u05dc \u05e4\u05e2\u05d9\u05dc\u05d5\u05ea, \u05d2\u05dd \u05d0\u05dd \u05d4\u05d9\u05d0 \u05e7\u05e6\u05e8\u05d4 \ud83d\udcaa\n\u05dc\u05e9\u05d0\u05dc\u05d5\u05ea \u05d0\u05e0\u05d9 \u05d6\u05de\u05d9\u05df \u05e4\u05d4 \u05d5\u05d1\u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4.\n\n\u05e8\u05d0\u05dd";
-let bcShow = "all", bcSent = {};
 const bcName = s=>(s.nameHe||"").trim() || s.name.split(" ")[0];
 const bcFill = (text, s)=>String(text).replace(/\{name\}|\{שם\}/g, bcName(s)).replace(/\[([^\[\]|]*)\|([^\[\]|]*)\]/g, (m,a,b)=>s.gender==="f" ? b : a);
 const hasParentApp = s=>families().some(f=>f.portal && (f.studentIds||[]).includes(s.id));
-function pBroadcast(v){
-  const st = state.settings, text = st.broadcastText!=null ? st.broadcastText : BROADCAST_SAMPLE;
-  const list = sortBy(state.students.filter(s=>s.active && !s.self && !s.clubOnly && (bcShow==="all" || hasParentApp(s))), "name");
-  v.innerHTML = '<div class="page-head"><div><p class="sub" style="margin:0 0 4px"><a href="#/students">‹ Students</a></p><h1>Message parents</h1><p class="sub">Write once — each child’s name and the right boy/girl words are filled in for every parent.</p></div></div>'+
-    '<div class="grid g2">'+
-    panel("Message", '<textarea id="bcText" class="fb" dir="auto" style="min-height:360px" aria-label="Message">'+esc(text)+'</textarea>'+
-      '<p class="small muted" style="margin:8px 0 0"><b>{name}</b> = the child’s name (the Hebrew name when set). <b>[boy|girl]</b> = the word for boys or for girls, e.g. [מדווח|מדווחת].</p>'+
-      '<div class="row-actions" style="margin-top:8px"><button class="btn small" data-a="bcIns">Insert {name}</button><button class="btn small ghost" data-a="bcSample">Use the fitness message</button></div>')+
-    panel("Send", '<div class="seg" role="group" aria-label="Who" style="margin-bottom:10px"><button type="button" class="'+(bcShow==="all"?"on":"")+'" data-a="bcShow" data-id="all">All active students</button><button type="button" class="'+(bcShow==="app"?"on":"")+'" data-a="bcShow" data-id="app">Parents with the app</button></div>'+
-      (list.length ? '<ul class="list" id="bcList">'+list.map(s=>{ const c = contactParts(s.contact), miss = [!s.nameHe?"no Hebrew name":"", !s.gender?"boy/girl not set":""].filter(Boolean);
-        return '<li style="flex-wrap:wrap"><div class="main"><div class="title">'+esc(s.name)+(s.nameHe?' <span class="muted" dir="rtl">'+esc(s.nameHe)+'</span>':'')+(bcSent[s.id]?' <span class="tag ok">Sent</span>':'')+'</div>'+
-          '<div class="small muted">'+(s.guardian?esc(s.guardian)+' · ':'')+(c.phone?esc(s.contact):'<span style="color:var(--flag)">No phone number</span>')+'</div>'+
-          (miss.length?'<div class="small"><a href="#" data-a="bcEdit" data-id="'+s.id+'" style="color:var(--warn)">⚠ '+esc(miss.join(", "))+' — edit</a></div>':'')+
-          '<details class="small"><summary>Preview</summary><p class="pre no-tr" dir="auto" style="margin:6px 0 0" data-prev="'+s.id+'"></p></details></div>'+
-          '<div class="row-actions">'+(c.phone?'<a class="btn small primary" target="_blank" rel="noopener" data-wa="'+s.id+'" style="text-decoration:none">WhatsApp</a>':'')+'<button class="btn small" data-a="bcCopy" data-id="'+s.id+'">Copy</button></div></li>'; }).join("")+'</ul>'
-        : '<p class="empty">'+(bcShow==="app" ? "No parent has connected to the app yet." : "No active students.")+'</p>'))+
-    '</div>';
-  const ta = $("#bcText"), byS = id=>state.students.find(x=>x.id===id);
-  const refresh = ()=>{ v.querySelectorAll("[data-prev]").forEach(p=>{ p.textContent = bcFill(ta.value, byS(p.dataset.prev)); });
-    v.querySelectorAll("[data-wa]").forEach(a=>{ const s = byS(a.dataset.wa); a.href = "https://wa.me/"+contactParts(s.contact).phone+"?text="+encodeURIComponent(bcFill(ta.value, s)); }); };
-  let saveT; ta.oninput = ()=>{ st.broadcastText = ta.value; refresh(); clearTimeout(saveT); saveT = setTimeout(saveSettings, 800); }; // kept at once, saved after a pause
-  v.querySelectorAll("[data-wa]").forEach(a=>a.addEventListener("click", ()=>{ bcSent[a.dataset.wa] = true; setTimeout(render, 300); }));
-  refresh();
-  bindActions(v,{
-    bcShow:id=>{ bcShow = id; render(); },
-    bcIns:()=>{ const p = ta.selectionStart||ta.value.length; ta.value = ta.value.slice(0,p)+"{name}"+ta.value.slice(p); ta.oninput(); ta.focus(); },
-    bcSample:()=>confirmBox("Use the fitness message?", "The text in the box will be replaced.", "Replace", ()=>{ st.broadcastText = BROADCAST_SAMPLE; saveSettings(); render(); }),
-    bcEdit:id=>editStudent(byS(id)),
-    bcCopy:async id=>{ const t = bcFill(ta.value, byS(id)); try { await navigator.clipboard.writeText(t); } catch(e){ const x = document.createElement("textarea"); x.value = t; document.body.appendChild(x); x.select(); document.execCommand("copy"); x.remove(); }
-      bcSent[id] = true; toast("Message copied"); render(); }
-  });
+function sendNotice(){
+  const m = $("#modal"), all = sortBy(state.students.filter(s=>s.active && !s.self), "name"), groups = clubRules().filter(r=>all.some(s=>(s.clubIds||[]).includes(r.id)));
+  m.innerHTML = '<form class="modal-form" method="dialog"><header><h2>Send a notification</h2><p class="sub small">It appears at the top of their Home in the app, marked New.</p></header><div class="modal-body" style="display:block">'+
+    '<div class="field full"><label for="nt">Message</label><textarea id="nt" dir="auto" style="min-height:140px" placeholder="e.g. No lesson next Tuesday — the club is closed. See you on Thursday!"></textarea>'+
+    '<span class="hint">{name} = the child’s name · [boy|girl] = the right word, e.g. [מוזמן|מוזמנת]</span></div>'+
+    '<div class="field full"><label>Send to</label><div class="row-actions" style="justify-content:flex-start"><label class="chk"><input type="checkbox" id="ntP" checked> Parents</label><label class="chk"><input type="checkbox" id="ntS"> Students</label></div></div>'+
+    '<div class="field full"><label>Who</label><div class="row-actions" style="justify-content:flex-start;flex-wrap:wrap"><button type="button" class="btn small" data-pick="all">Everyone</button><button type="button" class="btn small" data-pick="none">No one</button><button type="button" class="btn small" data-pick="private">Private students</button>'+
+      groups.map(r=>'<button type="button" class="btn small" data-pick="club:'+r.id+'">'+esc(r.name)+'</button>').join("")+'</div>'+
+      '<div class="notice-list">'+all.map(s=>'<label class="chk"><input type="checkbox" data-sid="'+s.id+'"> '+esc(s.name)+(s.clubOnly?' <span class="tag">Club</span>':'')+(hasParentApp(s)?'':' <span class="small muted">· parent not on the app</span>')+'</label>').join("")+'</div></div>'+
+    '<p class="small muted" id="ntCount" style="margin:4px 0 0"></p></div><p class="form-err" role="alert" hidden></p>'+
+    '<footer><button type="button" class="btn" data-act="cancel">Cancel</button><button type="submit" class="btn primary">Send</button></footer></form>';
+  const boxes = [...m.querySelectorAll("[data-sid]")], err = m.querySelector(".form-err");
+  const count = ()=>{ const n = boxes.filter(b=>b.checked).length; m.querySelector("#ntCount").textContent = n ? n+" student"+(n===1?"":"s")+" chosen" : "Choose who gets it"; };
+  m.querySelectorAll("[data-pick]").forEach(b=>b.onclick = ()=>{ const k = b.dataset.pick;
+    boxes.forEach(x=>{ const s = byId(x.dataset.sid); x.checked = k==="all" ? true : k==="none" ? false : k==="private" ? !s.clubOnly : (s.clubIds||[]).includes(k.slice(5)); }); count(); });
+  boxes.forEach(b=>b.onchange = count); count();
+  m.querySelector('[data-act="cancel"]').onclick = ()=>m.close();
+  m.querySelector("form").onsubmit = e=>{ e.preventDefault();
+    const text = m.querySelector("#nt").value.trim(), to = [m.querySelector("#ntP").checked && "parent", m.querySelector("#ntS").checked && "student"].filter(Boolean), ids = boxes.filter(b=>b.checked).map(b=>b.dataset.sid);
+    const fail = msg=>{ err.textContent = msg; err.hidden = false; };
+    if (!text) return fail("Write the message.");
+    if (!to.length) return fail("Choose parents, students or both.");
+    if (!ids.length) return fail("Choose at least one student.");
+    const id = "nt-"+uid(), date = today();
+    ids.forEach(sid=>{ const s = byId(sid); s.notices = (s.notices||[]).concat([{id, date, to, text:bcFill(text, s)}]).slice(-30); saveStudent(s); });
+    m.close(); render(); toast("Notification sent to "+ids.length+" student"+(ids.length===1?"":"s")+(to.length===2?" and their parents":to[0]==="parent"?"’ parents":"")); };
+  m.showModal(); m.querySelector("#nt").focus();
+}
+// On a student's or parent's Home: recent messages from the coach, New until "Got it".
+function noticesBox(s){
+  const t = today(), seen = seenSet(), list = sortBy((s.notices||[]).filter(n=>n.date>=addDays(t,-30)), "date", -1).slice(0,5); if (!list.length) return "";
+  return '<section class="panel notices" style="margin-bottom:16px;border-color:var(--sq-dark)"><div class="panel-head"><h2>Message from your coach</h2></div><ul class="list">'+
+    list.map(n=>{ const fresh = !seen.has("msg:"+n.id); return '<li style="display:block"><p class="pre" dir="auto" style="margin:0'+(fresh?';font-weight:600':'')+'">'+esc(n.text)+'</p><div class="row-actions" style="margin-top:6px;justify-content:space-between"><span class="small muted">'+esc(fmtDate(n.date,{weekday:"short",day:"numeric",month:"short"}))+'</span>'+
+      (fresh ? '<span><span class="tag board">New</span> <button class="btn small" data-a="gotIt" data-id="'+n.id+'">Got it</button></span>' : '')+'</div></li>'; }).join("")+'</ul></section>';
 }
 function pStudents(v){
-  v.innerHTML = '<div class="page-head"><div><h1>Students</h1><p class="sub">'+state.students.filter(s=>s.active && !s.self).length+' active</p></div><div class="row-actions"><input class="search" id="sq" type="search" placeholder="Search by name" value="'+esc(studentFilter.q)+'" aria-label="Search students"><select class="search" id="sf" style="min-width:auto" aria-label="Filter"><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><a class="btn" href="#/broadcast" style="text-decoration:none">Message parents</a><button class="btn primary" id="sAdd">Add student</button></div></div><section class="panel" style="padding:0" id="slist"></section>'+
+  v.innerHTML = '<div class="page-head"><div><h1>Students</h1><p class="sub">'+state.students.filter(s=>s.active && !s.self).length+' active</p></div><div class="row-actions"><input class="search" id="sq" type="search" placeholder="Search by name" value="'+esc(studentFilter.q)+'" aria-label="Search students"><select class="search" id="sf" style="min-width:auto" aria-label="Filter"><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><button class="btn primary" id="sAdd">Add student</button></div></div><section class="panel" style="padding:0" id="slist"></section>'+
     (WEB ? '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are checked automatically once a month'+(state.settings.ratingsSyncedAt?' — last checked '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. <button type="button" class="btn small ghost" id="ratingsNow"'+(ratingsBusy?' disabled':'')+'>'+(ratingsBusy?'Checking…':'Check now')+'</button></p>'+
       ((state.settings.ratingsFailed||[]).length ? '<p class="small" style="color:var(--warn);margin-top:0">Couldn\'t read last time: '+state.settings.ratingsFailed.map(esc).join(", ")+'</p>' : '') : '<p class="small muted" style="margin-top:14px">Official ratings from FIDE and the Israeli Chess Federation are filled in by Claude'+(state.settings.ratingsSyncedAt?' — last updated '+esc(fmtDate(state.settings.ratingsSyncedAt)):'')+'. To refresh them, ask Claude in the chat: “Update my students’ ratings.”</p>');
   $("#sf").value = studentFilter.show;
@@ -6630,7 +6638,10 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "First name in Hebrew":"שם פרטי בעברית", "Used in messages to parents":"משמש בהודעות להורים", "Boy or girl":"בן או בת", "Boy":"בן", "Girl":"בת", "For the right Hebrew forms in messages":"כדי שהניסוח בהודעות יתאים",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Send a notification":"שליחת התראה", "🔔 Send notification":"🔔 שליחת התראה", "It appears at the top of their Home in the app, marked New.":"ההתראה תופיע בראש מסך הבית באפליקציה, מסומנת כחדשה.",
+  "Send to":"למי לשלוח", "Parents":"הורים", "Students":"תלמידים", "Who":"מי", "Everyone":"כולם", "No one":"אף אחד", "Private students":"תלמידים פרטיים", "· parent not on the app":"· ההורה לא באפליקציה",
+  "Choose who gets it":"יש לבחור למי לשלוח", "Write the message.":"יש לכתוב הודעה.", "Choose parents, students or both.":"יש לבחור הורים, תלמידים או שניהם.", "Choose at least one student.":"יש לבחור לפחות תלמיד אחד.",
+  "Message from your coach":"הודעה מהמאמן", "Got it":"הבנתי", "{name} = the child’s name · [boy|girl] = the right word, e.g. [מוזמן|מוזמנת]":"{name} = שם הילד/ה · [בן|בת] = המילה המתאימה, למשל [מוזמן|מוזמנת]", "First name in Hebrew":"שם פרטי בעברית", "Used in messages to parents":"משמש בהודעות להורים", "Boy or girl":"בן או בת", "Boy":"בן", "Girl":"בת", "For the right Hebrew forms in messages":"כדי שהניסוח בהודעות יתאים",
   "Message parents":"הודעה להורים", "Write once — each child’s name and the right boy/girl words are filled in for every parent.":"כותבים פעם אחת — השם של כל ילד/ה והניסוח לבן או לבת מתמלאים לכל הורה.", "Message":"הודעה", "Send":"שליחה",
   "Insert {name}":"הוספת {name}", "Use the fitness message":"להשתמש בהודעה על הכושר", "All active students":"כל התלמידים הפעילים", "Parents with the app":"הורים עם האפליקציה", "Preview":"תצוגה מקדימה", "Sent":"נשלח",
   "No phone number":"אין מספר טלפון", "Use the fitness message?":"להשתמש בהודעה על הכושר?", "The text in the box will be replaced.":"הטקסט בתיבה יוחלף.", "Replace":"החלפה", "Message copied":"ההודעה הועתקה",
@@ -7139,7 +7150,7 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(\d+) more workouts? this week to keep your streak$/, (m,n)=>(+n===1?"עוד אימון אחד":"עוד "+n+" אימונים")+" השבוע כדי לשמור על הרצף"], [/^Now: (\d+ days?) in a row$/, (m,x)=>"עכשיו: "+heT(x)+" ברצף"], [/^Highest: (Pawn|Knight|Bishop|Rook|Queen|King)$/, (m,p)=>"הכי גבוה: "+heT(p)], [/^No practice logged for (\d+) days$/, "לא נרשם תרגול כבר $1 ימים"], [/^Nudge — (.+)$/, "תזכורת — $1"], [/^(\d+)-day practice streak$/, "רצף תרגול של $1 ימים"], [/^(\d+)-week fitness streak$/, "רצף כושר של $1 שבועות"], [/^(.+)’s medals$/, "המדליות של $1"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^(\d+) students? chosen$/, (m,n)=>+n===1?"נבחר תלמיד אחד":"נבחרו "+n+" תלמידים"], [/^Notification sent to (\d+) students?(.*)$/, (m,n,r)=>"ההתראה נשלחה ל־"+n+" תלמידים"+(r.includes("and")?" ולהורים שלהם":r?" (להורים)":"")], [/^(\d+) more workouts? this week to keep your streak$/, (m,n)=>(+n===1?"עוד אימון אחד":"עוד "+n+" אימונים")+" השבוע כדי לשמור על הרצף"], [/^Now: (\d+ days?) in a row$/, (m,x)=>"עכשיו: "+heT(x)+" ברצף"], [/^Highest: (Pawn|Knight|Bishop|Rook|Queen|King)$/, (m,p)=>"הכי גבוה: "+heT(p)], [/^No practice logged for (\d+) days$/, "לא נרשם תרגול כבר $1 ימים"], [/^Nudge — (.+)$/, "תזכורת — $1"], [/^(\d+)-day practice streak$/, "רצף תרגול של $1 ימים"], [/^(\d+)-week fitness streak$/, "רצף כושר של $1 שבועות"], [/^(.+)’s medals$/, "המדליות של $1"],
   [/^(\d+) (days?|weeks?)$/, (m,n,u)=>(+n===1 ? (u[0]==="d"?"יום אחד":"שבוע אחד") : n+(u[0]==="d"?" ימים":" שבועות"))], [/^Now: (.+)$/, (m,x)=>"עכשיו: "+heT(x)], [/^Best: (.+)$/, (m,x)=>"הכי טוב: "+heT(x)],
   [/^(\d+ (?:days?|weeks?)) more to (Pawn|Knight|Bishop|Rook|Queen|King)$/, (m,x,t)=>"עוד "+heT(x)+" ל"+heT(t)], [/^Switch to online$/, "מעבר לאונליין"], [/^Switch to in person$/, "מעבר לפרונטלי"], [/^The lesson on (.+) is now online$/, "השיעור ב־$1 יהיה אונליין"], [/^The lesson on (.+) is now in person$/, "השיעור ב־$1 יהיה פרונטלי"], [/^(In person|Online) → (In person|Online)$/, (m,a,b)=>({"In person":"פרונטלי","Online":"אונליין"})[a]+" → "+({"In person":"פרונטלי","Online":"אונליין"})[b]], [/^Notes from your lesson on (.+)$/, "הערות מהשיעור ב־$1"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
   [/^Logged: (.+)$/, "תועד: $1"], [/^🔥 (\d+) weeks in a row reaching the fitness goal$/, "🔥 $1 שבועות ברצף ביעד הכושר"], [/^Points scored after 8 h or more:$/, "נקודות אחרי 8 שעות שינה ומעלה:"], [/^after less:$/, "אחרי פחות:"], [/^([\d.]+) h$/, "$1 ש׳"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^(\d+) of (\d+) pages read$/, "$1 מתוך $2 עמודים נקראו"], [/^(\d+) pages read$/, "$1 עמודים נקראו"], [/^p\. ([\d–, ]+)$/, "עמ׳ $1"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
