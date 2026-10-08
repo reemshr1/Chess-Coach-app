@@ -4095,10 +4095,10 @@ function practiceGap(s){
   return last ? {days:daysBetween(last, today()), never:!s.worklog.length, last} : null;
 }
 const lastCheckin = s=>sortBy(s.checkins||[],"date").pop();
-// Ask again only after another week without practice.
+// After an answer, ask again once another 2 days pass without practice.
 function askCheckin(s){
   const g = practiceGap(s); if (!g || g.days<ASK_GAP_DAYS) return false;
-  const c = lastCheckin(s); return !c || c.date<g.last || daysBetween(c.date, today())>=7;
+  const c = lastCheckin(s); return !c || c.date<g.last || daysBetween(c.date, today())>=ASK_GAP_DAYS;
 }
 function checkinBox(s){
   if (PARENT() || !askCheckin(s)) return "";
