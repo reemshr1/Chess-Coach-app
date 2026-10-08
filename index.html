@@ -4086,8 +4086,8 @@ function backupNote(t){
   if (last ? age<BACKUP_EVERY_DAYS : daysBetween(since, t)<14) return "";
   return '<div class="note-bar"><span>'+(last ? "Last backup: "+age+" days ago — download a fresh copy." : "No backup downloaded yet — keep a copy of your records outside the app.")+'</span><button class="btn small" data-a="backup">Download backup</button></div>';
 }
-const PRACTICE_GAP_DAYS = 7;
-const ASK_GAP_DAYS = 5; // the student's app asks what's going on a bit before the coach sees them as quiet
+const PRACTICE_GAP_DAYS = 2;
+const ASK_GAP_DAYS = PRACTICE_GAP_DAYS; // the student is asked the same day the coach sees them as quiet
 const CHECKIN_REASONS = [["busy","Busy with school / exams"],["sick","I was sick"],["break","Taking a short break"],["other","Something else"]];
 // Days since the student last logged practice (or since they got the app, if they never have); null if neither.
 function practiceGap(s){
