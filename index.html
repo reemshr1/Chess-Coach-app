@@ -2875,7 +2875,7 @@ function applyOp(s, op, coachSide){
     // a new change for a lesson answers an earlier declined move ("try another time")
     if (les) list("requests").forEach(r=>{ if (r.needsAnswer && r.sessionId===les.id){ r.needsAnswer = false; r.answer = "retry"; r.answered = (op.at||"").slice(0,10)||today(); } });
     const L = list("requests"); if (!L.some(r=>r.id===it.id)) L.push(Object.assign({id:it.id, kind, by:it.by==="parent"?"parent":"student", date:it.date, time:it.time||"", duration:+it.duration||60, format:it.format||"In person", note:it.note||"", status:"pending", asked:(op.at||"").slice(0,10)||today()},
-      les ? {sessionId:les.id, was:{date:les.date, time:les.time||"", duration:+les.duration||60}} : {}));
+      les ? {sessionId:les.id, was:{date:les.date, time:les.time||"", duration:+les.duration||60, format:les.format||"In person"}} : {}));
     return true;
   }
   // After the coach declined a move: cancel the lesson, or keep it as planned.
@@ -3683,7 +3683,7 @@ function studentUpdates(s){
     const x = s.sessions.find(y=>y.id===r.sessionId) || r;
     if (r.status==="approved"){
       if (r.kind==="cancel") out.push({key:"req:"+r.id, date:r.decided, kind:"ok", text:"The lesson on "+day(r.was.date)+" was cancelled, as asked", href:"#/schedule"});
-      else if (r.kind==="move") out.push({key:"req:"+r.id, date:r.decided, kind:"ok", text:"The lesson moved to "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"});
+      else if (r.kind==="move") out.push({key:"req:"+r.id, date:r.decided, kind:"ok", text:r.was && r.date===r.was.date && r.time===r.was.time && r.format!==r.was.format ? "The lesson on "+day(x.date)+" is now "+(x.format==="Online"?"online":"in person") : "The lesson moved to "+day(x.date)+(x.time?" at "+x.time:"")+(r.was && x.format!==r.was.format ? " ("+(x.format==="Online"?"online":"in person")+")" : ""), href:"#/schedule"});
       else out.push({key:"req:"+r.id, date:r.decided, kind:"ok", text:"Your coach approved the lesson on "+day(x.date)+(x.time?" at "+x.time:""), href:"#/schedule"}); }
     else if (r.status==="declined") out.push({key:"req:"+r.id+":"+(r.answer||(r.needsAnswer?"ask":"no")), date:r.decided, kind:"flag", text:r.kind==="cancel" ? "The request to cancel the lesson on "+day(r.was.date)+" was declined — the lesson stays"
       : r.kind==="move" ? (r.needsAnswer ? "Your coach can't meet at the new time — choose what to do with the lesson on "+day(r.was.date)
@@ -3757,25 +3757,28 @@ function lessonActions(s, x, retry){
   if (pc) return confirmBox("Withdraw your request?", "You asked to "+(pc.kind==="cancel"?"cancel":"move")+" the lesson on "+day+". Withdraw that request?", "Withdraw", ()=>cancelRequest(s, pc.id));
   if (!changeable(x)){ toast(x.status==="done" ? "This lesson is done" : "This lesson can't be changed any more"); return; }
   const picks = !!s.freeSet, free = s.free||[], dates = [...new Set(free.map(f=>f.date))].sort();
+  const fmt = x.format==="Online" ? "Online" : "In person", other = fmt==="Online" ? "In person" : "Online";
   openForm({title:"Lesson on "+day, submit:"Send to your coach", parentOk:true, fields:[
-      {name:"what",label:"What do you need?",type:"select",options:[["cancel","I can't make it — cancel the lesson"],["move","Move it to another time"]],value:retry?"move":"cancel",full:true},
+      {name:"what",label:"What do you need?",type:"select",options:[["cancel","I can't make it — cancel the lesson"],["move","Move it to another time"],["switch",other==="Online"?"Same time, but online":"Same time, but in person"]],value:retry?"move":"cancel",full:true},
       picks ? {name:"date",label:"New date",type:"select",value:"",show:v=>v.what==="move",options:()=>{ const ds = dates.filter(d=>startTimes(free, d, +x.duration||60).length); return ds.length ? ds.map(d=>[d, fmtDate(d,{weekday:"long",day:"numeric",month:"short"})]) : [["","No free time in the coming weeks"]]; }}
             : {name:"date",label:"New date",type:"date",value:x.date,show:v=>v.what==="move"},
       picks ? {name:"time",label:"New start time",type:"select",value:"",show:v=>v.what==="move",options:v=>{ const ts = startTimes(free, v.date, +x.duration||60); return ts.length ? ts : [["","No free time that day for this length"]]; }}
             : {name:"time",label:"New start time",type:"time",value:x.time||"",show:v=>v.what==="move"},
+      {name:"format",label:"In person or online",type:"select",options:["In person","Online"],value:fmt,show:v=>v.what==="move"},
       {name:"note",label:"Note for your coach",type:"textarea",value:"",placeholder:"e.g. School trip that day"}],
     onSubmit:d=>{
-      const item = {id:uid(), kind:d.what, sessionId:x.id, duration:+x.duration||60, format:x.format||"In person", note:d.note};
+      const item = {id:uid(), kind:d.what==="switch"?"move":d.what, sessionId:x.id, duration:+x.duration||60, format:fmt, note:d.note};
       if (d.what==="cancel") Object.assign(item, {date:x.date, time:x.time||""});
+      else if (d.what==="switch") Object.assign(item, {date:x.date, time:x.time||"", format:other});
       else {
         if (!d.date || d.date<today()) return "Choose a new date.";
         if (!d.time) return "Choose a new start time.";
-        if (d.date===x.date && d.time===x.time) return "That's the same time as now.";
+        if (d.date===x.date && d.time===x.time && d.format===fmt) return "That's the same time as now.";
         if (picks && !fitsFree(free, d.date, d.time, +x.duration||60)) return "Your coach isn't free then. Choose another start time.";
-        Object.assign(item, {date:d.date, time:d.time});
+        Object.assign(item, {date:d.date, time:d.time, format:d.format||fmt});
       }
       const op = {type:"request", item}; store.send(op); applyOp(s, op, false); render();
-      toast(d.what==="cancel" ? "Cancellation request sent to your coach" : "Move request sent to your coach");
+      toast(d.what==="cancel" ? "Cancellation request sent to your coach" : d.what==="switch" ? "Request sent to your coach" : "Move request sent to your coach");
     }});
 }
 function requestLesson(s, pre){
@@ -4009,7 +4012,9 @@ function requestsPanel(){
   return '<section class="panel" style="margin-bottom:16px;border-color:var(--sq-dark)"><div class="panel-head"><h2>Lesson requests ('+reqs.length+')</h2></div><ul class="list">'+
     reqs.map(({s,r})=>{ const day = d=>fmtDate(d,{weekday:"short",day:"numeric",month:"short"});
       const what = r.kind==="cancel" ? '<span class="tag flag">Cancel lesson</span> '+esc(day(r.was.date))+(r.was.time?' · '+esc(r.was.time):'')
-        : r.kind==="move" ? '<span class="tag warn">Move lesson</span> '+esc(day(r.was.date))+(r.was.time?' '+esc(r.was.time):'')+' → '+esc(day(r.date))+' · '+esc(r.time)+' · '+r.duration+' min'
+        : r.kind==="move" ? (r.date===r.was.date && r.time===r.was.time ? '<span class="tag warn">Switch to '+esc(r.format==="Online"?"online":"in person")+'</span> '+esc(day(r.date))+' · '+esc(r.time)
+            : '<span class="tag warn">Move lesson</span> '+esc(day(r.was.date))+(r.was.time?' '+esc(r.was.time):'')+' → '+esc(day(r.date))+' · '+esc(r.time)+' · '+r.duration+' min')+
+          (r.was.format && r.format && r.format!==r.was.format ? ' · <span>'+esc(r.was.format)+' → '+esc(r.format)+'</span>' : '')
         : '<span class="tag board">New lesson</span> '+esc(day(r.date))+' · '+esc(r.time)+' · '+r.duration+' min · '+esc(r.format);
       return '<li><div class="main"><div class="title"><a href="#/student/'+s.id+'/sessions">'+esc(s.name)+'</a>'+(r.by==="parent"?' <span class="tag">from the parent</span>':'')+'</div><div class="small muted">'+what+(r.note?' · '+esc(r.note):'')+'</div>'+
       (r.date<today()?'<div class="small" style="color:var(--flag)">This date has passed</div>':'')+'</div><div class="row-actions"><button class="btn small ghost" data-a="decline" data-id="'+s.id+'|'+r.id+'">Decline</button><button class="btn small primary" data-a="approve" data-id="'+s.id+'|'+r.id+'">Approve</button></div></li>'; }).join("")+answers.map(ansLine).join("")+'</ul></section>';
@@ -4026,14 +4031,16 @@ function approveRequest(s, r){
     if (!les){ r.status = "declined"; r.decided = today(); saveStudent(s); render(); toast("That lesson no longer exists"); return; }
     return openForm({title:"Move lesson — "+s.name, submit:"Move lesson", fields:[
         {name:"date",label:"Date",type:"date",value:r.date},{name:"time",label:"Start time",type:"time",value:r.time},
-        {name:"duration",label:"Duration (minutes)",type:"number",value:r.duration||les.duration||60,min:15}],
+        {name:"duration",label:"Duration (minutes)",type:"number",value:r.duration||les.duration||60,min:15},
+        {name:"format",label:"Format",type:"select",options:["In person","Online","Group"],value:r.format||les.format||"In person"}],
       onSubmit:d=>{
-        const c = {id:les.id, date:d.date||r.date, time:d.time, duration:d.duration===""?60:+d.duration, format:les.format};
+        const c = {id:les.id, date:d.date||r.date, time:d.time, duration:d.duration===""?60:+d.duration, format:d.format||les.format};
         const err = clashCheck(s.id, c, ack); if (err) return err;
         const was = {date:les.date, time:les.time||""};
-        Object.assign(les, {date:c.date, time:c.time, duration:c.duration}); if (les.slotId) les.custom = true;
-        r.status = "approved"; r.decided = today(); saveStudent(s); render(); toast("Lesson moved — "+s.name.split(" ")[0]+" will see it in their app");
-        sendConfirm("moved", s, {date:c.date, time:c.time, was});
+        const formatChanged = c.format!==(les.format||"In person"), switched = formatChanged && c.date===les.date && c.time===(les.time||"");
+        Object.assign(les, {date:c.date, time:c.time, duration:c.duration, format:c.format}); if (les.slotId) les.custom = true;
+        r.status = "approved"; r.decided = today(); saveStudent(s); render(); toast((switched ? "Lesson changed to "+c.format.toLowerCase() : "Lesson moved")+" — "+s.name.split(" ")[0]+" will see it in their app");
+        sendConfirm("moved", s, Object.assign({date:c.date, time:c.time, was}, formatChanged ? {format:c.format} : {}));
       }});
   }
   openForm({title:"Approve lesson — "+s.name, submit:"Approve", fields:[
@@ -4583,14 +4590,16 @@ function confirmText(kind, s, o, lng){
   const day = (d,t)=>new Date(d+"T00:00").toLocaleDateString(he?"he-IL":undefined,{weekday:"long",day:"numeric",month:"long"})+(t?(he?" בשעה ":" at ")+t:"");
   const L = he ? {
       added:()=>"שלום! השיעור של "+first+" נקבע ל"+day(o.date,o.time)+". נתראה!",
-      moved:()=>"שלום! השיעור של "+first+" הוזז מ"+day(o.was.date,o.was.time)+" ל"+day(o.date,o.time)+".",
+      moved:()=>o.format && o.was.date===o.date && o.was.time===o.time ? "שלום! השיעור של "+first+" ב"+day(o.date,o.time)+" יהיה "+(o.format==="Online"?"אונליין":"פרונטלי")+"."
+        : "שלום! השיעור של "+first+" הוזז מ"+day(o.was.date,o.was.time)+" ל"+day(o.date,o.time)+(o.format?" ("+(o.format==="Online"?"אונליין":"פרונטלי")+")":"")+".",
       cancelled:()=>"שלום, השיעור של "+first+" ב"+day(o.date,o.time)+" בוטל כפי שביקשתם.",
       declined:()=>"שלום, לצערי אני לא פנוי/ה ב"+day(o.date,o.time)+". אפשר לבחור זמן אחר באפליקציה.",
       declinedCancel:()=>"שלום, לגבי הבקשה לבטל את השיעור ב"+day(o.date,o.time)+": השיעור נשאר כמתוכנן.",
       declinedMove:()=>"שלום, לצערי אני לא יכול/ה ב"+day(o.date,o.time)+". השיעור ב"+day(o.was.date,o.was.time)+" עדיין קבוע — באפליקציה אפשר לבחור לבטל אותו, להשאיר אותו או לנסות זמן אחר."
     } : {
       added:()=>"Hello! "+first+"'s lesson is booked for "+day(o.date,o.time)+". See you then!",
-      moved:()=>"Hello! "+first+"'s lesson has moved from "+day(o.was.date,o.was.time)+" to "+day(o.date,o.time)+".",
+      moved:()=>o.format && o.was.date===o.date && o.was.time===o.time ? "Hello! "+first+"'s lesson on "+day(o.date,o.time)+" will be "+(o.format==="Online"?"online":"in person")+"."
+        : "Hello! "+first+"'s lesson has moved from "+day(o.was.date,o.was.time)+" to "+day(o.date,o.time)+(o.format?" ("+(o.format==="Online"?"online":"in person")+")":"")+".",
       cancelled:()=>"Hello, "+first+"'s lesson on "+day(o.date,o.time)+" is cancelled, as you asked.",
       declined:()=>"Hello, unfortunately I'm not available on "+day(o.date,o.time)+". Please choose another time in the app.",
       declinedCancel:()=>"Hello, about the request to cancel the lesson on "+day(o.date,o.time)+": the lesson stays as planned.",
@@ -6470,7 +6479,7 @@ function pSettings(v){
 
 /* ---------- Hebrew ---------- */
 const HE = {
-  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Mark all as read":"סימון הכול כנקרא",
+  "Report another payment":"דיווח על תשלום נוסף", "Payment sent":"התשלום נשלח", "Paid something else as well?":"שילמת גם על משהו נוסף?", "Sent!":"נשלח!", "OK":"אישור", "Unpaid":"לא שולם", "Possible duplicate":"ייתכן שזה כפול", "Same time, but online":"באותה שעה, אבל אונליין", "Same time, but in person":"באותה שעה, אבל פרונטלי", "In person or online":"פרונטלי או אונליין", "Mark all as read":"סימון הכול כנקרא",
   "Group workout challenge (per month)":"אתגר אימונים קבוצתי (לחודש)", "Optional — a shared monthly target for the whole group's workouts. Students see only the group total.":"לא חובה — יעד חודשי משותף לאימוני כל הקבוצה. התלמידים רואים רק את סך הקבוצה.",
   "Quick log for today:":"תיעוד מהיר להיום:", "Which sport":"איזה ספורט", "e.g. Climbing":"למשל טיפוס", "group workouts this month":"אימונים קבוצתיים החודש", "The group reached the target!":"הקבוצה הגיעה ליעד!",
   "Sleep before tournaments":"שינה לפני טורנירים", "Add sleep":"הוספת שינה", "Log sleep":"תיעוד שינה", "Sleep":"שינה", "Night before":"הלילה שלפני", "Hours of sleep":"שעות שינה", "Enter the hours slept, e.g. 7.5.":"יש להזין כמה שעות ישנו, למשל 7.5.", "Sleep saved":"השינה נשמרה",
@@ -6956,6 +6965,7 @@ const HE_RX = [
   [/^(.+) is connected to the app since (.+)\.$/, "$1 מחובר/ת לאפליקציה מאז $2."],
   [/^(.+) can see their assignments, lessons and goals, log practice and games, and ask you for lessons — in their own account\.$/, "$1 יכול/ה לראות משימות, שיעורים ומטרות, לרשום תרגול ומשחקים ולבקש שיעורים — בחשבון שלו/ה."],
   [/^Lesson added — (.+) will see it in their app$/, "השיעור נוסף — $1 יראה אותו באפליקציה"],
+  [/^Lesson changed to (online|in person) — (.+) will see it in their app$/, (m,f,n)=>"השיעור הועבר ל"+(f==="online"?"אונליין":"פרונטלי")+" — "+n+" יראה זאת באפליקציה"],
   [/^(.+) asked for (.+)\. They'll see it as declined\.$/, "$1 ביקש/ה $2. הבקשה תופיע כנדחתה."],
   [/^They will no longer see their board in the app\. .*$/, "הלוח לא יוצג יותר באפליקציה. הנתונים נשארים כאן, ואפשר להזמין שוב בהמשך."],
   [/^(.+)’s own training plan$/, "תוכנית האימונים של $1"],
@@ -6969,7 +6979,7 @@ const HE_RX = [
   [/^(\d+) in development(?: \((.+)\))?$/, (m,n,inner)=>n+" בפיתוח"+(inner?" ("+inner.split(", ").map(heT).join(", ")+")":"")],
   [/^(\d+) by you$/, "$1 שלך"], [/^(\d+) by the student$/, "$1 של התלמיד"],
   [/^(\d+) needs? review$/, "$1 דורשים חזרה"], [/^(\d+) lines? needs? review$/, (m,n)=>+n===1 ? "וריאנט אחד דורש חזרה" : n+" וריאנטים דורשים חזרה"],
-  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^Notes from your lesson on (.+)$/, "הערות מהשיעור ב־$1"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
+  [/^(\d+) of (\d+)$/, "$1 מתוך $2"], [/^Switch to online$/, "מעבר לאונליין"], [/^Switch to in person$/, "מעבר לפרונטלי"], [/^The lesson on (.+) is now online$/, "השיעור ב־$1 יהיה אונליין"], [/^The lesson on (.+) is now in person$/, "השיעור ב־$1 יהיה פרונטלי"], [/^(In person|Online) → (In person|Online)$/, (m,a,b)=>({"In person":"פרונטלי","Online":"אונליין"})[a]+" → "+({"In person":"פרונטלי","Online":"אונליין"})[b]], [/^Notes from your lesson on (.+)$/, "הערות מהשיעור ב־$1"], [/^(.+) challenge$/, "האתגר של $1"], [/^(\d+) to go$/, "עוד $1"], [/^You added (\d+) this month$/, "הוספת $1 החודש"], [/^(.+) added (\d+) this month$/, "$1 הוסיף/ה $2 החודש"], [/^(\d+) of (\d+) group workouts this month$/, "$1 מתוך $2 אימונים קבוצתיים החודש"],
   [/^Logged: (.+)$/, "תועד: $1"], [/^🔥 (\d+) weeks in a row reaching the fitness goal$/, "🔥 $1 שבועות ברצף ביעד הכושר"], [/^Points scored after 8 h or more:$/, "נקודות אחרי 8 שעות שינה ומעלה:"], [/^after less:$/, "אחרי פחות:"], [/^([\d.]+) h$/, "$1 ש׳"], [/^of (\d+) pages read$/, "מתוך $1 עמודים נקראו"], [/^(\d+) of (\d+) pages read$/, "$1 מתוך $2 עמודים נקראו"], [/^(\d+) pages read$/, "$1 עמודים נקראו"], [/^p\. ([\d–, ]+)$/, "עמ׳ $1"], [/^last stop p\. (\d+)$/, "עצירה אחרונה בעמ׳ $1"], [/^p\. (\d+)–(\d+)$/, "עמ׳ $1–$2"], [/^pages read$/, "עמודים נקראו"], [/^Whole group: (.+) \((\d+)\)$/, "כל הקבוצה: $1 ($2)"], [/^Assignment given to (\d+) students?$/, (m,n)=>+n===1 ? "המשימה ניתנה לתלמיד אחד" : "המשימה ניתנה ל־"+n+" תלמידים"], [/^(\d+) students?$/, (m,n)=>+n===1 ? "תלמיד אחד" : n+" תלמידים"], [/^(\d+) of (\d+) workouts this week$/, "$1 מתוך $2 אימונים השבוע"], [/^(\d+) more to reach the weekly goal$/, "עוד $1 כדי להגיע ליעד השבועי"], [/^(\d+) weeks in a row$/, "$1 שבועות ברצף"],
   [/^Green weeks reached the goal of (\d+) workouts?\.$/, "בשבועות הירוקים הושג היעד של $1 אימונים."], [/^No weekly goal yet — set one so (.+) has something to aim for\.$/, "עדיין אין יעד שבועי — כדאי לקבוע אחד, כדי של־$1 יהיה למה לשאוף."], [/^of (\d+)$/, "מתוך $1"],
   [/^(\d+) weekly slots?$/, (m,n)=>+n===1 ? "שיעור קבוע אחד" : n+" שיעורים קבועים"],
